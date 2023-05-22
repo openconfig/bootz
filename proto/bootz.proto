@@ -1,0 +1,191 @@
+//
+// Copyright 2023 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+syntax = "proto3";
+
+import "google/protobuf/struct.proto";
+
+import "github.com/openconfig/gnsi/authz/authz.proto";
+import "github.com/openconfig/gnsi/certz/certz.proto";
+import "github.com/openconfig/gnsi/credentialz/credentialz.proto";
+import "github.com/openconfig/gnsi/pathz/pathz.proto";
+
+
+option go_package = "github.com/openconfig/bootz/proto/bootz";
+
+
+// The Bootz service definition.
+// Bootz service is hosted by the bootz-server, and the device is the
+// client (as opposed to most g*i services, which are hosted by the device).
+service Bootstrap {
+  // This RPC returns the data required to put the device in a known state
+  // (i.e. OS, bootloader password, etc) and applies an initial device
+  // configuration.
+  rpc GetBootstrapData(GetBootstrapDataRequest) returns 
+    (GetBootstrapDataResponse) {}
+   
+  // This RPC is used by the device to indicate successful application of
+  // BootstrappingData. The Bootz system will proceed to the next step if
+  // a SUCCESS is reported, otherwise it will retry or put the device in an
+  // out-of-service state. The device should validate the server's identity
+  // against the server_trust_cert it obtained in GetBootstrappingDataResponse.
+  rpc ReportStatus(ReportStatusRequest) returns (EmptyResponse) {}
+}
+
+// Initial request from device to the bootz-server. Contains a detailed
+// description of the chassis and its constituent control cards.
+message GetBootstrapDataRequest {
+  ChassisDescriptor chassis_descriptor = 1;
+  ControlCardState control_card_state = 2;
+  // A nonce that the bootstrap server should use when signing the response.
+  string nonce = 1001;
+}
+
+// Structured message containing the chassis details, and listing its component
+// control-card modules.
+message ChassisDescriptor {
+  string manufacturer = 1;
+  string part_number = 2;
+  // This field is populated for fixed form-factor chassis, and empty for
+  // modular chassis.
+  string serial_number = 3;
+  // For modular chassis this field will be used to list the control cards
+  // to be bootstrapped.
+  repeated ControlCard control_cards = 4;
+}
+
+// Details of the control card, including serial-number and the location
+// of the card on the chassis.
+message ControlCard {
+  string part_number = 1;
+  string serial_number = 2;
+  int32 slot = 3;
+}
+
+// ControlCardState indicates if the bootstrap process has
+// successfully completed.
+//
+// At the beginning of the bootstrap process (i.e. before a
+// ReportStatus has completed with BOOTSTRAP_STATUS_SUCCESS),
+// all control cards (1 or 2) are in NOT_INITIALIZED state.
+// If bootstrap successfully completes for a control-card, the
+// ControlCardStatus changes to INITIALIZED.
+//
+// Once a control-card is in INITIALIZED state, it may remain in that
+// state indefinitely, even if removed and reinstalled in a chassis.
+//
+// When there are 2 control-cards present and INITIALIZED and 1 is
+// removed, the remaining control card remains in INITIALIZED state.
+// If a new control-card is inserted which has never completed the
+// bootstrap process, it will start with NOT_INITIALIZED state.
+message ControlCardState {
+
+  enum ControlCardStatus {
+    // the bootstrap process status is not reported.
+    CONTROL_CARD_STATUS_UNSPECIFIED = 0; 
+    // the bootstrap process has not successfully completed.
+    CONTROL_CARD_STATUS_NOT_INITIALIZED = 1;
+    // the bootstrap process has successfully completed.
+    CONTROL_CARD_STATUS_INITIALIZED = 2; 
+  }
+
+  string serial_number = 1;
+  ControlCardStatus status = 2;
+}
+
+message GetBootstrapDataResponse {
+
+  message BootstrapDataResponse {
+    // The serial number of the control card to which this state should
+    // be applied.
+    string serial_num = 1;
+    // The device should download and install this image (or skip if the
+    // device is already running it).
+    SoftwareImage intended_image = 2;
+    // The device should set this hash as its Bootloader password.
+    string boot_password_hash = 3;
+    // This certificate should be used to validate the server when reporting
+    // progress.
+    string server_trust_cert = 4;
+    // Boot configuration is specified as structured data.
+    BootConfig boot_config = 5;
+    Credentials credentials = 6;
+    gnsi.pathz.v1.UploadRequest pathz = 7;
+    gnsi.authz.v1.UploadRequest authz = 8;
+    gnsi.certz.v1.UploadRequest certificates = 9;
+  } 
+
+  // Container message that is signed by server.
+  // the nonce is added to verify the contents from the client.
+  message BootstrapDataSigned {
+    repeated BootstrapDataResponse responses = 1;
+    string nonce = 2;
+  }
+  
+  BootstrapDataSigned signed_response = 1;
+  bytes ownership_voucher = 101;
+  bytes ownership_certificate = 102;
+  // This is a signature generated over the bytes of the signed_response field,
+  // using the ownership_certificate.
+  string response_signature = 103;
+}
+
+message SoftwareImage {
+  string name = 1;
+  string version = 2;
+  // An HTTP location from where the OS file can be downloaded.
+  string url = 3;
+  // Hash of the OS image. The device must verify that the hash of the
+  // downloaded OS image matches this.
+  string os_image_hash = 4;
+  string hash_algorithm = 5;
+}
+
+message Credentials {
+  repeated gnsi.credentialz.v1.AuthorizedKeysRequest credentials = 1;
+  repeated gnsi.credentialz.v1.AuthorizedUsersRequest users = 2;
+  repeated gnsi.credentialz.v1.PasswordRequest passwords = 3;
+}
+
+message BootConfig {
+  // Proprietary key-value parameters that are required as part of boot
+  // configuration (e.g., feature flags, or vendor-specific hardware knobs).
+  google.protobuf.Struct metadata = 1;
+  // Native format vendor configuration.
+  bytes vendor_config = 2;
+  // JSON rendered OC configuration.
+  bytes oc_config = 3;
+  // Bootloader key-value parameters that are required as part of boot
+  // configuration.
+  google.protobuf.Struct bootloader_config = 4;
+}
+
+// The device reports the status of applying Bootstrap data using this service.
+// The status_message is a human-readable message indicating the nature of 
+// failure, if any.
+message ReportStatusRequest {
+  enum BootstrapStatus {
+    BOOTSTRAP_STATUS_UNSPECIFIED = 0;
+    BOOTSTRAP_STATUS_SUCCESS = 1;
+    BOOTSTRAP_STATUS_FAILURE = 2;
+    BOOTSTRAP_STATUS_INITIATED = 3;
+  }
+  BootstrapStatus status = 1;
+  string status_message = 2;
+}
+
+// Used in  RPC methods that are not expected to return a response.
+message EmptyResponse {
+}
