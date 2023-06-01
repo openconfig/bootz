@@ -1,7 +1,5 @@
 # Bootz protocol v2 (sZTP++ or gZTP)
 
-[TOC]
-
 ## Objective
 
 Define a structured data format for exchanging as much data with the network device as possible, to take the device from a factory state to a fully production supportable state.
