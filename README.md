@@ -249,6 +249,24 @@ We recommend that the active card copy system software only (includes firmware, 
 
 Alternatively, the active card can perform the bootstrapping, enrollment and attestation workflow on behalf of the standby before copying operational configuration.
 
+#### Workflows for RMA replacement
+
+1. Card failure detected
+2. Card RMA issued
+3. Card replaced
+4. Active control card detects new linecard
+5. Active control card tries to verify card via IDevID
+6. Active control card verifies card software and firmware is at least at it's version
+    a. if not will send over the firmware and software and perform an upgrade.
+7. The chassis will update gNMI with component in inserted but not enrolled state.
+8. Kick of workflow for initialiation of new control card
+    a. Inventory system detects unenrolled control card kicks off workflow to the enrollment/attestion system.
+    b. Active control card send bootz request to bootserver containing serial number of new card and will get back bootz artifacts.
+9. Planet service makes call to enrollement API and provides proper OV for the
+  control card.
+10. Planet service makes call to attestation API to verify attestation values.
+11. Active control card now verifies the card and brings the card into production state and sync's configuration and other files.
+
 ### Open Questions
 
 1. Should TpmEnrollment and Attest methods be signed with owner's certificate?
