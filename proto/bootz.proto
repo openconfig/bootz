@@ -153,7 +153,7 @@ message GetBootstrapDataResponse {
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field
   // in the GetBootstrapDataRequest message.
-    string response_signature = 103;
+  string response_signature = 103;
 }
 
 message SoftwareImage {
