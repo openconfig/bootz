@@ -50,6 +50,8 @@ message GetBootstrapDataRequest {
   ChassisDescriptor chassis_descriptor = 1;
   ControlCardState control_card_state = 2;
   // A nonce that the bootstrap server should use when signing the response.
+  // Not settting this field indicates that the device is configured not to
+  // check for ownership voucher.
   string nonce = 1001;
 }
 
@@ -131,15 +133,27 @@ message GetBootstrapDataResponse {
   // the nonce is added to verify the contents from the client.
   message BootstrapDataSigned {
     repeated BootstrapDataResponse responses = 1;
+    // This should not be set if the device does not check for ownership
+    // voucher, which is indicated by the device not setting the nonce field
+    // in the GetBootstrapDataRequest message.
     string nonce = 2;
   }
   
   BootstrapDataSigned signed_response = 1;
+  // This should not be set if the device does not check for ownership
+  // voucher, which is indicated by the device not setting the nonce field
+  // in the GetBootstrapDataRequest message.
   bytes ownership_voucher = 101;
+  // This should not be set if the device does not check for ownership
+  // voucher, which is indicated by the device not setting the nonce field
+  // in the GetBootstrapDataRequest message.
   bytes ownership_certificate = 102;
   // This is a signature generated over the bytes of the signed_response field,
   // using the ownership_certificate.
-  string response_signature = 103;
+  // This should not be set if the device does not check for ownership
+  // voucher, which is indicated by the device not setting the nonce field
+  // in the GetBootstrapDataRequest message.
+    string response_signature = 103;
 }
 
 message SoftwareImage {
