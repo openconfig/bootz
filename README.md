@@ -202,6 +202,11 @@ After loading all the provided data on first boot the device is still not in
     2. The TLS connection **MUST** be secured on the client-side with the IDevId of the active control card.
     3. The responses from the bootz-server are signed by ownership-certificate. The device validates the ownership-voucher, which authenticates the ownership-certificate. The device verifies the signature of the message body before accepting the message.
     4. If the signature could not be verified, the bootstrap process starts from Step 1.
+
+Note: though a device SHOULD validate ownership by default, in some environment (e.g. a lab) we might not want to do so.
+In this case, the device can be explicitly configured to skip the ownership validation, and the device will then not set the `nonce` field in the `GetBootstrapDataRequest message`.
+The bootstrap server may proceed without signing the response and without providing the ownership voucher and ownership certificate.
+
 3. Ownership Voucher and Ownership Certificate
     1. These artifacts have the same meaning as the original sZTP [RFC](https://www.rfc-editor.org/rfc/rfc8572#section-3.2). This document uses OC and PDC interchangeably for convenience. However, we should keep in mind that OV authenticates a PDC (Pinned Domain Cert), and OC might be a distinct certificate with a chain of trust to the PDC.
     2. The contents of the GetBootstrappingDataResponse has an inner message body. The outer message contains the Ownership Voucher, the Ownership Certificate and a signature over the inner message body. The signature is generated using the OC and the nonce.
