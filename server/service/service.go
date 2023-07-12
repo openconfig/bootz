@@ -70,3 +70,13 @@ func (s *Service) ReportStatus(ctx context.Context, req bootz.ReportStatusReques
 func (s *Service) SetDeviceConfiguration(ctx context.Context, req entity.ConfigurationRequest) {entity.ConfigurationResonse, error} {
 	return nil, status.Errorf(codes.Unimplemented, "Unimplemented")
 }
+
+func (s *Service) Start() error {
+	return nil
+}
+
+func New(em EntityManager) *Service {
+	return &Service{
+		em: em
+	}
+}

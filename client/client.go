@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/openconfig/bootz/proto/bootz"
-	"google.golang.org/grpc/grpc"
+	"google.golang.org/grpc"
 )
 
 type Client struct {
