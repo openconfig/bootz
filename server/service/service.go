@@ -3,9 +3,10 @@ package service
 import (
 	"context"
 
+	"github.com/openconfig/bootz/proto/bootz"
+	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"github.com/openconfig/bootz/proto/bootz"
 )
 
 type EntityLookup struct {
@@ -18,8 +19,9 @@ type ChassisEntity struct {}
 
 type EntityManager interface {
 	ResolveChassis(EntityLookup) (ChassisEntity, error)
-	GetBootConfig(bootz.ControlCard) (bootz.BootConfig, error)
+	GetBootstrapData(bootz.ControlCard) (bootz.BootstrapDataResponse, error)
 	SetStatus(EntityLookup, bootz.ReportStatusRequest) error
+	Sign(resp *bootz.BootstrapDataResponse) error
 }
 
 type Service struct {
@@ -27,12 +29,12 @@ type Service struct {
 	em EntityManager
 }
 
-func (s *Service) GetBootstrapRequest(ctx context.Context, req bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
+func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
 	if len(req.ChassisDescriptor.ControlCards) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 	}
 	// Validate the chassis can be serviced
-    chassis, err := s.em.ResolveChassis(
+    chassis, err := s.em.ResolveChassis(s
 		req.ChassisDescriptor.Manufacturer,
 	    req.ChassisDescriptor.SerialNumber)
 	
@@ -44,15 +46,36 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req bootz.GetBootstra
 	if chassis.BootMode == "SecureOnly" && req.Nonce == "" {
 	  return nil, status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
 	}
-	
+
 	// Iterate over the control cards and fetch data for each card.
+	var errList errlist.List
+
+	var responses *bootz.BootstrapDataResponse
 	for _, v := range req.ChassisDescriptor.ControlCards {
-		s.em.GetBootConfig(v)
+		bootdata, err := errList.Add(s.em.GetBootstrapData(v))
+		if err != nil {
+			errList.Add(err)
+		}
+		responses = append(responses, bootdata)
 	}
-	return nil, nil
+	if len(errList) != 0 {
+		return nil, errList.Err()
+	}
+	resp := &bootz.GetBootstrapDataResponse{
+		SignedResponse: &bootz.BootstrapDataSigned{
+			Responses: responses,
+		},
+	}
+	// Sign the response if Nonce is provided.
+	if req.Nonce != "" {
+		if err := s.em.Sign(resp); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
+		}
+	}
+	return resp, nil
 }
 
-func (s *Service) ReportStatus(ctx context.Context, req bootz.ReportStatusRequest) (*bootz.EmptyResponse, error) {
+func (s *Service) ReportStatus(ctx context.Context, req *bootz.ReportStatusRequest) (*bootz.EmptyResponse, error) {
     // Get device information from metadata
 	// Iterate over control cards and set the bootstrap status for element
     var errList errlist.List
