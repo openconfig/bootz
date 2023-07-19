@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "client",
+    srcs = ["client.go"],
+    importpath = "github.com/openconfig/bootz/client",
+    visibility = ["//visibility:public"],
+    deps = ["@org_golang_google_grpc//:go_default_library"],
+)
