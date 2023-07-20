@@ -10,6 +10,7 @@ import (
 
 	"github.com/openconfig/bootz/proto/bootz"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // Represents a 128 bit nonce.
@@ -29,6 +30,7 @@ func nonce() (string, error) {
 
 func main() {
 	ctx := context.Background()
+	flag.Parse()
 	// 1. DHCP Discovery of Bootstrap Server
 	// This step emulates the retrieval of the bootz server IP
 	// address from a DHCP server. In this case we always connect to localhost.
@@ -40,7 +42,7 @@ func main() {
 	// 2. Bootstrapping Service
 	// Device initiates a TLS-secured gRPC connection with the Bootz server.
 	// TODO: Make this use TLS.
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", *port))
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", *port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Exitf("Unable to connect to Bootstrap Server: %v", err)
 	}
