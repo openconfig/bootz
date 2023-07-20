@@ -9,6 +9,7 @@ require (
 )
 
 require (
+	github.com/golang/glog v1.1.1 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/openconfig/gnmi v0.0.0-20220617175856-41246b1b3507 // indirect
 	github.com/openconfig/gnoi v0.0.0-20220809151450-6bddacd72ef8 // indirect
