@@ -13,6 +13,7 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/openconfig/gnmi v0.0.0-20220617175856-41246b1b3507 // indirect
 	github.com/openconfig/gnoi v0.0.0-20220809151450-6bddacd72ef8 // indirect
+	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352 // indirect
 	golang.org/x/net v0.9.0 // indirect
 	golang.org/x/sys v0.7.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
