@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -18,6 +21,7 @@ import (
 	"go.mozilla.org/pkcs7"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 )
 
 // Represents a 128 bit nonce.
@@ -120,6 +124,25 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 		return err
 	}
 	log.Infof("Validated ownership certificate with OV PDC\n")
+
+	// Validate the response signature.
+	signedResponseBytes, err := proto.Marshal(resp.GetSignedResponse())
+	if err != nil {
+		return err
+	}
+	hashed := sha256.Sum256(signedResponseBytes)
+
+	// Verify the signature with the ownership certificate's public key. Currently only RSA keys are supported.
+	switch pub := ocCert.PublicKey.(type) {
+	case *rsa.PublicKey:
+		err = rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], []byte(resp.GetResponseSignature()))
+		if err != nil {
+			return fmt.Errorf("signature not verified: %v", err)
+		}
+	default:
+		return fmt.Errorf("unsupported public key type")
+	}
+	log.Infof("Verified SignedResponse signature")
 
 	return nil
 }
