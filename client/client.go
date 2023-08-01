@@ -28,9 +28,9 @@ import (
 const nonceLength = 16
 
 var (
-	bootMode = flag.String("boot_mode", "SecureOnly", "The BootMode the device can start in.")
-	port     = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
-	rootCA   = flag.String("root_ca_cert_path", "ca.pem", "The path to a file contained a PEM encoded certificate for the manufacturer CA.")
+	secureOnly = flag.Bool("secure_only", true, "Whether to start the emulated device in SecureOnly boot mode.")
+	port       = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
+	rootCA     = flag.String("root_ca_cert_path", "ca.pem", "The path to a file contained a PEM encoded certificate for the manufacturer CA.")
 )
 
 type OwnershipVoucher struct {
@@ -45,6 +45,11 @@ type OwnershipVoucherInner struct {
 	Assertion                  string `json:"assertion"`
 	PinnedDomainCert           string `json:"pinned-domain-cert"`
 	DomainCertRevocationChecks bool   `json:"domain-cert-revocation-checks"`
+}
+
+// pemEncodeCert adds the correct PEM headers and footers to a raw certificate block.
+func pemEncodeCert(contents string) string {
+	return "-----BEGIN CERTIFICATE-----\n" + contents + "\n-----END CERTIFICATE-----"
 }
 
 // validateArtifacts checks the signed artifacts in a GetBootstrapDataResponse. Specifically, it:
@@ -82,7 +87,7 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 	// Create a CA pool for the device to validate that the vendor has signed this OV.
 	vendorCAPool := x509.NewCertPool()
 	if !vendorCAPool.AppendCertsFromPEM(rootCA) {
-		return fmt.Errorf("error adding vendor root CA to pool")
+		return fmt.Errorf("unable to add vendor root CA to pool")
 	}
 
 	// Verify the ownership voucher with this CA.
@@ -98,10 +103,7 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 		return fmt.Errorf("serial number from OV does not match request")
 	}
 
-	// Get the Pinned Domain Cert from the Ownership Voucher.
-	pdc := parsedOV.OV.PinnedDomainCert
-	// Construct the correct PEM data. We need to manually add the headers as the provided PDC does not contain these.
-	pdCPEM := "-----BEGIN CERTIFICATE-----\n" + pdc + "\n-----END CERTIFICATE-----"
+	pdCPEM := pemEncodeCert(parsedOV.OV.PinnedDomainCert)
 
 	// Create a new pool with this PDC.
 	pdcPool := x509.NewCertPool()
@@ -140,7 +142,7 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 			return fmt.Errorf("signature not verified: %v", err)
 		}
 	default:
-		return fmt.Errorf("unsupported public key type")
+		return fmt.Errorf("unsupported public key type: %T", pub)
 	}
 	log.Infof("Verified SignedResponse signature")
 
@@ -168,8 +170,6 @@ func generateNonce() (string, error) {
 func main() {
 	ctx := context.Background()
 	flag.Parse()
-
-	secureOnly := *bootMode == "SecureOnly"
 
 	if *rootCA == "" {
 		log.Exitf("No root CA certificate file specified")
@@ -204,7 +204,7 @@ func main() {
 		},
 	}
 
-	log.Infof("%v chassis %v starting in %v boot mode", chassis.Manufacturer, chassis.SerialNumber, *bootMode)
+	log.Infof("%v chassis %v starting with SecureOnly = %v", chassis.Manufacturer, chassis.SerialNumber, *secureOnly)
 
 	// 1. DHCP Discovery of Bootstrap Server
 	// This step emulates the retrieval of the bootz server IP
@@ -231,7 +231,7 @@ func main() {
 	activeControlCard := chassis.ControlCards[0]
 
 	nonce := ""
-	if secureOnly {
+	if *secureOnly {
 		// Generate a nonce that the Bootz server will use to sign the response.
 		nonce, err = generateNonce()
 		if err != nil {
@@ -258,14 +258,14 @@ func main() {
 	}
 
 	// Only check OC, OV and response signature if SecureOnly is set.
-	if secureOnly {
+	if *secureOnly {
 		if err := validateArtifacts(activeControlCard.GetSerialNumber(), resp, rootCABytes); err != nil {
 			log.Exitf("Error validating signed data: %v", err)
 		}
 	}
 
 	signedResp := resp.GetSignedResponse()
-	if secureOnly && signedResp.GetNonce() != nonce {
+	if *secureOnly && signedResp.GetNonce() != nonce {
 		log.Exitf("GetBootstrapDataResponse nonce does not match")
 	}
 
