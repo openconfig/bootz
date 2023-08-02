@@ -7,7 +7,7 @@ The code located in this directory is intended to emulator a typical Bootz clien
 ### Flags
 
 *   `port`: The port to listen to the Bootz Server on localhost.
-*   `boot_mode`: Determines the the mode to start the client emulator in. If set to `SecureOnly`, ownership vouchers and ownership certificate will be verified.
+*   `insecure_boot`: Whether to set start the emulated client in an insecure boot mode, in which ownership voucher and certificates aren't checked.
 *   `root_ca_cert_path`: A path to a file that contains a PEM encoded certificate for the trusted ZTP Signing authority. This certificate will be used to validate the ownership voucher.
 
 ### Root CA
