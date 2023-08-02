@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -28,9 +29,9 @@ import (
 const nonceLength = 16
 
 var (
-	secureOnly = flag.Bool("secure_only", true, "Whether to start the emulated device in SecureOnly boot mode.")
-	port       = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
-	rootCA     = flag.String("root_ca_cert_path", "ca.pem", "The path to a file contained a PEM encoded certificate for the manufacturer CA.")
+	insecureBoot = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
+	port         = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
+	rootCA       = flag.String("root_ca_cert_path", "../testdata/ca.pem", "The relative path to a file contained a PEM encoded certificate for the manufacturer CA.")
 )
 
 type OwnershipVoucher struct {
@@ -49,7 +50,7 @@ type OwnershipVoucherInner struct {
 
 // pemEncodeCert adds the correct PEM headers and footers to a raw certificate block.
 func pemEncodeCert(contents string) string {
-	return "-----BEGIN CERTIFICATE-----\n" + contents + "\n-----END CERTIFICATE-----"
+	return strings.Join([]string{"-----BEGIN CERTIFICATE-----", contents, "-----END CERTIFICATE-----"}, "\n")
 }
 
 // validateArtifacts checks the signed artifacts in a GetBootstrapDataResponse. Specifically, it:
@@ -114,7 +115,7 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 	// Parse the Ownership Certificate.
 	ocCert, err := certFromPemBlock(oc)
 	if err != nil {
-		log.Exitf("failed to parse certificate: %v", err)
+		return fmt.Errorf("failed to parse certificate: %v", err)
 	}
 
 	// Verify that the OC is signed by the PDC.
@@ -204,7 +205,7 @@ func main() {
 		},
 	}
 
-	log.Infof("%v chassis %v starting with SecureOnly = %v", chassis.Manufacturer, chassis.SerialNumber, *secureOnly)
+	log.Infof("%v chassis %v starting with SecureOnly = %v", chassis.Manufacturer, chassis.SerialNumber, !*insecureBoot)
 
 	// 1. DHCP Discovery of Bootstrap Server
 	// This step emulates the retrieval of the bootz server IP
@@ -231,7 +232,7 @@ func main() {
 	activeControlCard := chassis.ControlCards[0]
 
 	nonce := ""
-	if *secureOnly {
+	if !*insecureBoot {
 		// Generate a nonce that the Bootz server will use to sign the response.
 		nonce, err = generateNonce()
 		if err != nil {
@@ -258,14 +259,14 @@ func main() {
 	}
 
 	// Only check OC, OV and response signature if SecureOnly is set.
-	if *secureOnly {
+	if !*insecureBoot {
 		if err := validateArtifacts(activeControlCard.GetSerialNumber(), resp, rootCABytes); err != nil {
 			log.Exitf("Error validating signed data: %v", err)
 		}
 	}
 
 	signedResp := resp.GetSignedResponse()
-	if *secureOnly && signedResp.GetNonce() != nonce {
+	if !*insecureBoot && signedResp.GetNonce() != nonce {
 		log.Exitf("GetBootstrapDataResponse nonce does not match")
 	}
 
