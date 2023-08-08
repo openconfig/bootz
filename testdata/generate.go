@@ -27,6 +27,15 @@ var (
 	controlCardSerials = flag.String("serials", "", "Comma-separated list of control card serials to generate OVs for.")
 )
 
+const (
+	// Default values for the Root CA certificates.
+	caCountry  = "US"
+	caProvince = "CA"
+	caLocality = "Mountain View"
+	// Default one year expiry of certs.
+	caExpiry = time.Hour * 24 * 365
+)
+
 type OwnershipVoucher struct {
 	OV OwnershipVoucherInner `json:"ietf-voucher:voucher"`
 }
@@ -62,9 +71,9 @@ func newCertificateAuthority(commonName string, org string) (string, string, err
 		Subject: pkix.Name{
 			CommonName:   commonName,
 			Organization: []string{org},
-			Country:      []string{"US"},
-			Province:     []string{"CA"},
-			Locality:     []string{"Mountain View"},
+			Country:      []string{caCountry},
+			Province:     []string{caProvince},
+			Locality:     []string{caLocality},
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().AddDate(10, 0, 0),
@@ -111,10 +120,11 @@ func removePemHeaders(pemBlock string) string {
 
 // newOwnershipVoucher creates an OV for the device serial which is signed by the vendor's CA.
 func newOwnershipVoucher(serial string, pdcPem []byte, vendorCACert *x509.Certificate, vendorCAPriv *rsa.PrivateKey) (string, error) {
+	currentTime := time.Now()
 	ov := OwnershipVoucher{
 		OV: OwnershipVoucherInner{
-			CreatedOn:        time.Now().String(),
-			ExpiresOn:        time.Now().Add(time.Hour * 24 * 365).String(),
+			CreatedOn:        currentTime.String(),
+			ExpiresOn:        currentTime.Add(caExpiry).String(),
 			SerialNumber:     serial,
 			PinnedDomainCert: removePemHeaders(string(pdcPem)),
 		},
