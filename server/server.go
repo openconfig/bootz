@@ -11,6 +11,7 @@ import (
 	"net"
 
 	"github.com/openconfig/bootz/proto/bootz"
+	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
 
@@ -23,8 +24,8 @@ var (
 
 func main() {
 	flag.Parse()
-	// TODO: Implement an entity manager.
-	c := service.New(nil)
+	em := entitymanager.New()
+	c := service.New(em)
 	s := grpc.NewServer()
 
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", *port))
