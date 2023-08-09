@@ -19,11 +19,15 @@ import (
 )
 
 var (
-	port = flag.String("port", "15000", "The port to start the Bootz server on localhost")
+	port = flag.String("port", "", "The port to start the Bootz server on localhost")
 )
 
 func main() {
 	flag.Parse()
+
+	if *port == "" {
+		log.Exitf("no port selected. specify with the -port flag")
+	}
 	em := entitymanager.New()
 	c := service.New(em)
 	s := grpc.NewServer()
