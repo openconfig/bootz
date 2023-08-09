@@ -6,8 +6,9 @@
 package main
 
 import (
-	"github.com/labstack/gommon/log"
+	log "github.com/golang/glog"
 	"github.com/openconfig/bootz/proto/bootz"
+	"github.com/openconfig/bootz/server/fileentitymanager"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
 )
