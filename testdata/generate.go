@@ -50,21 +50,9 @@ type OwnershipVoucherInner struct {
 	DomainCertRevocationChecks bool   `json:"domain-cert-revocation-checks"`
 }
 
-// certFromPem converts a PEM-formatted byte slice to an x509 Certificate
-func certFromPem(contents []byte) (*x509.Certificate, error) {
-	pemBlock, _ := pem.Decode(contents)
-	return x509.ParseCertificate(pemBlock.Bytes)
-}
-
-// privateKeyFromPem converts a PEM-formatted byte slice to an RSA Private Key
-func privateKeyFromPem(contents []byte) (*rsa.PrivateKey, error) {
-	pemBlock, _ := pem.Decode(contents)
-	return x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
-}
-
 // newCertificateAuthority creates a new CA for the chosen organization.
 // It returns a self-signed CA certificate as the first value, the associated private key as the second and any error as the third.
-func newCertificateAuthority(commonName string, org string) (string, string, error) {
+func newCertificateAuthority(commonName string, org string) (*x509.Certificate, *rsa.PrivateKey, error) {
 	// Create the certificate authority.
 	ca := &x509.Certificate{
 		SerialNumber: big.NewInt(int64(time.Now().Year())),
@@ -86,29 +74,20 @@ func newCertificateAuthority(commonName string, org string) (string, string, err
 	// Generate an RSA 4096 bit pub/private key pair.
 	caPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		return "", "", err
+		return nil, nil, err
 	}
 	// Generate the self-signed cert.
 	certBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caPrivateKey.PublicKey, caPrivateKey)
 	if err != nil {
-		return "", "", err
-	}
-	// Encode certificate in PEM format.
-	caCertPEM := new(bytes.Buffer)
-	if err = pem.Encode(caCertPEM, &pem.Block{Type: "CERTIFICATE", Bytes: certBytes}); err != nil {
-		return "", "", err
+		return nil, nil, err
 	}
 
-	// Encode private key in PEM format.
-	caPrivateKeyPEM := new(bytes.Buffer)
-	if err := pem.Encode(caPrivateKeyPEM, &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(caPrivateKey),
-	}); err != nil {
-		return "", "", err
+	cert, err := x509.ParseCertificate(certBytes)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return caCertPEM.String(), caPrivateKeyPEM.String(), nil
+	return cert, caPrivateKey, nil
 }
 
 // removePemHeaders strips the PEM headers from a certificate so it can be used in an Ownership Voucher.
@@ -155,6 +134,18 @@ func newOwnershipVoucher(serial string, pdcPem []byte, vendorCACert *x509.Certif
 	return base64.StdEncoding.EncodeToString(signedBytes), nil
 }
 
+// pemEncode returns a PEM encoding of DER bytes
+func pemEncode(der []byte, pemType string) ([]byte, error) {
+	pemBytes := new(bytes.Buffer)
+	if err := pem.Encode(pemBytes, &pem.Block{
+		Type:  pemType,
+		Bytes: der,
+	}); err != nil {
+		return nil, err
+	}
+	return pemBytes.Bytes(), nil
+}
+
 // writeFile writes the contents to a new file in the current directory.
 func writeFile(contents []byte, filename string) error {
 	f, err := os.Create(filename)
@@ -189,10 +180,18 @@ func main() {
 	if err != nil {
 		log.Exitf("unable to generate vendor CA: %v", err)
 	}
-	if err := writeFile([]byte(vendorCAPub), "vendorca_pub.pem"); err != nil {
+	vendorCACertPem, err := pemEncode(vendorCAPub.Raw, "CERTIFICATE")
+	if err != nil {
 		log.Exit(err)
 	}
-	if err := writeFile([]byte(vendorCAPriv), "vendorca_priv.pem"); err != nil {
+	if err := writeFile(vendorCACertPem, "vendorca_pub.pem"); err != nil {
+		log.Exit(err)
+	}
+	vendorCAPrivPem, err := pemEncode(x509.MarshalPKCS1PrivateKey(vendorCAPriv), "RSA PRIVATE KEY")
+	if err != nil {
+		log.Exit(err)
+	}
+	if err := writeFile(vendorCAPrivPem, "vendorca_priv.pem"); err != nil {
 		log.Exit(err)
 	}
 
@@ -202,10 +201,18 @@ func main() {
 	if err != nil {
 		log.Exitf("unable to generate PDC: %v", err)
 	}
-	if err := writeFile([]byte(pdc), "pdc_pub.pem"); err != nil {
+	pdcPem, err := pemEncode(pdc.Raw, "CERTIFICATE")
+	if err != nil {
 		log.Exit(err)
 	}
-	if err := writeFile([]byte(pdcPriv), "pdc_priv.pem"); err != nil {
+	if err := writeFile(pdcPem, "pdc_pub.pem"); err != nil {
+		log.Exit(err)
+	}
+	pdcPrivPem, err := pemEncode(x509.MarshalPKCS1PrivateKey(pdcPriv), "RSA PRIVATE KEY")
+	if err != nil {
+		log.Exit(err)
+	}
+	if err := writeFile(pdcPrivPem, "pdc_priv.pem"); err != nil {
 		log.Exit(err)
 	}
 
@@ -213,28 +220,25 @@ func main() {
 	// Real implementations may instead have the OC as a separate certificate signed by the PDC.
 	fmt.Printf("Generating %v OC cert and private key\n", *owner)
 	oc, ocPriv := pdc, pdcPriv
-	if err := writeFile([]byte(oc), "oc_pub.pem"); err != nil {
-		log.Exit(err)
-	}
-	if err := writeFile([]byte(ocPriv), "oc_priv.pem"); err != nil {
-		log.Exit(err)
-	}
-
-	// Convert PEM bytes to RSA Private Key for signing the OV
-	vcapriv, err := privateKeyFromPem([]byte(vendorCAPriv))
+	ocPem, err := pemEncode(oc.Raw, "CERTIFICATE")
 	if err != nil {
 		log.Exit(err)
 	}
-	// Convert PEM bytes to x509 Cert for signing the OV
-	vca, err := certFromPem([]byte(vendorCAPub))
+	if err := writeFile(ocPem, "oc_pub.pem"); err != nil {
+		log.Exit(err)
+	}
+	ocPrivPem, err := pemEncode(x509.MarshalPKCS1PrivateKey(ocPriv), "RSA PRIVATE KEY")
 	if err != nil {
+		log.Exit(err)
+	}
+	if err := writeFile(ocPrivPem, "oc_priv.pem"); err != nil {
 		log.Exit(err)
 	}
 
 	// Generate OVs for each control card.
 	for _, s := range serials {
 		fmt.Printf("Generating OV for control card serial %v\n", s)
-		ov, err := newOwnershipVoucher(s, []byte(pdc), vca, vcapriv)
+		ov, err := newOwnershipVoucher(s, pdcPem, vendorCAPub, vendorCAPriv)
 		if err != nil {
 			log.Exitf("unable to create OV: %v", err)
 		}
