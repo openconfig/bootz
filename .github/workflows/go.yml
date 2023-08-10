@@ -2,9 +2,9 @@
 name: Go
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   schedule:
     - cron: "0 0 * * *"
 jobs:
@@ -14,13 +14,13 @@ jobs:
       matrix:
         go: ["1.19", "1.x"]
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Go ${{ matrix.go }}
-      uses: actions/setup-go@v4.1.0
-      with:
-        go-version: ${{ matrix.go }}
-    - name: Build
-      run: go build -v ./...
+      - uses: actions/checkout@v2
+      - name: Set up Go ${{ matrix.go }}
+        uses: actions/setup-go@v4.1.0
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Build
+        run: go build -v ./...
   test:
     runs-on: ubuntu-latest
     steps:
