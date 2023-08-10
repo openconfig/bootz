@@ -27,9 +27,9 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("failed to listen: %v", err))
 	}
-	bootzServer:=service.New(em); 
+	bootzService:=service.New(em); 
 	grpcSrv := grpc.NewServer()
-	bootz.RegisterBootstrapServer(grpcSrv,bootzServer)
+	grpcSrv.RegisterService(&bootz.Bootstrap_ServiceDesc, bootzService)
 	go func() {
 		err:=grpcSrv.Serve(lis); if err != nil {
 			log.Errorf("Failed to start server: %w", err)
