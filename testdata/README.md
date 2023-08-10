@@ -30,7 +30,12 @@ This is an x509 certificate/RSA keypair that represents the ownership certificat
 
 Each of these files are base64-encoded, PKCS7 signed messages that represent the Ownership Voucher for that control card. It is signed by the Vendor CA and contains the PDC Cert.
 
-In this context, a control card is the smallest unit to host and run the OS image. FFF (Fixed Form Factor) devices only have one unit of this per chassis, while MFF (Modular Form Factor) devices often have two (or more) of these per chassis. The term Control Card isn't used consistently across the industry. Each vendor have their own hardware architectures and hence their own terms for this bootstrapping unit including:
+In this context, a control card is the smallest unit to host and run the OS
+image. FFF (Fixed Form Factor) devices only have one unit of this per
+chassis, while MFF (Modular Form Factor) devices often have two (or more) of
+these per chassis. The term Control Card isn't used consistently across the
+industry. Each vendor have their own hardware architectures and hence their
+own terms for this bootstrapping unit including:
 
 - Arista uses supervisors e.g. DCS-7280 is a single-supervisor (FFF) and DCS-7808 is a dual-supervisor (MFF).
 - Cisco uses Routing Processors (RPs) e.g. CISCO-8202 is a single-RP (FFF) and CISCO-8808 is a dual-RP (MFF).
