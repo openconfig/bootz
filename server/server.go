@@ -11,7 +11,7 @@ import (
 	"net"
 
 	"github.com/openconfig/bootz/proto/bootz"
-	"github.com/openconfig/bootz/server/entitymanager"
+	"github.com/openconfig/bootz/server/fileentitymanager"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
 
@@ -36,6 +36,7 @@ func main() {
 	if err != nil {
 		log.Exitf("Error listening on port: %v", err)
 	}
+  log.Infof("Listening on %s", lis.Addr())
 	bootz.RegisterBootstrapServer(s, c)
 	err = s.Serve(lis)
 	if err != nil {
