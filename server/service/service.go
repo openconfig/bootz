@@ -12,16 +12,17 @@ import (
 type EntityLookup struct {
 	Manufacturer string
 	SerialNumber string
-	DeviceName string
 }
 
-type ChassisEntity struct {}
+type ChassisEntity struct {
+	BootMode string
+}
 
 type EntityManager interface {
-	ResolveChassis(EntityLookup) (ChassisEntity, error)
-	GetBootstrapData(bootz.ControlCard) (bootz.BootstrapDataResponse, error)
-	SetStatus(EntityLookup, bootz.ReportStatusRequest) error
-	Sign(resp *bootz.BootstrapDataResponse) error
+	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
+	GetBootstrapData(*bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
+	SetStatus(*bootz.ReportStatusRequest) error
+	Sign(*bootz.GetBootstrapDataResponse) error
 }
 
 type Service struct {
@@ -33,33 +34,35 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 	if len(req.ChassisDescriptor.ControlCards) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 	}
-	// Validate the chassis can be serviced
-    chassis, err := s.em.ResolveChassis(s
+	lookup := &EntityLookup{
 		req.ChassisDescriptor.Manufacturer,
-	    req.ChassisDescriptor.SerialNumber)
-	
+		req.ChassisDescriptor.SerialNumber,
+	}
+	// Validate the chassis can be serviced
+	chassis, err := s.em.ResolveChassis(lookup)
+
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v", req.ChassisDescriptor)
 	}
 
 	// If chassis can only be booted into secure mode then return error
 	if chassis.BootMode == "SecureOnly" && req.Nonce == "" {
-	  return nil, status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
+		return nil, status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
 	}
 
 	// Iterate over the control cards and fetch data for each card.
-	var errList errlist.List
+	var errs errlist.List
 
-	var responses *bootz.BootstrapDataResponse
+	var responses []*bootz.BootstrapDataResponse
 	for _, v := range req.ChassisDescriptor.ControlCards {
-		bootdata, err := errList.Add(s.em.GetBootstrapData(v))
+		bootdata, err := s.em.GetBootstrapData(v)
 		if err != nil {
-			errList.Add(err)
+			errs.Add(err)
 		}
 		responses = append(responses, bootdata)
 	}
-	if len(errList) != 0 {
-		return nil, errList.Err()
+	if errs.Err() != nil {
+		return nil, errs.Err()
 	}
 	resp := &bootz.GetBootstrapDataResponse{
 		SignedResponse: &bootz.BootstrapDataSigned{
@@ -76,30 +79,17 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 }
 
 func (s *Service) ReportStatus(ctx context.Context, req *bootz.ReportStatusRequest) (*bootz.EmptyResponse, error) {
-    // Get device information from metadata
-	// Iterate over control cards and set the bootstrap status for element
-    var errList errlist.List
-	for _, v := range req.ControlCards {
-		if err := s.em.SetStatus(); err != nil {
-			errList.Append(err)
-		}
-	}
-    return errlist.Error()
-
+	return nil, s.em.SetStatus(req)
 }
 
-// Public API for allowing the device configuration to be set for each device the 
+// Public API for allowing the device configuration to be set for each device the
 // will be responsible for configuring.  This will be only availble for testing.
-func (s *Service) SetDeviceConfiguration(ctx context.Context, req entity.ConfigurationRequest) {entity.ConfigurationResonse, error} {
-	return nil, status.Errorf(codes.Unimplemented, "Unimplemented")
-}
-
-func (s *Service) Start() error {
-	return nil
+func (s *Service) SetDeviceConfiguration(ctx context.Context) error {
+	return status.Errorf(codes.Unimplemented, "Unimplemented")
 }
 
 func New(em EntityManager) *Service {
 	return &Service{
-		em: em
+		em: em,
 	}
 }
