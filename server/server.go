@@ -36,7 +36,7 @@ func main() {
 	if err != nil {
 		log.Exitf("Error listening on port: %v", err)
 	}
-  log.Infof("Listening on %s", lis.Addr())
+	log.Infof("Listening on %s", lis.Addr())
 	bootz.RegisterBootstrapServer(s, c)
 	err = s.Serve(lis)
 	if err != nil {
