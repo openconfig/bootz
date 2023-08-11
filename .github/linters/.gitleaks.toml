@@ -1,0 +1,8 @@
+title = "gitleaks config"
+
+[allowlist]
+description = "global allow lists"
+paths = [
+    '''/testdata/pdc_priv.pem''',
+    '''/testdata/oc_priv.pem'''
+]
