@@ -126,7 +126,7 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 	if _, err := ocCert.Verify(opts); err != nil {
 		return err
 	}
-	log.Infof("Validated ownership certificate with OV PDC\n")
+	log.Infof("Validated ownership certificate with OV PDC")
 
 	// Validate the response signature.
 	signedResponseBytes, err := proto.Marshal(resp.GetSignedResponse())

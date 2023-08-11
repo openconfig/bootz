@@ -195,7 +195,7 @@ func main() {
 		log.Exit(err)
 	}
 
-	//Generate PDC.
+	// Generate PDC.
 	fmt.Printf("Generating %v PDC cert and private key\n", *owner)
 	pdc, pdcPriv, err := newCertificateAuthority("Device Owner PDC", *owner)
 	if err != nil {
