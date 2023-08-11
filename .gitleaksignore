@@ -1,2 +1,2 @@
-/github/workspace/testdata/pdc_priv.pem:private-key:1
-/github/workspace/testdata/oc_priv.pem:private-key:1
+/testdata/pdc_priv.pem:private-key:1
+/testdata/oc_priv.pem:private-key:1
