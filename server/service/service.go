@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
+	"time"
+
 	//"time"
 
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/openconfig/bootz/proto/bootz"
 	//"google.golang.org/grpc"
 	"github.com/openconfig/gnmi/errlist"
@@ -15,37 +16,37 @@ import (
 type EntityLookup struct {
 	Manufacturer string
 	SerialNumber string
-	DeviceName string
+	PartNumber   string
 }
 
 type ChassisEntity struct {
-	DeviceName string
-	SerialNumber string
-	Manufacturer string
-	PartNumber	string
-	Status      bootz.ReportStatusRequest_BootstrapStatus
-	BootMode   string
-}
-
-type EntityManager interface {
-	ResolveChassis(EntityLookup) (*ChassisEntity, error)
-	GetBootstrapData(*bootz.ControlCard) (bootz.BootstrapDataResponse, error)
-	SetStatus(EntityLookup, bootz.ReportStatusRequest) error
-	Sign(resp *bootz.GetBootstrapDataResponse) error
+	Name     string
+	BootMode string
 }
 
 type bootLog struct {
-	Chassis ChassisEntity
-	Start timestamp.Timestamp
-	End   timestamp.Timestamp
-	Status bootz.ReportStatusRequest_BootstrapStatus
-	BootStrapData bootz.BootstrapDataResponse
-	BootStrapRequest bootz.GetBootstrapDataRequest
+	BootMode       string
+	StartTimeStamp uint64
+	EndTimeStamp   uint64
+	Status         []bootz.ReportStatusRequest_BootstrapStatus
+	BootResponse   *bootz.BootstrapDataResponse
+	BootRequest    *bootz.GetBootstrapDataRequest
+	Err            error
 }
+type EntityManager interface {
+	ResolveChassis(EntityLookup) (*ChassisEntity, error)
+	GetBootstrapData(*bootz.GetBootstrapDataRequest, *bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
+	//SetStatus(EntityLookup, bootz.ReportStatusRequest) error
+	Sign(resp *bootz.GetBootstrapDataResponse) error
+}
+
 type Service struct {
 	bootz.UnimplementedBootstrapServer
-	em EntityManager
-	bootlogs  []bootLog
+
+	em               EntityManager
+	connectedChassis map[string]*bootz.ChassisDescriptor
+	activeBoots      map[string]*bootLog
+	failedRequest    map[*bootz.GetBootstrapDataRequest]error
 }
 
 /*func New() (*Service, error){
@@ -53,22 +54,25 @@ type Service struct {
 }*/
 
 func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
-	return nil,nil
 	if len(req.ChassisDescriptor.ControlCards) == 0 {
+		s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 	}
 	// Validate the chassis can be serviced
-    chassis, err := s.em.ResolveChassis(EntityLookup{
+	chassis, err := s.em.ResolveChassis(EntityLookup{
 		Manufacturer: req.ChassisDescriptor.Manufacturer,
-	    SerialNumber: req.ChassisDescriptor.SerialNumber})
-	
+		SerialNumber: req.ChassisDescriptor.SerialNumber})
+
 	if err != nil {
+		s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory, error from IM: %v", err)
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v", req.ChassisDescriptor)
 	}
+	s.connectedChassis[chassis.Name] = req.ChassisDescriptor
 
 	// If chassis can only be booted into secure mode then return error
 	if chassis.BootMode == "SecureOnly" && req.Nonce == "" {
-	  return nil, status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
+		s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
+		return nil, status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
 	}
 
 	// Iterate over the control cards and fetch data for each card.
@@ -76,11 +80,20 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 
 	var responses []*bootz.BootstrapDataResponse
 	for _, v := range req.ChassisDescriptor.ControlCards {
-		bootdata, err := s.em.GetBootstrapData(v)
+		bootdata, err := s.em.GetBootstrapData(req, v)
+		s.activeBoots[v.GetSerialNumber()] = &bootLog{
+			BootMode:       chassis.BootMode,
+			StartTimeStamp: uint64(time.Now().UnixMilli()),
+			BootRequest:    req,
+			Err:            err,
+			BootResponse:   bootdata,
+			Status:         []bootz.ReportStatusRequest_BootstrapStatus{bootz.ReportStatusRequest_BootstrapStatus(req.ControlCardState.Status)},
+		}
 		if err != nil {
 			errList.Add(err)
+			s.activeBoots[v.GetSerialNumber()].EndTimeStamp = uint64(time.Now().UnixMilli())
 		}
-		responses = append(responses, &bootdata)
+		responses = append(responses, bootdata)
 	}
 	if errList.Err() != nil {
 		return nil, errList.Err()
@@ -100,20 +113,30 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 }
 
 func (s *Service) ReportStatus(ctx context.Context, req *bootz.ReportStatusRequest) (*bootz.EmptyResponse, error) {
-    // Get device information from metadata
+	// Get device information from metadata
 	// Iterate over control cards and set the bootstrap status for element
-    /*var errList errlist.List
+	var errList errlist.List
 	for _, v := range req.States {
-		if err := s.em.SetStatus(); err != nil {
-			errList.Append(err)
+		bootLog, ok := s.activeBoots[v.SerialNumber]
+		if !ok {
+			// TODO: this will lead to issues if the server restarts with the current code.
+			// later we need fix this, either not return the error or add a way to recover active boots logs when server restarts
+			errList.Add(status.Errorf(codes.InvalidArgument, "getting status request for controller card %s is not expected, the card never requested boot data", v.SerialNumber))
+			continue
+		}
+		bootLog.Status = append(bootLog.Status, bootz.ReportStatusRequest_BootstrapStatus(v.Status))
+		if v.Status == bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED {
+			bootLog.EndTimeStamp = uint64(time.Now().UnixMilli())
 		}
 	}
-    return errlist.Error()*/
-	return nil,nil
+	if errList.Err() != nil {
+		return &bootz.EmptyResponse{}, nil
 
+	}
+	return nil, errList.Err()
 }
 
-// Public API for allowing the device configuration to be set for each device the 
+// Public API for allowing the device configuration to be set for each device the
 // will be responsible for configuring.  This will be only available for testing.
 //func (s *Service) SetDeviceConfiguration(ctx context.Context, req entity.ConfigurationRequest) {entity.ConfigurationResonse, error} {
 //	return nil, status.Errorf(codes.Unimplemented, "Unimplemented")
@@ -123,10 +146,8 @@ func (s *Service) Start() error {
 	return nil
 }
 
-
 func New(em EntityManager) *Service {
 	return &Service{
 		em: em,
 	}
 }
-

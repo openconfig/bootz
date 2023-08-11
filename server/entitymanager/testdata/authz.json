@@ -1,0 +1,1 @@
+{"name": "authz", "allow_rules": [{"name": "allow all for everyone", "request": {"paths": ["/gnmi.gNMI/*"]}}]}

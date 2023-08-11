@@ -1,0 +1,24 @@
+chassis {
+    name: "test"
+    serial_number: "12345678"
+    part_number: "partnumbertest"
+    manufacturer: "cisco"
+    ownership_voucher: ""
+    bootloader_password_hash: ""
+    software_image {
+
+    }
+    boot_mode: UnSecure
+    config {
+        boot_config {
+
+        }
+        gnsi_config {
+
+        }
+        dhcp_config {
+            
+        }
+
+    }
+}
