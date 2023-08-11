@@ -56,7 +56,7 @@ func pemEncodeCert(contents string) string {
 // validateArtifacts checks the signed artifacts in a GetBootstrapDataResponse. Specifically, it:
 // - Checks that the OV in the response is signed by the manufacturer.
 // - Checks that the serial number in the OV matches the one in the original request.
-// - Verififies that the Ownership Certificate is in the chain of signers of the Pinned Domain Cert.
+// - Verifies that the Ownership Certificate is in the chain of signers of the Pinned Domain Cert.
 func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse, rootCA []byte) error {
 	ov64 := resp.GetOwnershipVoucher()
 	if len(ov64) == 0 {
