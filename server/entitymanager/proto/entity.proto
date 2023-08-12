@@ -133,10 +133,10 @@ message BootConfig {
   google.protobuf.Struct metadata = 1;
 
   // Native format vendor configuration file
-  bytes vendor_config_file = 2;
+  string vendor_config_file = 2;
 
   // JSON rendered OC configuration file
-  bytes oc_config_file = 3;
+  string oc_config_file = 3;
 
   // Bootloader key-value parameters that are required as part of boot
   // configuration.

@@ -147,7 +147,11 @@ func (s *Service) Start() error {
 }
 
 func New(em EntityManager) *Service {
-	return &Service{
+	// initialize the maps
+	return  & Service{
 		em: em,
+		connectedChassis: map[string]*bootz.ChassisDescriptor{},
+		activeBoots: map[string]*bootLog{},
+		failedRequest: map[*bootz.GetBootstrapDataRequest]error{},
 	}
 }
