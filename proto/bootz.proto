@@ -103,7 +103,8 @@ message ControlCardState {
     CONTROL_CARD_STATUS_INITIALIZED = 2; 
   }
 
-  // Serial must align with the serial numberpre
+  // Serial must align with the serial number of the provided
+  // control card in the chassis descriptor.
   string serial_number = 1;
   ControlCardStatus status = 2;
 }

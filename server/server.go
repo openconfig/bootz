@@ -10,31 +10,39 @@ import (
 	"net"
 	"fmt"
 
-	"github.com/labstack/gommon/log"
+	//"github.com/labstack/gommon/log"
 	"github.com/openconfig/bootz/proto/bootz"
+	//"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
-	"github.com/openconfig/bootz/server/fileentitymanager"
+	"github.com/openconfig/bootz/server/entitymanager"
 	"google.golang.org/grpc"
+
+	log "github.com/golang/glog"
 )
 
 var (
-	address = flag.String("address", "127.0.0.1:8999", "The address where the bootzserver will listen")
+	port = flag.String("port", "", "The port to start the Bootz server on localhost")
 )
 
 func main() {
-	em := fileentitymanager.New("config_file+test")
-	lis, err := net.Listen("tcp", *address)
-	if err != nil {
-		panic(fmt.Sprintf("failed to listen: %v", err))
+	flag.Parse()
+
+	if *port == "" {
+		log.Exitf("no port selected. specify with the -port flag")
 	}
-	bootzService:=service.New(em); 
-	grpcSrv := grpc.NewServer()
-	grpcSrv.RegisterService(&bootz.Bootstrap_ServiceDesc, bootzService)
-	go func() {
-		err:=grpcSrv.Serve(lis); if err != nil {
-			log.Errorf("Failed to start server: %w", err)
-		}
-	}()
-	//grpcSrv.GracefulStop()
+	em, err := entitymanager.New("test")
+	c := service.New(em)
+	s := grpc.NewServer()
+
+	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", *port))
+	if err != nil {
+		log.Exitf("Error listening on port: %v", err)
+	}
+	log.Infof("Listening on %s", lis.Addr())
+	bootz.RegisterBootstrapServer(s, c)
+	err = s.Serve(lis)
+	if err != nil {
+		log.Exitf("Error serving grpc: %v", err)
+	}
 
 }

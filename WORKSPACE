@@ -81,8 +81,8 @@ go_repository(
 go_repository(
     name = "com_github_openconfig_gnsi",
     importpath = "github.com/openconfig/gnsi",
-    sum = "h1:CfJsd2V3ElPPtp3eAEExsShKy86Ar20hPL0rhlTp0l0=",
-    version = "v0.2.1",
+    sum = "h1:RYEzX1S7jpFPz2Mr4dZggq8bKtkhjWJJ+i809QM+ttk=",
+    version = "v1.2.2",
 )
 
 load("@rules_proto_grpc//go:repositories.bzl", rules_proto_grpc_go_repos = "go_repos")

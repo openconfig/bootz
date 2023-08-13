@@ -76,7 +76,7 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 	}
 
 	// Iterate over the control cards and fetch data for each card.
-	var errList errlist.List
+	var errs errlist.Error
 
 	var responses []*bootz.BootstrapDataResponse
 	for _, v := range req.ChassisDescriptor.ControlCards {
@@ -90,13 +90,13 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 			Status:         []bootz.ReportStatusRequest_BootstrapStatus{bootz.ReportStatusRequest_BootstrapStatus(req.ControlCardState.Status)},
 		}
 		if err != nil {
-			errList.Add(err)
+			errs.Add(err)
 			s.activeBoots[v.GetSerialNumber()].EndTimeStamp = uint64(time.Now().UnixMilli())
 		}
 		responses = append(responses, bootdata)
 	}
-	if errList.Err() != nil {
-		return nil, errList.Err()
+	if errs.Err() != nil {
+		return nil, errs.Err()
 	}
 	resp := &bootz.GetBootstrapDataResponse{
 		SignedResponse: &bootz.BootstrapDataSigned{

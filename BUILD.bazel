@@ -1,5 +1,4 @@
 load("@bazel_gazelle//:def.bzl", "gazelle")
 
-# gazelle:prefix github.com/openconfig/gnsi
+# gazelle:prefix github.com/openconfig/bootz
 gazelle(name = "gazelle")
-
