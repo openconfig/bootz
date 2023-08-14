@@ -18,20 +18,38 @@ package entity;
 import "google/protobuf/struct.proto";
 //import "bootz/proto/bootz.proto";
 
+import "github.com/openconfig/gnsi/authz/authz.proto";
+import "github.com/openconfig/gnsi/certz/certz.proto";
+import "github.com/openconfig/gnsi/credentialz/credentialz.proto";
+import "github.com/openconfig/gnsi/pathz/pathz.proto";
+import "proto/bootz.proto";
+
 
 
 option go_package = "github.com/openconfig/bootz/server/entitymanager/proto/entity";
 
+message Options {
+  // global gnsi config for all entities. Device level config will take precedence if is defined
+  gNSIConfig gnsi_global_config = 1;
+
+  // server trust bundle that is used by clients to authenticate bootz server 
+  string server_trust_bundle_file = 2;
+
+}
 
 // A binding configuration.
 message Entities {
-  repeated Chassis chassis = 1;
+  // configs to be applied globally
+  Options options = 1;
+
+  // chassis to be servered with the inventory manager
+  repeated Chassis chassis = 2;
 }
 
 // Config for resetting the device before the test run.
 message Config {
   // boot config
-  BootConfig boot_config =1 ; 
+  bootz.BootConfig boot_config =1 ; 
 
   // dhcp config
   DHCPConfig dhcp_config =2 ; 
@@ -42,45 +60,32 @@ message Config {
 }
 
 message gNSIConfig {
-  // path to authz policy file
-  string authz_policy_file = 1;
+  // path to authz upload file
+  string authz_upload_file = 1;
 
-  // path to certz policy file
-  string certz_policy_file = 2;
+  // authz upload request
+  gnsi.authz.v1.UploadRequest authz_upload = 2;
+
+  //pathz upload file
+  string pathz_upload_file = 3;
+
+  //pathz upload 
+  gnsi.pathz.v1.UploadRequest pathz_upload = 4;
+
+  // certificate upload request
+  gnsi.certz.v1.UploadRequest certz_upload = 5;
+
+  // path to certz certificate file
+  string certz_upload_file = 6;
 
   // path to credz policy file
-  string credz_policy_file = 3;
+  string credentials_file = 7;
 
-  // path to pathz policy file
-  string pathz_policy_file = 4;
-
-  // path to CA certificate bundle file 
-  string ca_trust_bundle_file = 5;
-
-  // TODO: add remained configs
+  //  gnsi credentail config
+  bootz.Credentials credentials = 8;
 
 }
- 
-// Details of the control card, including serial-number and the location
-// of the card on the chassis.
-message ControlCard {
-  string part_number = 1;
-  string serial_number = 2;
-  int32 slot = 3;
-}
-
-message SoftwareImage {
-  string name = 1;
-  string version = 2;
-  // An HTTP location from where the OS file can be downloaded.
-  string url = 3;
-  // Hash of the OS image. The device must verify that the hash of the
-  // downloaded OS image matches this.
-  string os_image_hash = 4;
-  string hash_algorithm = 5;
-}
-
-message  DHCPConfig {
+ message  DHCPConfig {
     // mac address of the management interface that will be used to get dhcp address
     repeated string hardware_ethernet = 1;
 
@@ -88,9 +93,9 @@ message  DHCPConfig {
     repeated string fixed_address = 2;
 }
 
-enum BootModes{
+enum BootMode{
       UnSecure = 0;
-      Secure = 1;
+      Secure = 2;
    }
 
 // A Chassis entity.
@@ -115,31 +120,17 @@ message Chassis {
   string bootloader_password_hash = 6;
 
   // Boot mode defines the boot mode that can be secure/UnSecure 
-  BootModes boot_mode =7;
+  BootMode boot_mode =7;
 
   // Software image to be loaded on the chassis
-  SoftwareImage software_image = 8; 
+  bootz.SoftwareImage software_image = 8; 
 
-  // control cards
+  // control cards. 
+  repeated bootz.ControlCard controller_cards = 9;
 
   // config to be loaded on the chassis
-  Config config = 9; 
+  Config config = 10; 
 
 }
 
-message BootConfig {
-  // Proprietary key-value parameters that are required as part of boot
-  // configuration (e.g., feature flags, or vendor-specific hardware knobs).
-  google.protobuf.Struct metadata = 1;
-
-  // Native format vendor configuration file
-  string vendor_config_file = 2;
-
-  // JSON rendered OC configuration file
-  string oc_config_file = 3;
-
-  // Bootloader key-value parameters that are required as part of boot
-  // configuration.
-  google.protobuf.Struct bootloader_config = 4;
-}
 

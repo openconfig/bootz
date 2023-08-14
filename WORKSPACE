@@ -85,6 +85,11 @@ go_repository(
     version = "v1.2.2",
 )
 
+local_repository(
+  name = "local_repo_root",
+  path = "./",
+)
+
 load("@rules_proto_grpc//go:repositories.bzl", rules_proto_grpc_go_repos = "go_repos")
 
 rules_proto_grpc_go_repos()

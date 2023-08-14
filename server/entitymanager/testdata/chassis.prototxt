@@ -1,3 +1,4 @@
+options
 chassis {
     name: "test"
     serial_number: "12345678"
