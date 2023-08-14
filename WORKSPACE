@@ -18,6 +18,7 @@ http_archive(
 )
 
 load("@com_google_googleapis//:repository_rules.bzl", "switched_rules_by_language")
+
 switched_rules_by_language(
     name = "com_google_googleapis_imports",
     cc = True,
@@ -49,50 +50,25 @@ load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_depe
 
 go_rules_dependencies()
 
-go_register_toolchains(go_version = "1.18")
+go_register_toolchains(go_version = "1.19")
 
 # gazelle:repo bazel_gazelle
 bazel_gazelle()
 
-load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
+load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
 
-go_repository(
-    name = "com_github_openconfig_gnoi",
-    build_directives = [
-        "gazelle:proto_import_prefix github.com/openconfig/gnoi",
-    ],
-    build_file_generation = "on",
-    importpath = "github.com/openconfig/gnoi",
-    sum = "h1:7Odq6UyieHuXW3PYfDBj/dUWgFrL9KVMm0iooQoFLdw=",
-    version = "v0.1.0",
-)
-
-go_repository(
-    name = "com_github_openconfig_gnmi",
-    build_directives = [
-        "gazelle:proto_import_prefix github.com/openconfig/gnmi",
-    ],
-    build_file_generation = "on",
-    importpath = "github.com/openconfig/gnmi",
-    sum = "h1:hVOdLTaRjdy68oCGJbkf2vrmnUoQ5xbINqBOAMix4xM=",
-    version = "v0.9.1",
-)
-
-go_repository(
-    name = "com_github_openconfig_gnsi",
-    importpath = "github.com/openconfig/gnsi",
-    sum = "h1:RYEzX1S7jpFPz2Mr4dZggq8bKtkhjWJJ+i809QM+ttk=",
-    version = "v1.2.2",
-)
 
 load("@rules_proto_grpc//go:repositories.bzl", rules_proto_grpc_go_repos = "go_repos")
+load("//:deps.bzl", "go_dependencies")
+
+# gazelle:repository_macro deps.bzl%go_dependencies
+go_dependencies()
 
 rules_proto_grpc_go_repos()
 
 # Load gazelle_dependencies last, so that the newer version of org_golang_google_grpc is used.
 # see https://github.com/rules-proto-grpc/rules_proto_grpc/issues/160
 gazelle_dependencies()
-
 
 load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
 

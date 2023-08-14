@@ -206,3 +206,11 @@ message ReportStatusRequest {
 // Used in  RPC methods that are not expected to return a response.
 message EmptyResponse {
 }
+
+// BootMode specifies if the chassis should utilize OV data.
+// Secure mode uses the OV validation.
+enum BootMode {
+  BOOTMODE_UNSPECIFIED = 0;
+  BOOTMODE_INSECURE = 1;
+  BOOTMODE_SECURE = 2;
+}
