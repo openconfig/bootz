@@ -103,42 +103,44 @@ message ControlCardState {
     CONTROL_CARD_STATUS_INITIALIZED = 2; 
   }
 
+  // Serial must align with the serial number of the provided
+  // control card in the chassis descriptor.
   string serial_number = 1;
   ControlCardStatus status = 2;
 }
 
+message BootstrapDataResponse {
+  // The serial number of the control card to which this state should
+  // be applied.
+  string serial_num = 1;
+  // The device should download and install this image (or skip if the
+  // device is already running it).
+  SoftwareImage intended_image = 2;
+  // The device should set this hash as its Bootloader password.
+  string boot_password_hash = 3;
+  // This certificate should be used to validate the server when reporting
+  // progress.
+  string server_trust_cert = 4;
+  // Boot configuration is specified as structured data.
+  BootConfig boot_config = 5;
+  Credentials credentials = 6;
+  gnsi.pathz.v1.UploadRequest pathz = 7;
+  gnsi.authz.v1.UploadRequest authz = 8;
+  gnsi.certz.v1.UploadRequest certificates = 9;
+} 
+
+
+// Container message that is signed by server.
+// the nonce is added to verify the contents from the client.
+message BootstrapDataSigned {
+  repeated BootstrapDataResponse responses = 1;
+  // This should not be set if the device does not check for ownership
+  // voucher, which is indicated by the device not setting the nonce field
+  // in the GetBootstrapDataRequest message.
+  string nonce = 2;
+}
+
 message GetBootstrapDataResponse {
-
-  message BootstrapDataResponse {
-    // The serial number of the control card to which this state should
-    // be applied.
-    string serial_num = 1;
-    // The device should download and install this image (or skip if the
-    // device is already running it).
-    SoftwareImage intended_image = 2;
-    // The device should set this hash as its Bootloader password.
-    string boot_password_hash = 3;
-    // This certificate should be used to validate the server when reporting
-    // progress.
-    string server_trust_cert = 4;
-    // Boot configuration is specified as structured data.
-    BootConfig boot_config = 5;
-    Credentials credentials = 6;
-    gnsi.pathz.v1.UploadRequest pathz = 7;
-    gnsi.authz.v1.UploadRequest authz = 8;
-    gnsi.certz.v1.UploadRequest certificates = 9;
-  } 
-
-  // Container message that is signed by server.
-  // the nonce is added to verify the contents from the client.
-  message BootstrapDataSigned {
-    repeated BootstrapDataResponse responses = 1;
-    // This should not be set if the device does not check for ownership
-    // voucher, which is indicated by the device not setting the nonce field
-    // in the GetBootstrapDataRequest message.
-    string nonce = 2;
-  }
-  
   BootstrapDataSigned signed_response = 1;
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field
@@ -198,8 +200,17 @@ message ReportStatusRequest {
   }
   BootstrapStatus status = 1;
   string status_message = 2;
+  repeated ControlCardState states = 3;
 }
 
 // Used in  RPC methods that are not expected to return a response.
 message EmptyResponse {
+}
+
+// BootMode specifies if the chassis should utilize OV data.
+// Secure mode uses the OV validation.
+enum BootMode {
+  BOOT_MODE_UNSPECIFIED = 0;
+  BOOT_MODE_INSECURE = 1;
+  BOOT_MODE_SECURE = 2;
 }

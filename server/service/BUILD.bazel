@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "service",
+    srcs = ["service.go"],
+    importpath = "github.com/openconfig/bootz/server/service",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto:bootz",
+        "@com_github_openconfig_gnmi//errlist",
+        "@org_golang_google_grpc//codes",
+        "@org_golang_google_grpc//status",
+    ],
+)

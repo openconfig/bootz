@@ -10,13 +10,12 @@ use_new_compilers()
 proto_library(
     name = "bootz_proto",
     srcs = ["bootz.proto"],
-    import_prefix = "github.com/openconfig/bootz",
     deps = [
-        "@com_google_protobuf//:struct_proto",
         "@com_github_openconfig_gnsi//authz:authz_proto",
         "@com_github_openconfig_gnsi//certz:certz_proto",
         "@com_github_openconfig_gnsi//credentialz:credentialz_proto",
-        "@com_github_openconfig_gnsi//pathz:pathz_proto",        
+        "@com_github_openconfig_gnsi//pathz:pathz_proto",
+        "@com_google_protobuf//:struct_proto",
     ],
 )
 
@@ -26,17 +25,14 @@ proto_library(
 
 go_proto_library(
     name = "bootz_go_proto",
-    compilers = [
-        "go_protoc_gen_go",
-        "go_protoc_gen_go_grpc",
-    ],
+    compilers = ["@io_bazel_rules_go//proto:go_grpc"],
     importpath = "github.com/openconfig/bootz/proto/bootz",
     proto = ":bootz_proto",
     deps = [
         "@com_github_openconfig_gnsi//authz:authz_go_proto",
         "@com_github_openconfig_gnsi//certz:certz_go_proto",
         "@com_github_openconfig_gnsi//credentialz:credentialz_go_proto",
-        "@com_github_openconfig_gnsi//pathz:pathz_go_proto",        
+        "@com_github_openconfig_gnsi//pathz:pathz_go_proto",
     ],
 )
 
