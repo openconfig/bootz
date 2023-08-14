@@ -35,8 +35,8 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 	}
 	lookup := &EntityLookup{
-		req.ChassisDescriptor.Manufacturer,
-		req.ChassisDescriptor.SerialNumber,
+		Manufacturer: req.ChassisDescriptor.Manufacturer,
+		SerialNumber: req.ChassisDescriptor.SerialNumber,
 	}
 	// Validate the chassis can be serviced
 	chassis, err := s.em.ResolveChassis(lookup)
