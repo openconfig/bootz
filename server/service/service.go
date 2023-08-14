@@ -9,13 +9,17 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// EntityLookup provides a way to resolve chassis and control cards
+// in the EntityManager.
 type EntityLookup struct {
 	Manufacturer string
 	SerialNumber string
 }
 
+// ChassisEntity provides the mode that the system is currently
+// configured.
 type ChassisEntity struct {
-	BootMode string
+	BootMode bootz.BootMode
 }
 
 type EntityManager interface {
@@ -46,7 +50,7 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 	}
 
 	// If chassis can only be booted into secure mode then return error
-	if chassis.BootMode == "SecureOnly" && req.Nonce == "" {
+	if chassis.BootMode == bootz.BootMode_BOOT_MODE_SECURE && req.Nonce == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
 	}
 
