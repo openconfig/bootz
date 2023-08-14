@@ -51,9 +51,9 @@ chassis. The term Control Card isn't used consistently across the industry. Each
 vendor have their own hardware architectures and hence their own terms for this
 bootstrapping unit including:
 
-*   Arista uses supervisors e.g. DCS-7280 is a single-supervisor (FFF) and
+* Arista uses supervisors e.g. DCS-7280 is a single-supervisor (FFF) and
     DCS-7808 is a dual-supervisor (MFF).
-    *   Cisco uses Routing Processors (RPs) e.g. CISCO-8202 is a single-RP (FFF)
-        and CISCO-8808 is a dual-RP (MFF).
-    *   Juniper uses Routing Engine (REs) e.g. PTX1000 (AKA PTX1k) is a
-        single-RE (FFF) and PTX10008 is a dual-RE (MFF).
+  * Cisco uses Routing Processors (RPs) e.g. CISCO-8202 is a single-RP (FFF)
+    and CISCO-8808 is a dual-RP (MFF).
+  * Juniper uses Routing Engine (REs) e.g. PTX1000 (AKA PTX1k) is a
+    single-RE (FFF) and PTX10008 is a dual-RE (MFF).
