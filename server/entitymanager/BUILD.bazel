@@ -5,5 +5,10 @@ go_library(
     srcs = ["entitymanager.go"],
     importpath = "github.com/openconfig/bootz/server/entitymanager",
     visibility = ["//visibility:public"],
-    deps = ["//server/service"],
+    deps = [
+        "//proto:bootz",
+        "//server/service",
+        "@org_golang_google_grpc//codes",
+        "@org_golang_google_grpc//status",
+    ],
 )

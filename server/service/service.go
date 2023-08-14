@@ -13,15 +13,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// EntityLookup provides a way to resolve chassis and control cards
+// in the EntityManager.
 type EntityLookup struct {
 	Manufacturer string
 	SerialNumber string
 	PartNumber   string
 }
 
+// ChassisEntity provides the mode that the system is currently
+// configured.
 type ChassisEntity struct {
-	Name     string
-	BootMode string
+	BootMode bootz.BootMode
 }
 
 type bootLog struct {
@@ -58,6 +61,10 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 		s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 	}
+	lookup := &EntityLookup{
+		Manufacturer: req.ChassisDescriptor.Manufacturer,
+		SerialNumber: req.ChassisDescriptor.SerialNumber,
+	}
 	// Validate the chassis can be serviced
 	chassis, err := s.em.ResolveChassis(EntityLookup{
 		Manufacturer: req.ChassisDescriptor.Manufacturer,
@@ -70,8 +77,7 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 	s.connectedChassis[chassis.Name] = req.ChassisDescriptor
 
 	// If chassis can only be booted into secure mode then return error
-	if chassis.BootMode == "SecureOnly" && req.Nonce == "" {
-		s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
+	if chassis.BootMode == bootz.BootMode_BOOT_MODE_SECURE && req.Nonce == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
 	}
 
