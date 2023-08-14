@@ -9,11 +9,11 @@ import (
 	cdconfig "github.com/coredhcp/coredhcp/config"
 	cdplugins "github.com/coredhcp/coredhcp/plugins"
 	cdserver "github.com/coredhcp/coredhcp/server"
-	"github.com/openconfig/bootz/dhcp/plugins"
 
 	plfile "github.com/coredhcp/coredhcp/plugins/file"
 	plnetmask "github.com/coredhcp/coredhcp/plugins/netmask"
 	plrouter "github.com/coredhcp/coredhcp/plugins/router"
+	plbootz "github.com/openconfig/bootz/dhcp/plugins"
 )
 
 const confTemplate = `
@@ -30,7 +30,7 @@ var desiredPlugins = []*cdplugins.Plugin{
 	&plfile.Plugin,
 	&plnetmask.Plugin,
 	&plrouter.Plugin,
-	&plugins.Plugin,
+	&plbootz.Plugin,
 }
 
 type dhcpServer struct {
@@ -40,6 +40,7 @@ type dhcpServer struct {
 }
 
 func New() *dhcpServer {
+	//TODO: Read from input
 	tmpParameters := struct {
 		HWAddr   string
 		Gateway  string

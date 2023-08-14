@@ -28,7 +28,7 @@ const (
 
 var (
 	opt136 *dhcpv4.Option
-	opt143 *dhcpv6.OptionGeneric
+	opt143 dhcpv6.Option
 )
 
 func parseArgs(args ...string) (*url.URL, error) {
@@ -45,7 +45,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 	}
 	opt := dhcpv4.OptGeneric(dhcpv4.GenericOptionCode(OPTION_V4_SZTP_REDIRECT), []byte(url.String()))
 	opt136 = &opt
-	log.Printf("loaded plugin for bootZ.")
+	log.Printf("Loaded plugin for bootZ.")
 	return bootzHandler4, nil
 }
 
@@ -59,12 +59,12 @@ func setup6(args ...string) (handler.Handler6, error) {
 		OptionData: []byte(url.String()),
 	}
 	opt143 = &opt
-	log.Printf("loaded plugin for bootZ.")
+	log.Printf("Loaded plugin for bootZ.")
 	return bootzHandler6, nil
 }
 
 func bootzHandler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
-	log.Debugf("received DHCPv4 packet: %s", req.Summary())
+	log.Debugf("Received DHCPv4 packet: %s", req.Summary())
 	if opt136 == nil {
 		return resp, true
 	}
@@ -76,7 +76,7 @@ func bootzHandler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 }
 
 func bootzHandler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
-	log.Debugf("received DHCPv4 packet: %s", req.Summary())
+	log.Debugf("Received DHCPv4 packet: %s", req.Summary())
 	if opt143 == nil {
 		return resp, true
 	}
@@ -88,7 +88,7 @@ func bootzHandler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 	}
 
 	for _, code := range decap.Options.RequestedOptions() {
-		if code == opt143.OptionCode {
+		if code == opt143.Code() {
 			resp.AddOption(opt143)
 			log.Debugf("Added BootZ %s to request", opt136)
 		}
