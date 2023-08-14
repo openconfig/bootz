@@ -29,6 +29,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type BootMode int32
+
+const (
+	BootMode_BOOT_MODE_UNSPECIFIED BootMode = 0
+	BootMode_BOOT_MODE_INSECURE    BootMode = 1
+	BootMode_BOOT_MODE_SECURE      BootMode = 2
+)
+
+// Enum value maps for BootMode.
+var (
+	BootMode_name = map[int32]string{
+		0: "BOOT_MODE_UNSPECIFIED",
+		1: "BOOT_MODE_INSECURE",
+		2: "BOOT_MODE_SECURE",
+	}
+	BootMode_value = map[string]int32{
+		"BOOT_MODE_UNSPECIFIED": 0,
+		"BOOT_MODE_INSECURE":    1,
+		"BOOT_MODE_SECURE":      2,
+	}
+)
+
+func (x BootMode) Enum() *BootMode {
+	p := new(BootMode)
+	*p = x
+	return p
+}
+
+func (x BootMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (BootMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_bootz_proto_enumTypes[0].Descriptor()
+}
+
+func (BootMode) Type() protoreflect.EnumType {
+	return &file_proto_bootz_proto_enumTypes[0]
+}
+
+func (x BootMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use BootMode.Descriptor instead.
+func (BootMode) EnumDescriptor() ([]byte, []int) {
+	return file_proto_bootz_proto_rawDescGZIP(), []int{0}
+}
+
 type ControlCardState_ControlCardStatus int32
 
 const (
@@ -62,11 +111,11 @@ func (x ControlCardState_ControlCardStatus) String() string {
 }
 
 func (ControlCardState_ControlCardStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_bootz_proto_enumTypes[0].Descriptor()
+	return file_proto_bootz_proto_enumTypes[1].Descriptor()
 }
 
 func (ControlCardState_ControlCardStatus) Type() protoreflect.EnumType {
-	return &file_proto_bootz_proto_enumTypes[0]
+	return &file_proto_bootz_proto_enumTypes[1]
 }
 
 func (x ControlCardState_ControlCardStatus) Number() protoreflect.EnumNumber {
@@ -114,11 +163,11 @@ func (x ReportStatusRequest_BootstrapStatus) String() string {
 }
 
 func (ReportStatusRequest_BootstrapStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_bootz_proto_enumTypes[1].Descriptor()
+	return file_proto_bootz_proto_enumTypes[2].Descriptor()
 }
 
 func (ReportStatusRequest_BootstrapStatus) Type() protoreflect.EnumType {
-	return &file_proto_bootz_proto_enumTypes[1]
+	return &file_proto_bootz_proto_enumTypes[2]
 }
 
 func (x ReportStatusRequest_BootstrapStatus) Number() protoreflect.EnumNumber {
@@ -1104,19 +1153,24 @@ var file_proto_bootz_proto_rawDesc = []byte{
 	0x10, 0x02, 0x12, 0x1e, 0x0a, 0x1a, 0x42, 0x4f, 0x4f, 0x54, 0x53, 0x54, 0x52, 0x41, 0x50, 0x5f,
 	0x53, 0x54, 0x41, 0x54, 0x55, 0x53, 0x5f, 0x49, 0x4e, 0x49, 0x54, 0x49, 0x41, 0x54, 0x45, 0x44,
 	0x10, 0x03, 0x22, 0x0f, 0x0a, 0x0d, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x52, 0x65, 0x73, 0x70, 0x6f,
-	0x6e, 0x73, 0x65, 0x32, 0x8e, 0x01, 0x0a, 0x09, 0x42, 0x6f, 0x6f, 0x74, 0x73, 0x74, 0x72, 0x61,
-	0x70, 0x12, 0x49, 0x0a, 0x10, 0x47, 0x65, 0x74, 0x42, 0x6f, 0x6f, 0x74, 0x73, 0x74, 0x72, 0x61,
-	0x70, 0x44, 0x61, 0x74, 0x61, 0x12, 0x18, 0x2e, 0x47, 0x65, 0x74, 0x42, 0x6f, 0x6f, 0x74, 0x73,
-	0x74, 0x72, 0x61, 0x70, 0x44, 0x61, 0x74, 0x61, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
-	0x19, 0x2e, 0x47, 0x65, 0x74, 0x42, 0x6f, 0x6f, 0x74, 0x73, 0x74, 0x72, 0x61, 0x70, 0x44, 0x61,
-	0x74, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x36, 0x0a, 0x0c,
-	0x52, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x14, 0x2e, 0x52,
-	0x65, 0x70, 0x6f, 0x72, 0x74, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
-	0x73, 0x74, 0x1a, 0x0e, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x22, 0x00, 0x42, 0x29, 0x5a, 0x27, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
-	0x6f, 0x6d, 0x2f, 0x6f, 0x70, 0x65, 0x6e, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x2f, 0x62, 0x6f,
-	0x6f, 0x74, 0x7a, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x62, 0x6f, 0x6f, 0x74, 0x7a, 0x62,
-	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x6e, 0x73, 0x65, 0x2a, 0x53, 0x0a, 0x08, 0x42, 0x6f, 0x6f, 0x74, 0x4d, 0x6f, 0x64, 0x65, 0x12,
+	0x19, 0x0a, 0x15, 0x42, 0x4f, 0x4f, 0x54, 0x5f, 0x4d, 0x4f, 0x44, 0x45, 0x5f, 0x55, 0x4e, 0x53,
+	0x50, 0x45, 0x43, 0x49, 0x46, 0x49, 0x45, 0x44, 0x10, 0x00, 0x12, 0x16, 0x0a, 0x12, 0x42, 0x4f,
+	0x4f, 0x54, 0x5f, 0x4d, 0x4f, 0x44, 0x45, 0x5f, 0x49, 0x4e, 0x53, 0x45, 0x43, 0x55, 0x52, 0x45,
+	0x10, 0x01, 0x12, 0x14, 0x0a, 0x10, 0x42, 0x4f, 0x4f, 0x54, 0x5f, 0x4d, 0x4f, 0x44, 0x45, 0x5f,
+	0x53, 0x45, 0x43, 0x55, 0x52, 0x45, 0x10, 0x02, 0x32, 0x8e, 0x01, 0x0a, 0x09, 0x42, 0x6f, 0x6f,
+	0x74, 0x73, 0x74, 0x72, 0x61, 0x70, 0x12, 0x49, 0x0a, 0x10, 0x47, 0x65, 0x74, 0x42, 0x6f, 0x6f,
+	0x74, 0x73, 0x74, 0x72, 0x61, 0x70, 0x44, 0x61, 0x74, 0x61, 0x12, 0x18, 0x2e, 0x47, 0x65, 0x74,
+	0x42, 0x6f, 0x6f, 0x74, 0x73, 0x74, 0x72, 0x61, 0x70, 0x44, 0x61, 0x74, 0x61, 0x52, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x1a, 0x19, 0x2e, 0x47, 0x65, 0x74, 0x42, 0x6f, 0x6f, 0x74, 0x73, 0x74,
+	0x72, 0x61, 0x70, 0x44, 0x61, 0x74, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22,
+	0x00, 0x12, 0x36, 0x0a, 0x0c, 0x52, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x53, 0x74, 0x61, 0x74, 0x75,
+	0x73, 0x12, 0x14, 0x2e, 0x52, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x0e, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x52,
+	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x42, 0x29, 0x5a, 0x27, 0x67, 0x69, 0x74,
+	0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6f, 0x70, 0x65, 0x6e, 0x63, 0x6f, 0x6e, 0x66,
+	0x69, 0x67, 0x2f, 0x62, 0x6f, 0x6f, 0x74, 0x7a, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x62,
+	0x6f, 0x6f, 0x74, 0x7a, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1131,55 +1185,56 @@ func file_proto_bootz_proto_rawDescGZIP() []byte {
 	return file_proto_bootz_proto_rawDescData
 }
 
-var file_proto_bootz_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_proto_bootz_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_proto_bootz_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_proto_bootz_proto_goTypes = []interface{}{
-	(ControlCardState_ControlCardStatus)(0),    // 0: ControlCardState.ControlCardStatus
-	(ReportStatusRequest_BootstrapStatus)(0),   // 1: ReportStatusRequest.BootstrapStatus
-	(*GetBootstrapDataRequest)(nil),            // 2: GetBootstrapDataRequest
-	(*ChassisDescriptor)(nil),                  // 3: ChassisDescriptor
-	(*ControlCard)(nil),                        // 4: ControlCard
-	(*ControlCardState)(nil),                   // 5: ControlCardState
-	(*BootstrapDataResponse)(nil),              // 6: BootstrapDataResponse
-	(*BootstrapDataSigned)(nil),                // 7: BootstrapDataSigned
-	(*GetBootstrapDataResponse)(nil),           // 8: GetBootstrapDataResponse
-	(*SoftwareImage)(nil),                      // 9: SoftwareImage
-	(*Credentials)(nil),                        // 10: Credentials
-	(*BootConfig)(nil),                         // 11: BootConfig
-	(*ReportStatusRequest)(nil),                // 12: ReportStatusRequest
-	(*EmptyResponse)(nil),                      // 13: EmptyResponse
-	(*pathz.UploadRequest)(nil),                // 14: gnsi.pathz.v1.UploadRequest
-	(*authz.UploadRequest)(nil),                // 15: gnsi.authz.v1.UploadRequest
-	(*certz.UploadRequest)(nil),                // 16: gnsi.certz.v1.UploadRequest
-	(*credentialz.AuthorizedKeysRequest)(nil),  // 17: gnsi.credentialz.v1.AuthorizedKeysRequest
-	(*credentialz.AuthorizedUsersRequest)(nil), // 18: gnsi.credentialz.v1.AuthorizedUsersRequest
-	(*credentialz.PasswordRequest)(nil),        // 19: gnsi.credentialz.v1.PasswordRequest
-	(*structpb.Struct)(nil),                    // 20: google.protobuf.Struct
+	(BootMode)(0),                              // 0: BootMode
+	(ControlCardState_ControlCardStatus)(0),    // 1: ControlCardState.ControlCardStatus
+	(ReportStatusRequest_BootstrapStatus)(0),   // 2: ReportStatusRequest.BootstrapStatus
+	(*GetBootstrapDataRequest)(nil),            // 3: GetBootstrapDataRequest
+	(*ChassisDescriptor)(nil),                  // 4: ChassisDescriptor
+	(*ControlCard)(nil),                        // 5: ControlCard
+	(*ControlCardState)(nil),                   // 6: ControlCardState
+	(*BootstrapDataResponse)(nil),              // 7: BootstrapDataResponse
+	(*BootstrapDataSigned)(nil),                // 8: BootstrapDataSigned
+	(*GetBootstrapDataResponse)(nil),           // 9: GetBootstrapDataResponse
+	(*SoftwareImage)(nil),                      // 10: SoftwareImage
+	(*Credentials)(nil),                        // 11: Credentials
+	(*BootConfig)(nil),                         // 12: BootConfig
+	(*ReportStatusRequest)(nil),                // 13: ReportStatusRequest
+	(*EmptyResponse)(nil),                      // 14: EmptyResponse
+	(*pathz.UploadRequest)(nil),                // 15: gnsi.pathz.v1.UploadRequest
+	(*authz.UploadRequest)(nil),                // 16: gnsi.authz.v1.UploadRequest
+	(*certz.UploadRequest)(nil),                // 17: gnsi.certz.v1.UploadRequest
+	(*credentialz.AuthorizedKeysRequest)(nil),  // 18: gnsi.credentialz.v1.AuthorizedKeysRequest
+	(*credentialz.AuthorizedUsersRequest)(nil), // 19: gnsi.credentialz.v1.AuthorizedUsersRequest
+	(*credentialz.PasswordRequest)(nil),        // 20: gnsi.credentialz.v1.PasswordRequest
+	(*structpb.Struct)(nil),                    // 21: google.protobuf.Struct
 }
 var file_proto_bootz_proto_depIdxs = []int32{
-	3,  // 0: GetBootstrapDataRequest.chassis_descriptor:type_name -> ChassisDescriptor
-	5,  // 1: GetBootstrapDataRequest.control_card_state:type_name -> ControlCardState
-	4,  // 2: ChassisDescriptor.control_cards:type_name -> ControlCard
-	0,  // 3: ControlCardState.status:type_name -> ControlCardState.ControlCardStatus
-	9,  // 4: BootstrapDataResponse.intended_image:type_name -> SoftwareImage
-	11, // 5: BootstrapDataResponse.boot_config:type_name -> BootConfig
-	10, // 6: BootstrapDataResponse.credentials:type_name -> Credentials
-	14, // 7: BootstrapDataResponse.pathz:type_name -> gnsi.pathz.v1.UploadRequest
-	15, // 8: BootstrapDataResponse.authz:type_name -> gnsi.authz.v1.UploadRequest
-	16, // 9: BootstrapDataResponse.certificates:type_name -> gnsi.certz.v1.UploadRequest
-	6,  // 10: BootstrapDataSigned.responses:type_name -> BootstrapDataResponse
-	7,  // 11: GetBootstrapDataResponse.signed_response:type_name -> BootstrapDataSigned
-	17, // 12: Credentials.credentials:type_name -> gnsi.credentialz.v1.AuthorizedKeysRequest
-	18, // 13: Credentials.users:type_name -> gnsi.credentialz.v1.AuthorizedUsersRequest
-	19, // 14: Credentials.passwords:type_name -> gnsi.credentialz.v1.PasswordRequest
-	20, // 15: BootConfig.metadata:type_name -> google.protobuf.Struct
-	20, // 16: BootConfig.bootloader_config:type_name -> google.protobuf.Struct
-	1,  // 17: ReportStatusRequest.status:type_name -> ReportStatusRequest.BootstrapStatus
-	5,  // 18: ReportStatusRequest.states:type_name -> ControlCardState
-	2,  // 19: Bootstrap.GetBootstrapData:input_type -> GetBootstrapDataRequest
-	12, // 20: Bootstrap.ReportStatus:input_type -> ReportStatusRequest
-	8,  // 21: Bootstrap.GetBootstrapData:output_type -> GetBootstrapDataResponse
-	13, // 22: Bootstrap.ReportStatus:output_type -> EmptyResponse
+	4,  // 0: GetBootstrapDataRequest.chassis_descriptor:type_name -> ChassisDescriptor
+	6,  // 1: GetBootstrapDataRequest.control_card_state:type_name -> ControlCardState
+	5,  // 2: ChassisDescriptor.control_cards:type_name -> ControlCard
+	1,  // 3: ControlCardState.status:type_name -> ControlCardState.ControlCardStatus
+	10, // 4: BootstrapDataResponse.intended_image:type_name -> SoftwareImage
+	12, // 5: BootstrapDataResponse.boot_config:type_name -> BootConfig
+	11, // 6: BootstrapDataResponse.credentials:type_name -> Credentials
+	15, // 7: BootstrapDataResponse.pathz:type_name -> gnsi.pathz.v1.UploadRequest
+	16, // 8: BootstrapDataResponse.authz:type_name -> gnsi.authz.v1.UploadRequest
+	17, // 9: BootstrapDataResponse.certificates:type_name -> gnsi.certz.v1.UploadRequest
+	7,  // 10: BootstrapDataSigned.responses:type_name -> BootstrapDataResponse
+	8,  // 11: GetBootstrapDataResponse.signed_response:type_name -> BootstrapDataSigned
+	18, // 12: Credentials.credentials:type_name -> gnsi.credentialz.v1.AuthorizedKeysRequest
+	19, // 13: Credentials.users:type_name -> gnsi.credentialz.v1.AuthorizedUsersRequest
+	20, // 14: Credentials.passwords:type_name -> gnsi.credentialz.v1.PasswordRequest
+	21, // 15: BootConfig.metadata:type_name -> google.protobuf.Struct
+	21, // 16: BootConfig.bootloader_config:type_name -> google.protobuf.Struct
+	2,  // 17: ReportStatusRequest.status:type_name -> ReportStatusRequest.BootstrapStatus
+	6,  // 18: ReportStatusRequest.states:type_name -> ControlCardState
+	3,  // 19: Bootstrap.GetBootstrapData:input_type -> GetBootstrapDataRequest
+	13, // 20: Bootstrap.ReportStatus:input_type -> ReportStatusRequest
+	9,  // 21: Bootstrap.GetBootstrapData:output_type -> GetBootstrapDataResponse
+	14, // 22: Bootstrap.ReportStatus:output_type -> EmptyResponse
 	21, // [21:23] is the sub-list for method output_type
 	19, // [19:21] is the sub-list for method input_type
 	19, // [19:19] is the sub-list for extension type_name
@@ -1343,7 +1398,7 @@ func file_proto_bootz_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_bootz_proto_rawDesc,
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
