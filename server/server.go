@@ -27,14 +27,18 @@ import (
 )
 
 var (
-	insecureBoot       = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
-	bootzAddress       = flag.String("address", "", "The [ip:]port to listen for the bootz server. when ip is not given, the server will listen on local host. ip should be specific (other than local host) when the client does not run on the local host.")
-	rootCA             = flag.String("root_ca_cert_path", "../testdata/ca.pem", "The relative path to a file contained a PEM encoded certificate for the manufacturer CA.")
-	cert               = flag.String("server_cert_path", "../testdata/servercert.pem", "The relative path to a file contained a PEM encoded certificate for the bootz server, that can be verified using root ca.")
-	key                = flag.String("server_key_path", "../testdata/serverkey.pem", "The relative path to a file contained a PEM encoded private key for the bootz server, that can be verified using root ca.")
-	dhcpServerAddress  = flag.String("dhcp_address", "", "The ip to listen for the dhcp server. when ip is not given, the dhcp server will not start. root access is required for dhcp.")
-	imageServerAddress = flag.String("image_server_address", "3000", "The [ip:]port to listen for the image server. when ip is not given, the server will listen on local host. ip should be specific (other than local host) when the client does not run on the local host.")
-	imagesLocation     = flag.String("image_location", "/tmp/bootz/images", "The directory where the images will reside. The defaults is /tmp/bootz/images")
+	insecureBoot 	 	= flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
+	bootzAddress          	= flag.String("address", "8008", "The [ip:]port to listen for the bootz server. when ip is not given, the server will listen on local host. ip should be specific (other than local host) when the client does not run on the local hos.")
+	rootCA       	 	= flag.String("root_ca_cert_path", "entitymanager/testdata/ca.cert.pem", "The relative path to a file contained a PEM encoded certificate for the root CA.")
+	cert       		 	= flag.String("server_cert_path", "entitymanager/testdata/bootz.cert.pem", "The relative path to a file contained a PEM encoded certificate for the bootz server, that can be verified using root ca.")
+	key      		 	= flag.String("server_key_path", "entitymanager/testdata/bootz.key.pem", "The relative path to a file contained a PEM encoded private key for the bootz server, that can be verified using root ca.")
+	dhcpServerAddress       	= flag.String("dhcp_address", "", "The ip to listen for the dhcp server. when ip is not given, the dhcp server will not start. root access is required for dhcp.")
+	imageServerAddress  = flag.String("image_server_address", "", "The ip to listen for the image server. When ip is not given, the image server will not start, and for external client the ip should be specific.")
+	imagesLocation      = flag.String("image_location", "/tmp/bootz/images", "The directory where the images will reside. The defaults is /tmp/bootz/images") 
+	devicesBootConfig   = flag.String("device_boot_config_path", "entitymanager/testdata/chassis.prototxt", "The relative path to a file containing boot config for devices")
+           
+
+
 )
 
 // load trust bundle and client key and certificate
@@ -70,8 +74,7 @@ func convertAddress(addr string) string {
 func main() {
 	flag.Parse()
 
-	em, err := entitymanager.New("test")
-	if err != nil {
+	em, err := entitymanager.New(*devicesBootConfig); if err!=nil {
 		log.Exitf("Could not initialize an entity manage %v", err)
 	}
 	c := service.New(em)

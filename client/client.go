@@ -15,22 +15,25 @@ import (
 	"os"
 	"strings"
 	"time"
+	"crypto/tls"
 
 	log "github.com/golang/glog"
 
 	"github.com/openconfig/bootz/proto/bootz"
 	"go.mozilla.org/pkcs7"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	//"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/grpc/credentials"
+	//"google.golang.org/grpc/credentials/insecure"
 )
 
 // Represents a 128 bit nonce.
 const nonceLength = 16
 
 var (
-	insecureBoot = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
-	port         = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
+	insecureBoot = flag.Bool("insecure_boot", true, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
+	port         = flag.String("port", "8008", "The port to listen to on localhost for the bootz server.")
 	rootCA       = flag.String("root_ca_cert_path", "../testdata/ca.pem", "The relative path to a file contained a PEM encoded certificate for the manufacturer CA.")
 )
 
@@ -214,13 +217,14 @@ func main() {
 	if *port == "" {
 		log.Exitf("No port provided.")
 	}
-	bootzAddress := fmt.Sprintf("localhost:%v", *port)
+	bootzAddress := fmt.Sprintf("127.0.0.1:%v", *port)
 	log.Infof("Connecting to bootz server at address %q", bootzAddress)
 
 	// 2. Bootstrapping Service
 	// Device initiates a TLS-secured gRPC connection with the Bootz server.
 	// TODO: Make this use TLS.
-	conn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	//conn, err := grpc.Dial(bootzAddress)
 	if err != nil {
 		log.Exitf("Unable to connect to Bootstrap Server: %v", err)
 	}

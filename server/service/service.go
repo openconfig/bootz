@@ -52,7 +52,7 @@ type Service struct {
 	return nil,nil
 }*/
 
-func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
+func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
 	if len(req.ChassisDescriptor.ControlCards) == 0 {
 		s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
