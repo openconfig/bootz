@@ -6,29 +6,33 @@
 package main
 
 import (
-	"flag"
-	"net"
-	"fmt"
-	"os"
 	"crypto/tls"
 	"crypto/x509"
+	"flag"
+	"fmt"
+	"net"
+	"os"
+	"strings"
+
 	"google.golang.org/grpc/credentials"
 
-
 	"github.com/openconfig/bootz/proto/bootz"
-	"github.com/openconfig/bootz/server/service"
 	"github.com/openconfig/bootz/server/entitymanager"
+	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
 
 	log "github.com/golang/glog"
 )
 
 var (
-	insecureBoot = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
-	port         = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
-	rootCA       = flag.String("root_ca_cert_path", "../testdata/ca.pem", "The relative path to a file contained a PEM encoded certificate for the manufacturer CA.")
-	cert       = flag.String("server_cert_path", "../testdata/servercert.pem", "The relative path to a file contained a PEM encoded certificate for the bootz server, that can be verified using root ca.")
-	key       = flag.String("server_key_path", "../testdata/serverkey.pem", "The relative path to a file contained a PEM encoded private key for the bootz server, that can be verified using root ca.")
+	insecureBoot 	 	= flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
+	bootzAddress          	= flag.String("address", "", "The [ip:]port to listen for the bootz server. when ip is not given, the server will listen on local host. ip should be specific (other than local host) when the client does not run on the local hos.")
+	rootCA       	 	= flag.String("root_ca_cert_path", "../testdata/ca.pem", "The relative path to a file contained a PEM encoded certificate for the manufacturer CA.")
+	cert       		 	= flag.String("server_cert_path", "../testdata/servercert.pem", "The relative path to a file contained a PEM encoded certificate for the bootz server, that can be verified using root ca.")
+	key      		 	= flag.String("server_key_path", "../testdata/serverkey.pem", "The relative path to a file contained a PEM encoded private key for the bootz server, that can be verified using root ca.")
+	dhcpServerAddress       	= flag.String("dhcp_address", "", "The ip to listen for the dhcp server. when ip is not given, the dhcp server will not start. root access is required for dhcp.")
+	imageServerAddress  = flag.String("image_server_address", "", "The ip to listen for the image server. When ip is not given, the image server will not start, and for external client the ip should be specific.")
+	imagesLocation      = flag.String("image_location", "/tmp/bootz/images", "The directory where the images will reside. The defaults is /tmp/bootz/images")             
 
 
 )
@@ -57,10 +61,6 @@ func loadCertificates(rootCaFile, certFile, keyFile string) (*x509.CertPool, tls
 func main() {
 	flag.Parse()
 
-	if *port == "" {
-		log.Exitf("No port selected. specify with the -port flag")
-	}
-
 	em, err := entitymanager.New("test"); if err!=nil {
 		log.Exitf("Could not initialize an entity manage %v", err)
 	}
@@ -73,20 +73,35 @@ func main() {
     ca, serverCert, err:= loadCertificates(*rootCA, *cert, *key); if err!=nil {
 		log.Exitf("Could not load certificates and root ca: %v")
 	}
-
-
 	opts:=[]grpc.ServerOption{}
 	tls := &tls.Config{
 		Certificates: []tls.Certificate{serverCert},
 		RootCAs:      ca,
 	}
+	
+
+	// TO: use wait group to ensure both started (when they are asked) before starting bootz server
+    go func (){
+		// code to start dhcp server
+		// exit the code if the address is given, but server can not be started
+	}()
+
+	go func (){
+		// code to start image server
+		// exit the code if the address is given, but server can not be started
+		// use the same certificate loaded above for image server
+	}()
+
+
 	tlsConfig := credentials.NewTLS(tls)
 	opts = append(opts, grpc.Creds(tlsConfig))
 	s := grpc.NewServer(opts...)
-
-
-
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", *port))
+	items:= strings.Split(*bootzAddress, ":")
+	listenAddress:= *bootzAddress
+	if len(items)==1 {
+		listenAddress= fmt.Sprintf("localhost:%v", *bootzAddress)
+	} 
+	lis, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		log.Exitf("Error listening on port: %v", err)
 	}
