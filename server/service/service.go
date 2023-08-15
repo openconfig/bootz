@@ -10,6 +10,23 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// OVList is a mapping of control card serial number to ownership voucher.
+type OVList map[string]string
+
+// KeyPair is a struct containing PEM-encoded certificates and private keys.
+type KeyPair struct {
+	Cert string
+	Key  string
+}
+
+// SecurityArtifacts contains all KeyPairs and OVs needed for the Bootz Server.
+type SecurityArtifacts struct {
+	OC       *KeyPair
+	PDC      *KeyPair
+	VendorCA *KeyPair
+	OV       OVList
+}
+
 // EntityLookup provides a way to resolve chassis and control cards
 // in the EntityManager.
 type EntityLookup struct {
