@@ -13,14 +13,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// EntityLookup provides a way to resolve chassis and control cards
-// in the EntityManager.
-type EntityLookup struct {
-	Manufacturer string
-	SerialNumber string
-	PartNumber   string
-}
-
 // ChassisEntity provides the mode that the system is currently
 // configured.
 type ChassisEntity struct {
@@ -29,7 +21,7 @@ type ChassisEntity struct {
 }
 
 type bootLog struct {
-	BootMode       string
+	BootMode       bootz.BootMode
 	StartTimeStamp uint64
 	EndTimeStamp   uint64
 	Status         []bootz.ReportStatusRequest_BootstrapStatus
@@ -38,7 +30,7 @@ type bootLog struct {
 	Err            error
 }
 type EntityManager interface {
-	ResolveChassis(EntityLookup) (*ChassisEntity, error)
+	ResolveChassis(*bootz.ChassisDescriptor) (*ChassisEntity, error)
 	GetBootstrapData(*bootz.GetBootstrapDataRequest, *bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
 	//SetStatus(EntityLookup, bootz.ReportStatusRequest) error
 	Sign(resp *bootz.GetBootstrapDataResponse) error
@@ -62,14 +54,8 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 		s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 	}
-	lookup := &EntityLookup{
-		Manufacturer: req.ChassisDescriptor.Manufacturer,
-		SerialNumber: req.ChassisDescriptor.SerialNumber,
-	}
 	// Validate the chassis can be serviced
-	chassis, err := s.em.ResolveChassis(EntityLookup{
-		Manufacturer: req.ChassisDescriptor.Manufacturer,
-		SerialNumber: req.ChassisDescriptor.SerialNumber})
+	chassis, err := s.em.ResolveChassis(req.ChassisDescriptor)
 
 	if err != nil {
 		s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory, error from IM: %v", err)

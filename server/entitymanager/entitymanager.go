@@ -16,7 +16,8 @@ import (
 	authz "github.com/openconfig/gnsi/authz"
 	certz "github.com/openconfig/gnsi/certz"
 	pathz "github.com/openconfig/gnsi/pathz"
-
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	//credz "github.com/openconfig/gnsi/credentialz"
 
 	"github.com/openconfig/bootz/server/service"
@@ -37,20 +38,38 @@ type bootLog struct {
 	Err            error
 }
 
-func (m *InMemoryEntityManager) ResolveChassis(lookup service.EntityLookup) (*service.ChassisEntity, error) {
-	for _, chassis := range m.chassisConfigs {
+func (m *InMemoryEntityManager) ResolveChassis(chassDesc *bootz.ChassisDescriptor) (*service.ChassisEntity, error) {
+	for _, chassConf := range m.chassisConfigs {
 		// matching on Manufacturer and serial number is the must
-		if chassis.GetManufacturer() == lookup.Manufacturer && chassis.SerialNumber == lookup.SerialNumber {
+		if chassConf.GetManufacturer() == chassDesc.GetManufacturer() && chassConf.SerialNumber == chassDesc.GetSerialNumber() {
 			// only check part number if is specified on both side
-			if lookup.PartNumber != "" && chassis.GetPartNumber() != "" && lookup.PartNumber != chassis.GetPartNumber() {
+			if chassConf.GetPartNumber() != "" && chassDesc.GetPartNumber() != chassConf.GetPartNumber() {
+				continue
+			}
+			// check for controller match if they provided in config
+			found:=0
+			opts:= []cmp.Option{
+				cmpopts.IgnoreUnexported(bootz.ControlCard{}),
+			}
+			if len(chassConf.GetControllerCards())>=1 {
+				for _,ccInConfig := range chassConf.GetControllerCards(){
+					for _,ccInBootReq := range chassDesc.GetControlCards(){
+						if cmp.Equal(ccInConfig,ccInBootReq, opts...) {
+							found+=1
+							break
+						}
+					}
+				}
+			}
+			if found != len(chassConf.GetControllerCards()) {
 				continue
 			}
 			return &service.ChassisEntity{
-				BootMode: bootz.BootMode_BOOT_MODE_INSECURE,
-				Name:     chassis.GetName()}, nil
+				BootMode: chassConf.GetBootMode(),
+				Name:     chassConf.GetName()}, nil
 		}
 	}
-	return nil, fmt.Errorf("could not resolve chassis with serial#: %s and manufacturer: %s", lookup.SerialNumber, lookup.Manufacturer)
+	return nil, fmt.Errorf("could not resolve chassis with serial#: %s and manufacturer: %s", chassDesc.GetSerialNumber(), chassDesc.GetManufacturer())
 }
 
 func (m *InMemoryEntityManager) GetChassisConfig(name string) *epb.Chassis {
@@ -149,10 +168,7 @@ func populateCredzConfig(conf *epb.GNSIConfig) (*bootz.Credentials, error) {
 
 func (m *InMemoryEntityManager) GetBootstrapData(bootRequest *bootz.GetBootstrapDataRequest, cc *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
 	chDesc := bootRequest.GetChassisDescriptor()
-	lookup := service.EntityLookup{SerialNumber: chDesc.SerialNumber,
-		PartNumber:   chDesc.PartNumber,
-		Manufacturer: chDesc.Manufacturer}
-	chassicEn, err := m.ResolveChassis(lookup)
+	chassicEn, err := m.ResolveChassis(chDesc)
 	if err != nil {
 		return nil, err
 	}
@@ -183,20 +199,16 @@ func (m *InMemoryEntityManager) GetBootstrapData(bootRequest *bootz.GetBootstrap
 	bootStrapData.BootPasswordHash = chassisConf.GetBootloaderPasswordHash()
 	bootStrapData.SerialNum = cc.SerialNumber
 
-	bootStrapData.IntendedImage.Name = chassisConf.SoftwareImage.Name
-	bootStrapData.IntendedImage.OsImageHash = chassisConf.SoftwareImage.OsImageHash
-	bootStrapData.IntendedImage.Url = chassisConf.SoftwareImage.Url
-	bootStrapData.IntendedImage.Version = chassisConf.SoftwareImage.Version
-	bootStrapData.IntendedImage.HashAlgorithm = chassisConf.SoftwareImage.HashAlgorithm
+	bootStrapData.IntendedImage= chassisConf.SoftwareImage
+
 
 	// TODO
 	//bootStrapData.ServerTrustCert:= readServerCert()
 
 	return bootStrapData, nil
 }
-func (*InMemoryEntityManager) SetStatus(service.EntityLookup, bootz.ReportStatusRequest) error {
-	return nil
-}
+
+
 func (*InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse) error {
 	return nil
 }

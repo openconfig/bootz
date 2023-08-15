@@ -1,4 +1,3 @@
-options
 chassis {
     name: "test"
     serial_number: "12345678"
@@ -9,7 +8,7 @@ chassis {
     software_image {
 
     }
-    boot_mode: UnSecure
+    boot_mode: BOOT_MODE_INSECURE
     config {
         boot_config {
 
