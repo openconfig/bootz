@@ -26,6 +26,8 @@ import (
 
 type InMemoryEntityManager struct {
 	chassisConfigs []*epb.Chassis
+	bootzServerDefaultAddress string
+	imageServerDefaultAddress string
 }
 
 type bootLog struct {
@@ -36,6 +38,17 @@ type bootLog struct {
 	BootResponse   *bootz.BootstrapDataResponse
 	BootRequest    *bootz.GetBootstrapDataRequest
 	Err            error
+}
+
+func (m *InMemoryEntityManager) DHCPEntities() ([]*epb.DHCPConfig) {
+	dhcpEntities:= []*epb.DHCPConfig{}
+	for _,chassis := range m.chassisConfigs {
+		if chassis.GetConfig().GetDhcpConfig().Bootzserver=="" {
+			chassis.GetConfig().GetDhcpConfig().Bootzserver=m.bootzServerDefaultAddress
+		}
+		dhcpEntities=append(dhcpEntities, chassis.GetConfig().GetDhcpConfig())
+	}
+	return dhcpEntities
 }
 
 func (m *InMemoryEntityManager) ResolveChassis(chassDesc *bootz.ChassisDescriptor) (*service.ChassisEntity, error) {
