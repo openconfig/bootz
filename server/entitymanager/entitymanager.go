@@ -5,6 +5,8 @@ import (
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/pem"
 
 	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/bootz/server/service"
@@ -82,8 +84,16 @@ func (m *InMemoryEntityManager) SetStatus(req *bootz.ReportStatusRequest) error 
 }
 
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
-func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, serial string, priv *rsa.PrivateKey) error {
+func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, serial string) error {
 	// Sign the response
+	block, _ := pem.Decode([]byte(m.artifacts.OC.Key))
+	if block == nil {
+		return status.Errorf(codes.Internal, "unable to decode OC private key")
+	}
+	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		return err
+	}
 	if resp.GetSignedResponse() == nil {
 		return status.Errorf(codes.InvalidArgument, "empty signed response")
 	}

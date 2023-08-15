@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/pem"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -128,16 +130,23 @@ func TestSign(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	privPEM := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(priv),
+	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			artifacts := &service.SecurityArtifacts{
 				OV: service.OVList{test.serial: test.wantOV},
-				OC: &service.KeyPair{Cert: test.wantOC},
+				OC: &service.KeyPair{
+					Cert: test.wantOC,
+					Key:  string(pem.EncodeToMemory(privPEM)),
+				},
 			}
 			em := New(artifacts)
 
-			err := em.Sign(test.resp, test.serial, priv)
+			err := em.Sign(test.resp, test.serial)
 			if err != nil {
 				if test.wantErr {
 					t.Skip()
