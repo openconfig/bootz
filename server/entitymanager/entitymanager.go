@@ -9,7 +9,6 @@ import (
 
 	//"crypto/sha512"
 
-	"github.com/labstack/gommon/log"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -23,6 +22,8 @@ import (
 
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/protobuf/encoding/prototext"
+	log "github.com/golang/glog"
+
 )
 
 type InMemoryEntityManager struct {
@@ -242,7 +243,7 @@ func New(chassisConfigFile string) (service.EntityManager, error) {
 		log.Errorf("Error in un-marshalling %s: %v", protoTextFile, err)
 		return nil, err
 	}
-	log.Printf("New entity manager is initialized successfully from chassis config file %s", chassisConfigFile)
+	log.Infof("New entity manager is initialized successfully from chassis config file %s", chassisConfigFile)
 	newManager.chassisConfigs = entities.GetChassis()
 	return newManager, nil
 }

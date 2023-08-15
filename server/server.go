@@ -36,7 +36,6 @@ var (
 	imageServerAddress  = flag.String("image_server_address", "", "The ip to listen for the image server. When ip is not given, the image server will not start, and for external client the ip should be specific.")
 	imagesLocation      = flag.String("image_location", "/tmp/bootz/images", "The directory where the images will reside. The defaults is /tmp/bootz/images") 
 	devicesBootConfig   = flag.String("device_boot_config_path", "entitymanager/testdata/chassis.prototxt", "The relative path to a file containing boot config for devices")
-           
 
 
 )
@@ -100,7 +99,7 @@ func main() {
 
 	err = dhcpSrv.Start()
 	if err != nil {
-		log.Exitf("Count not start dhcp server: %v", err)
+		log.Exitf("Could not start dhcp server: %v", err)
 	}
 	defer dhcpSrv.Stop()
 

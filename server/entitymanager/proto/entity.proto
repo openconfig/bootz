@@ -49,13 +49,13 @@ message Entities {
 // Config for resetting the device before the test run.
 message Config {
   // boot config
-  BootConfig boot_config =1 ; 
+  BootConfig boot_config =1 ;
 
   // dhcp config
-  DHCPConfig dhcp_config =2 ; 
+  DHCPConfig dhcp_config =2 ;
 
   // gnsi config
-  gNSIConfig gnsi_config =3 ; 
+  gNSIConfig gnsi_config =3 ;
 
 }
 
@@ -147,7 +147,7 @@ message Chassis {
   bootz.SoftwareImage software_image = 8; 
 
   // control cards. 
-  repeated bootz.ControlCard controller_cards = 9;
+  repeated bootz.ControlCard controller_card = 9;
 
   // config to be loaded on the chassis
   Config config = 10; 

@@ -1,10 +1,20 @@
 chassis {
     name: "test"
-    serial_number: "12345678"
-    part_number: "partnumbertest"
-    manufacturer: "cisco"
+    serial_number: "123"
+    part_number: ""
+    manufacturer: "Cisco"
     ownership_voucher: ""
     bootloader_password_hash: ""
+    controller_cards {
+        serial_number: "123A"
+		slot:         1
+		partNumber:   "123A"
+    }
+    controller_cards {
+        serial_number: "123B"
+		slot:         2
+		partNumber:   "123B"
+    }
     software_image {
 
     }
