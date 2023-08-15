@@ -13,6 +13,7 @@ import (
 	plnetmask "github.com/coredhcp/coredhcp/plugins/netmask"
 	plrouter "github.com/coredhcp/coredhcp/plugins/router"
 	plbootz "github.com/openconfig/bootz/dhcp/plugins"
+	bootzsrv "github.com/openconfig/bootz/server/service"
 
 	log "github.com/golang/glog"
 )
@@ -24,7 +25,7 @@ server4:
     - router: {{ .Gateway }}
     - netmask: {{ .Netmask }}
     - file: {{ .LeaseFile }}
-    - bootz: {{ .BootzSrv }}
+    - bootz: {{ .BootzServer }}
 `
 
 var desiredPlugins = []*cdplugins.Plugin{
@@ -47,64 +48,71 @@ type DHCPServerConfig struct {
 	BootzServerAddr string
 }
 
-func New(conf *DHCPServerConfig) *dhcpServer {
+func New(em bootzsrv.EntityManager) (*dhcpServer, error) {
 	leaseFile, err := os.CreateTemp("", "coredhcp_leases_*.txt")
 	if err != nil {
-		log.Fatalf("Failed to create lease file: %v", err)
+		return nil, fmt.Errorf("failed to create lease file: %v", err)
 	}
 
-	for mac, ip := range conf.StaticAddresses {
-		leaseFile.WriteString(fmt.Sprintf("%s %s\n", mac, ip))
+	//TODO: support for per-device gw+bootzServer?
+	gateway, netmask, bootzSrv := "", "", ""
+	conf := em.GetDHCPConfig()
+	for _, d := range conf {
+		leaseFile.WriteString(fmt.Sprintf("%s %s\n", d.GetHardwareAddress(), d.GetIp()))
+		gateway = d.Gateway
+		netmask = d.Netmask
+		bootzSrv = d.Bootzserver
 	}
 	leaseFile.Close()
 
 	confFile, err := os.CreateTemp("", "coredhcp_conf_*.yml")
 	if err != nil {
-		log.Fatalf("Failed to create configuration file: %v", err)
+		return nil, fmt.Errorf("failed to create configuration file: %v", err)
 	}
 	defer os.Remove(confFile.Name())
 
 	confTmpl, err := template.New("coredhcp_conf").Parse(confTemplate)
 
 	if err != nil {
-		log.Fatalf("Error parsing configuraiton template: %v", err)
+		return nil, fmt.Errorf("Error parsing configuraiton template: %v", err)
 	}
 
 	confTmpl.Execute(confFile, struct {
-		Gateway   string
-		Netmask   string
-		LeaseFile string
-		BootzSrv  string
+		Gateway     string
+		Netmask     string
+		LeaseFile   string
+		BootzServer string
 	}{
-		Gateway:   conf.Gateway,
-		Netmask:   conf.Netmask,
-		LeaseFile: leaseFile.Name(),
-		BootzSrv:  conf.BootzServerAddr,
+		Gateway:     gateway,
+		Netmask:     netmask,
+		LeaseFile:   leaseFile.Name(),
+		BootzServer: bootzSrv,
 	})
 
 	config, err := cdconfig.Load(confFile.Name())
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		return nil, fmt.Errorf("failed to load configuration: %v", err)
 	}
 
 	for _, plugin := range desiredPlugins {
 		if err := cdplugins.RegisterPlugin(plugin); err != nil {
-			log.Fatalf("Failed to register plugin '%s': %v", plugin.Name, err)
+			return nil, fmt.Errorf("failed to register plugin '%s': %v", plugin.Name, err)
 		}
 	}
 
 	return &dhcpServer{
 		config:    config,
 		leaseFile: leaseFile.Name(),
-	}
+	}, nil
 }
 
-func (dhcp *dhcpServer) Start() {
+func (dhcp *dhcpServer) Start() error {
 	srv, err := cdserver.Start(dhcp.config)
 	if err != nil {
-		log.Fatalf("Error starting DHCP server: %v", err)
+		return fmt.Errorf("error starting DHCP server: %v", err)
 	}
 	dhcp.server = srv
+	return nil
 }
 
 func (dhcp *dhcpServer) Stop() {

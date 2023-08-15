@@ -17,6 +17,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
+	"github.com/openconfig/bootz/dhcp"
 	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
@@ -89,11 +90,16 @@ func main() {
 		RootCAs:      ca,
 	}
 
-	// TO: use wait group to ensure both started (when they are asked) before starting bootz server
-	go func() {
-		// code to start dhcp server
-		// exit the code if the address is given, but server can not be started
-	}()
+	dhcpSrv, err := dhcp.New(em)
+	if err != nil {
+		log.Exitf("Failed to create dhcp server: %v", err)
+	}
+
+	err = dhcpSrv.Start()
+	if err != nil {
+		log.Exitf("Count not start dhcp server: %v", err)
+	}
+	defer dhcpSrv.Stop()
 
 	go func() {
 		// code to start image server
@@ -119,5 +125,4 @@ func main() {
 	if err != nil {
 		log.Exitf("Error serving grpc: %v", err)
 	}
-
 }

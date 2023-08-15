@@ -11,6 +11,8 @@ import (
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 )
 
 // ChassisEntity provides the mode that the system is currently
@@ -34,6 +36,7 @@ type EntityManager interface {
 	GetBootstrapData(*bootz.GetBootstrapDataRequest, *bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
 	//SetStatus(EntityLookup, bootz.ReportStatusRequest) error
 	Sign(resp *bootz.GetBootstrapDataResponse) error
+	GetDHCPConfig() []*epb.DHCPConfig
 }
 
 type Service struct {

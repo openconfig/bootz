@@ -41,7 +41,7 @@ type bootLog struct {
 	Err            error
 }
 
-func (m *InMemoryEntityManager) DHCPEntities() []*epb.DHCPConfig {
+func (m *InMemoryEntityManager) GetDHCPConfig() []*epb.DHCPConfig {
 	dhcpEntities := []*epb.DHCPConfig{}
 	for _, chassis := range m.chassisConfigs {
 		if chassis.GetConfig().GetDhcpConfig().Bootzserver == "" {
