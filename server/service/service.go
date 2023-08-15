@@ -96,6 +96,7 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 	// Sign the response if Nonce is provided.
 	// TODO: Populate Sign() with an RSA key.
 	if req.Nonce != "" {
+		resp.SignedResponse.Nonce = req.Nonce
 		if err := s.em.Sign(resp, req.GetControlCardState().GetSerialNumber(), nil); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
 		}

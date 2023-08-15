@@ -100,6 +100,7 @@ func TestSign(t *testing.T) {
 		serial  string
 		resp    *bootz.GetBootstrapDataResponse
 		wantOV  string
+		wantOC  string
 		wantErr bool
 	}{
 		{
@@ -113,6 +114,7 @@ func TestSign(t *testing.T) {
 				},
 			},
 			wantOV:  "test_ov",
+			wantOC:  "test_oc",
 			wantErr: false,
 		},
 		{
@@ -131,6 +133,7 @@ func TestSign(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			artifacts := &service.SecurityArtifacts{
 				OV: service.OVList{test.serial: test.wantOV},
+				OC: &service.KeyPair{Cert: test.wantOC},
 			}
 			em := New(artifacts)
 
@@ -150,8 +153,11 @@ func TestSign(t *testing.T) {
 			if err != nil {
 				t.Errorf("Sign() err == %v, want %v", err, test.wantErr)
 			}
-			if got, want := string(test.resp.GetOwnershipVoucher()), test.wantOV; got != want {
-				t.Errorf("Sign() ov = %v, want %v", got, want)
+			if gotOV, wantOV := string(test.resp.GetOwnershipVoucher()), test.wantOV; gotOV != wantOV {
+				t.Errorf("Sign() ov = %v, want %v", gotOV, wantOV)
+			}
+			if gotOC, wantOC := string(test.resp.GetOwnershipCertificate()), test.wantOC; gotOC != wantOC {
+				t.Errorf("Sign() oc = %v, want %v", gotOC, wantOC)
 			}
 		})
 	}
