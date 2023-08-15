@@ -16,7 +16,7 @@ import (
 // ChassisEntity provides the mode that the system is currently
 // configured.
 type ChassisEntity struct {
-	Name string
+	Name     string
 	BootMode bootz.BootMode
 }
 
@@ -141,10 +141,10 @@ func (s *Service) Start() error {
 
 func New(em EntityManager) *Service {
 	// initialize the maps
-	return  & Service{
-		em: em,
+	return &Service{
+		em:               em,
 		connectedChassis: map[string]*bootz.ChassisDescriptor{},
-		activeBoots: map[string]*bootLog{},
-		failedRequest: map[*bootz.GetBootstrapDataRequest]error{},
+		activeBoots:      map[string]*bootLog{},
+		failedRequest:    map[*bootz.GetBootstrapDataRequest]error{},
 	}
 }

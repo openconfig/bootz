@@ -11,13 +11,14 @@ import (
 
 	"github.com/labstack/gommon/log"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/openconfig/bootz/proto/bootz"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 	authz "github.com/openconfig/gnsi/authz"
 	certz "github.com/openconfig/gnsi/certz"
 	pathz "github.com/openconfig/gnsi/pathz"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
+
 	//credz "github.com/openconfig/gnsi/credentialz"
 
 	"github.com/openconfig/bootz/server/service"
@@ -25,7 +26,7 @@ import (
 )
 
 type InMemoryEntityManager struct {
-	chassisConfigs []*epb.Chassis
+	chassisConfigs            []*epb.Chassis
 	bootzServerDefaultAddress string
 	imageServerDefaultAddress string
 }
@@ -40,13 +41,13 @@ type bootLog struct {
 	Err            error
 }
 
-func (m *InMemoryEntityManager) DHCPEntities() ([]*epb.DHCPConfig) {
-	dhcpEntities:= []*epb.DHCPConfig{}
-	for _,chassis := range m.chassisConfigs {
-		if chassis.GetConfig().GetDhcpConfig().Bootzserver=="" {
-			chassis.GetConfig().GetDhcpConfig().Bootzserver=m.bootzServerDefaultAddress
+func (m *InMemoryEntityManager) DHCPEntities() []*epb.DHCPConfig {
+	dhcpEntities := []*epb.DHCPConfig{}
+	for _, chassis := range m.chassisConfigs {
+		if chassis.GetConfig().GetDhcpConfig().Bootzserver == "" {
+			chassis.GetConfig().GetDhcpConfig().Bootzserver = m.bootzServerDefaultAddress
 		}
-		dhcpEntities=append(dhcpEntities, chassis.GetConfig().GetDhcpConfig())
+		dhcpEntities = append(dhcpEntities, chassis.GetConfig().GetDhcpConfig())
 	}
 	return dhcpEntities
 }
@@ -60,15 +61,15 @@ func (m *InMemoryEntityManager) ResolveChassis(chassDesc *bootz.ChassisDescripto
 				continue
 			}
 			// check for controller match if they provided in config
-			found:=0
-			opts:= []cmp.Option{
+			found := 0
+			opts := []cmp.Option{
 				cmpopts.IgnoreUnexported(bootz.ControlCard{}),
 			}
-			if len(chassConf.GetControllerCards())>=1 {
-				for _,ccInConfig := range chassConf.GetControllerCards(){
-					for _,ccInBootReq := range chassDesc.GetControlCards(){
-						if cmp.Equal(ccInConfig,ccInBootReq, opts...) {
-							found+=1
+			if len(chassConf.GetControllerCards()) >= 1 {
+				for _, ccInConfig := range chassConf.GetControllerCards() {
+					for _, ccInBootReq := range chassDesc.GetControlCards() {
+						if cmp.Equal(ccInConfig, ccInBootReq, opts...) {
+							found += 1
 							break
 						}
 					}
@@ -212,15 +213,13 @@ func (m *InMemoryEntityManager) GetBootstrapData(bootRequest *bootz.GetBootstrap
 	bootStrapData.BootPasswordHash = chassisConf.GetBootloaderPasswordHash()
 	bootStrapData.SerialNum = cc.SerialNumber
 
-	bootStrapData.IntendedImage= chassisConf.SoftwareImage
-
+	bootStrapData.IntendedImage = chassisConf.SoftwareImage
 
 	// TODO
 	//bootStrapData.ServerTrustCert:= readServerCert()
 
 	return bootStrapData, nil
 }
-
 
 func (*InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse) error {
 	return nil

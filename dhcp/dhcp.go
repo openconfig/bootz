@@ -2,7 +2,6 @@ package dhcp
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"text/template"
 
@@ -14,6 +13,8 @@ import (
 	plnetmask "github.com/coredhcp/coredhcp/plugins/netmask"
 	plrouter "github.com/coredhcp/coredhcp/plugins/router"
 	plbootz "github.com/openconfig/bootz/dhcp/plugins"
+
+	log "github.com/golang/glog"
 )
 
 const confTemplate = `
@@ -39,28 +40,22 @@ type dhcpServer struct {
 	leaseFile string
 }
 
-func New() *dhcpServer {
-	//TODO: Read from input
-	tmpParameters := struct {
-		HWAddr   string
-		Gateway  string
-		Netmask  string
-		Ip       string
-		BootzSrv string
-	}{
-		HWAddr:   "4c:5d:3c:ef:de:60",
-		Gateway:  "5.78.0.1",
-		Netmask:  "255.255.0.0",
-		Ip:       "5.78.26.27",
-		BootzSrv: "bootz://10.10.10.10:8000",
-	}
+type DHCPServerConfig struct {
+	StaticAddresses map[string]string
+	Gateway         string
+	Netmask         string
+	BootzServerAddr string
+}
 
+func New(conf *DHCPServerConfig) *dhcpServer {
 	leaseFile, err := os.CreateTemp("", "coredhcp_leases_*.txt")
 	if err != nil {
 		log.Fatalf("Failed to create lease file: %v", err)
 	}
 
-	leaseFile.WriteString(fmt.Sprintf("%s %s\n", tmpParameters.HWAddr, tmpParameters.Ip))
+	for mac, ip := range conf.StaticAddresses {
+		leaseFile.WriteString(fmt.Sprintf("%s %s\n", mac, ip))
+	}
 	leaseFile.Close()
 
 	confFile, err := os.CreateTemp("", "coredhcp_conf_*.yml")
@@ -81,10 +76,10 @@ func New() *dhcpServer {
 		LeaseFile string
 		BootzSrv  string
 	}{
-		Gateway:   tmpParameters.Gateway,
-		Netmask:   tmpParameters.Netmask,
+		Gateway:   conf.Gateway,
+		Netmask:   conf.Netmask,
 		LeaseFile: leaseFile.Name(),
-		BootzSrv:  tmpParameters.BootzSrv,
+		BootzSrv:  conf.BootzServerAddr,
 	})
 
 	config, err := cdconfig.Load(confFile.Name())
@@ -107,7 +102,7 @@ func New() *dhcpServer {
 func (dhcp *dhcpServer) Start() {
 	srv, err := cdserver.Start(dhcp.config)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Error starting DHCP server: %v", err)
 	}
 	dhcp.server = srv
 }
@@ -116,7 +111,7 @@ func (dhcp *dhcpServer) Stop() {
 	if dhcp.server != nil {
 		dhcp.server.Close()
 		if err := dhcp.server.Wait(); err != nil {
-			log.Print(err)
+			log.Warningln(err)
 		}
 	}
 	os.Remove(dhcp.leaseFile)
