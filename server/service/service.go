@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/rsa"
 
 	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/gnmi/errlist"
@@ -26,7 +27,7 @@ type EntityManager interface {
 	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
 	GetBootstrapData(*bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
 	SetStatus(*bootz.ReportStatusRequest) error
-	Sign(*bootz.GetBootstrapDataResponse) error
+	Sign(*bootz.GetBootstrapDataResponse, *rsa.PrivateKey) error
 }
 
 type Service struct {
@@ -74,8 +75,9 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 		},
 	}
 	// Sign the response if Nonce is provided.
+	// TODO: Populate Sign() with an RSA key.
 	if req.Nonce != "" {
-		if err := s.em.Sign(resp); err != nil {
+		if err := s.em.Sign(resp, nil); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
 		}
 	}

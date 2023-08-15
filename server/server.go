@@ -28,7 +28,7 @@ func main() {
 	if *port == "" {
 		log.Exitf("no port selected. specify with the -port flag")
 	}
-	em := entitymanager.New()
+	em := entitymanager.New().AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A").AddControlCard("123B")
 	c := service.New(em)
 	s := grpc.NewServer()
 
