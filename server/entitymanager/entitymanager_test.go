@@ -13,6 +13,44 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func TestFetchOwnershipVoucher(t *testing.T) {
+	tests := []struct {
+		desc    string
+		serial  string
+		want    string
+		wantErr bool
+	}{
+		{
+			desc:    "Missing OV",
+			serial:  "123B",
+			wantErr: true,
+		},
+		{
+			desc:    "Found OV",
+			serial:  "123A",
+			want:    "test_ov",
+			wantErr: false,
+		},
+	}
+
+	artifacts := &service.SecurityArtifacts{
+		OV: service.OVList{"123A": "test_ov"},
+	}
+	em := New(artifacts)
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			got, err := em.FetchOwnershipVoucher(test.serial)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("FetchOwnershipVoucher(%v) err = %v, want %v", test.serial, err, test.wantErr)
+			}
+			if !cmp.Equal(got, test.want) {
+				t.Errorf("FetchOwnershipVoucher(%v) got %v, want %v", test.serial, got, test.want)
+			}
+		})
+	}
+}
+
 func TestResolveChassis(t *testing.T) {
 	tests := []struct {
 		desc    string
@@ -41,7 +79,7 @@ func TestResolveChassis(t *testing.T) {
 		},
 	}
 
-	em := New().AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
+	em := New(nil).AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
@@ -80,7 +118,7 @@ func TestSign(t *testing.T) {
 		},
 	}
 
-	em := New()
+	em := New(nil)
 	priv, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +190,7 @@ func TestSetStatus(t *testing.T) {
 		},
 	}
 
-	em := New().AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
+	em := New(nil).AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
@@ -209,7 +247,7 @@ func TestGetBootstrapData(t *testing.T) {
 		},
 	}
 
-	em := New().AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
+	em := New(nil).AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {

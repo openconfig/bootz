@@ -22,6 +22,7 @@ type InMemoryEntityManager struct {
 	chassisInventory map[service.EntityLookup]*service.ChassisEntity
 	// represents the current status of known control cards
 	controlCardStatuses map[string]bootz.ControlCardState_ControlCardStatus
+	artifacts           *service.SecurityArtifacts
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
@@ -98,6 +99,14 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, priv 
 	return nil
 }
 
+// FetchOwnershipVoucher retrieves the ownership voucher for a control card
+func (m *InMemoryEntityManager) FetchOwnershipVoucher(serial string) (string, error) {
+	if ov, ok := m.artifacts.OV[serial]; ok {
+		return ov, nil
+	}
+	return "", status.Errorf(codes.NotFound, "OV for serial %v not found", serial)
+}
+
 // AddControlCard adds a new control card to the entity manager.
 func (m *InMemoryEntityManager) AddControlCard(serial string) *InMemoryEntityManager {
 	m.controlCardStatuses[serial] = bootz.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
@@ -118,8 +127,9 @@ func (m *InMemoryEntityManager) AddChassis(bootMode bootz.BootMode, manufacturer
 }
 
 // New returns a new in-memory entity manager.
-func New() *InMemoryEntityManager {
+func New(artifacts *service.SecurityArtifacts) *InMemoryEntityManager {
 	return &InMemoryEntityManager{
+		artifacts:           artifacts,
 		chassisInventory:    make(map[service.EntityLookup]*service.ChassisEntity),
 		controlCardStatuses: make(map[string]bootz.ControlCardState_ControlCardStatus),
 	}

@@ -45,6 +45,7 @@ type EntityManager interface {
 	GetBootstrapData(*bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
 	SetStatus(*bootz.ReportStatusRequest) error
 	Sign(*bootz.GetBootstrapDataResponse, *rsa.PrivateKey) error
+	FetchOwnershipVoucher(string) (string, error)
 }
 
 type Service struct {
@@ -86,7 +87,14 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 	if errs.Err() != nil {
 		return nil, errs.Err()
 	}
+	// Fetch the OV of the active control card
+	ov, err := s.em.FetchOwnershipVoucher(req.GetControlCardState().GetSerialNumber())
+	if err != nil {
+		return nil, err
+	}
+
 	resp := &bootz.GetBootstrapDataResponse{
+		OwnershipVoucher: []byte(ov),
 		SignedResponse: &bootz.BootstrapDataSigned{
 			Responses: responses,
 		},

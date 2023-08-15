@@ -102,12 +102,12 @@ func main() {
 	if *artifactDirectory == "" {
 		log.Exitf("no artifact directory specified")
 	}
-	// TODO: Pass security artifacts to service.
-	_, err := parseSecurityArtifacts()
+	sa, err := parseSecurityArtifacts()
 	if err != nil {
 		log.Exit(err)
 	}
-	em := entitymanager.New().AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A").AddControlCard("123B")
+	em := entitymanager.New(sa)
+	em.AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A").AddControlCard("123B")
 	c := service.New(em)
 	s := grpc.NewServer()
 
