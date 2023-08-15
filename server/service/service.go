@@ -24,6 +24,7 @@ type EntityLookup struct {
 // ChassisEntity provides the mode that the system is currently
 // configured.
 type ChassisEntity struct {
+	Name string
 	BootMode bootz.BootMode
 }
 

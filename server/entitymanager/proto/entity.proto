@@ -49,7 +49,7 @@ message Entities {
 // Config for resetting the device before the test run.
 message Config {
   // boot config
-  bootz.BootConfig boot_config =1 ; 
+  BootConfig boot_config =1 ; 
 
   // dhcp config
   DHCPConfig dhcp_config =2 ; 
@@ -58,6 +58,22 @@ message Config {
   gNSIConfig gnsi_config =3 ; 
 
 }
+
+message BootConfig {
+  // Proprietary key-value parameters that are required as part of boot
+  // configuration (e.g., feature flags, or vendor-specific hardware knobs).
+  google.protobuf.Struct metadata = 1;
+
+  // Native format vendor configuration file
+  string vendor_config_file = 2;
+
+  // JSON rendered OC configuration file
+  string oc_config_file = 3;
+
+  // Bootloader key-value parameters that are required as part of boot
+  // configuration.
+  google.protobuf.Struct bootloader_config = 4;
+}  
 
 message gNSIConfig {
   // path to authz upload file
@@ -93,11 +109,6 @@ message gNSIConfig {
     repeated string fixed_address = 2;
 }
 
-enum BootMode{
-      UnSecure = 0;
-      Secure = 2;
-   }
-
 // A Chassis entity.
 message Chassis {
 
@@ -120,7 +131,7 @@ message Chassis {
   string bootloader_password_hash = 6;
 
   // Boot mode defines the boot mode that can be secure/UnSecure 
-  BootMode boot_mode =7;
+  bootz.BootMode boot_mode =7;
 
   // Software image to be loaded on the chassis
   bootz.SoftwareImage software_image = 8; 

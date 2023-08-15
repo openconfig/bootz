@@ -12,175 +12,185 @@ import (
 	"github.com/labstack/gommon/log"
 
 	"github.com/openconfig/bootz/proto/bootz"
-	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity/entity"
+	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 	authz "github.com/openconfig/gnsi/authz"
-	pathz "github.com/openconfig/gnsi/pathz"
 	certz "github.com/openconfig/gnsi/certz"
-	//credz "github.com/openconfig/gnsi/credentialz"
+	pathz "github.com/openconfig/gnsi/pathz"
 
+	//credz "github.com/openconfig/gnsi/credentialz"
 
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
 type InMemoryEntityManager struct {
-	chassisConfigs []*epb.Chassis  
-} 
+	chassisConfigs []*epb.Chassis
+}
 
 type bootLog struct {
-	BootMode epb.BootModes
+	BootMode       bootz.BootMode
 	StartTimeStamp uint64
 	EndTimeStamp   uint64
-	Status []bootz.ReportStatusRequest_BootstrapStatus
-	BootResponse *bootz.BootstrapDataResponse
-	BootRequest *bootz.GetBootstrapDataRequest
-	Err error 
+	Status         []bootz.ReportStatusRequest_BootstrapStatus
+	BootResponse   *bootz.BootstrapDataResponse
+	BootRequest    *bootz.GetBootstrapDataRequest
+	Err            error
 }
 
 func (m *InMemoryEntityManager) ResolveChassis(lookup service.EntityLookup) (*service.ChassisEntity, error) {
-	for _,chassic := range m.chassisConfigs {
+	for _, chassis := range m.chassisConfigs {
 		// matching on Manufacturer and serial number is the must
-		if chassic.GetManufacturer()==lookup.Manufacturer && chassic.SerialNumber==lookup.SerialNumber { 
+		if chassis.GetManufacturer() == lookup.Manufacturer && chassis.SerialNumber == lookup.SerialNumber {
 			// only check part number if is specified on both side
-			if lookup.PartNumber!="" && chassic.GetPartNumber()!="" && lookup.PartNumber!=chassic.GetPartNumber() { 
+			if lookup.PartNumber != "" && chassis.GetPartNumber() != "" && lookup.PartNumber != chassis.GetPartNumber() {
 				continue
 			}
-			return  &service.ChassisEntity{Name: chassic.GetName(),
-				BootMode: chassic.GetBootMode().String(),},nil
+			return &service.ChassisEntity{
+				BootMode: bootz.BootMode_BOOT_MODE_INSECURE,
+				Name:     chassis.GetName()}, nil
 		}
 	}
-	return nil, fmt.Errorf("could not resolve chassis with serial#: %s and manufacturer: %s",lookup.SerialNumber ,lookup.Manufacturer)
+	return nil, fmt.Errorf("could not resolve chassis with serial#: %s and manufacturer: %s", lookup.SerialNumber, lookup.Manufacturer)
 }
 
-func (m *InMemoryEntityManager) GetChassisConfig(name string) *epb.Chassis{
-	for _,chassic := range m.chassisConfigs {
-		if chassic.Name==name {
+func (m *InMemoryEntityManager) GetChassisConfig(name string) *epb.Chassis {
+	for _, chassic := range m.chassisConfigs {
+		if chassic.Name == name {
 			return chassic
 		}
-	 }
-	 return &epb.Chassis{}
+	}
+	return &epb.Chassis{}
 }
 
-func loadAndValidateJSONfile(jsonFilePath string) ([]byte,error){
-	jsonByte, err := os.ReadFile(string(jsonFilePath)); if err!=nil {
+func loadAndValidateJSONfile(jsonFilePath string) ([]byte, error) {
+	jsonByte, err := os.ReadFile(string(jsonFilePath))
+	if err != nil {
 		return nil, fmt.Errorf("could not populate oc config %v", err)
 	}
-	if !json.Valid(jsonByte)  {
+	if !json.Valid(jsonByte) {
 		return nil, fmt.Errorf("could not populate oc config, the oc config is not a valid json")
 	}
 	return jsonByte, err
 }
 
 func populateBootConfig(conf *epb.BootConfig) (*bootz.BootConfig, error) {
-	bootConfig:= &bootz.BootConfig{}
-	if conf.GetOcConfigFile()!="" {
-		ocConf, err:= loadAndValidateJSONfile(conf.GetOcConfigFile()); if err!= nil {
+	bootConfig := &bootz.BootConfig{}
+	if conf.GetOcConfigFile() != "" {
+		ocConf, err := loadAndValidateJSONfile(conf.GetOcConfigFile())
+		if err != nil {
 			return nil, err
 		}
-		bootConfig.OcConfig=ocConf
+		bootConfig.OcConfig = ocConf
 	}
-	if conf.GetVendorConfigFile()!="" {
-		cliConf, err := os.ReadFile(string(conf.VendorConfigFile)); if err!=nil {
+	if conf.GetVendorConfigFile() != "" {
+		cliConf, err := os.ReadFile(string(conf.VendorConfigFile))
+		if err != nil {
 			return nil, fmt.Errorf("could not populate vendor config %v", err)
 		}
-		bootConfig.VendorConfig=cliConf
+		bootConfig.VendorConfig = cliConf
 	}
-	bootConfig.Metadata= conf.GetMetadata()
+	bootConfig.Metadata = conf.GetMetadata()
 	bootConfig.BootloaderConfig = conf.GetBootloaderConfig()
-	return bootConfig,nil
+	return bootConfig, nil
 }
 
 func populateAuthzConfig(conf *epb.GNSIConfig) (*authz.UploadRequest, error) {
-	if conf.GetAuthzPolicyFile()=="" {
+	if conf.GetAuthzUploadFile() == "" {
 		return nil, nil
-	} 
-	authzPolicy, err := loadAndValidateJSONfile(conf.GetAuthzPolicyFile()); if err!= nil {
+	}
+	authzPolicy, err := loadAndValidateJSONfile(conf.GetAuthzUploadFile())
+	if err != nil {
 		return nil, err
 	}
-	uploadReques:= &authz.UploadRequest{
-		Version: "bootz",
+	uploadReques := &authz.UploadRequest{
+		Version:   "bootz",
 		CreatedOn: uint64(time.Now().UnixMilli()),
-		Policy: string(authzPolicy),
+		Policy:    string(authzPolicy),
 	}
 	return uploadReques, nil
 }
 
 func populatePathzConfig(conf *epb.GNSIConfig) (*pathz.UploadRequest, error) {
-	if conf.GetAuthzPolicyFile()=="" {
+	if conf.GetPathzUploadFile() == "" {
 		return nil, nil
-	} 
-	pathzPolicyJson, err := loadAndValidateJSONfile(conf.GetAuthzPolicyFile()); if err!= nil {
+	}
+	pathzPolicyJson, err := loadAndValidateJSONfile(conf.GetPathzUploadFile())
+	if err != nil {
 		return nil, err
 	}
-	pathzPolicy:=  &pathz.AuthorizationPolicy{}
-	err = json.Unmarshal(pathzPolicyJson,pathzPolicy); if err!=nil {
+	pathzPolicy := &pathz.AuthorizationPolicy{}
+	err = json.Unmarshal(pathzPolicyJson, pathzPolicy)
+	if err != nil {
 		return nil, err
 	}
-	uploadReques:= &pathz.UploadRequest{
-		Version: "bootz",
+	uploadReques := &pathz.UploadRequest{
+		Version:   "bootz",
 		CreatedOn: uint64(time.Now().UnixMilli()),
-		Policy: pathzPolicy,
+		Policy:    pathzPolicy,
 	}
 	return uploadReques, nil
 }
 
 func populateCertzConfig(conf *epb.GNSIConfig) (*certz.UploadRequest, error) {
-	if conf.GetAuthzPolicyFile()=="" {
+	if conf.GetCertzUploadFile() == "" {
 		return nil, nil
-	} 
+	}
 	return nil, nil
 	// TODO
 }
 
 func populateCredzConfig(conf *epb.GNSIConfig) (*bootz.Credentials, error) {
-	if conf.GetAuthzPolicyFile()=="" {
+	if conf.GetCredentialsFile() == "" {
 		return nil, nil
-	} 
+	}
 	return nil, nil
 	// TODO
 }
 
-func (m *InMemoryEntityManager)	GetBootstrapData(bootRequest *bootz.GetBootstrapDataRequest, cc *bootz.ControlCard) (*bootz.BootstrapDataResponse, error){
-	chDesc:= bootRequest.GetChassisDescriptor()
-	lookup:= service.EntityLookup{SerialNumber: chDesc.SerialNumber,
-		PartNumber: chDesc.PartNumber,
-		Manufacturer: chDesc.Manufacturer,}
-	chassicEn, err := m.ResolveChassis(lookup);  if err!=nil {
+func (m *InMemoryEntityManager) GetBootstrapData(bootRequest *bootz.GetBootstrapDataRequest, cc *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
+	chDesc := bootRequest.GetChassisDescriptor()
+	lookup := service.EntityLookup{SerialNumber: chDesc.SerialNumber,
+		PartNumber:   chDesc.PartNumber,
+		Manufacturer: chDesc.Manufacturer}
+	chassicEn, err := m.ResolveChassis(lookup)
+	if err != nil {
 		return nil, err
 	}
-	chassisConf:=m.GetChassisConfig(chassicEn.Name)
+	chassisConf := m.GetChassisConfig(chassicEn.Name)
 
 	bootStrapData := &bootz.BootstrapDataResponse{}
 
-	bootConfig, err := populateBootConfig(chassisConf.Config.GetBootConfig()); if err!=nil {
+	bootConfig, err := populateBootConfig(chassisConf.Config.GetBootConfig())
+	if err != nil {
 		return nil, fmt.Errorf("error in populating bootConfig %v", err)
 	}
-	bootStrapData.BootConfig=bootConfig
+	bootStrapData.BootConfig = bootConfig
 
-	authzUploadReq, err:=populateAuthzConfig(chassisConf.Config.GetGnsiConfig()) ; if err!= nil {
+	authzUploadReq, err := populateAuthzConfig(chassisConf.Config.GetGnsiConfig())
+	if err != nil {
 		return nil, fmt.Errorf("error in populating authz config: %v", err)
 
 	}
-	bootStrapData.Authz=authzUploadReq
+	bootStrapData.Authz = authzUploadReq
 
-	pathzUploadReq, err:=populatePathzConfig(chassisConf.Config.GetGnsiConfig()) ; if err!= nil {
+	pathzUploadReq, err := populatePathzConfig(chassisConf.Config.GetGnsiConfig())
+	if err != nil {
 		return nil, fmt.Errorf("error in populating authz config: %v", err)
 
 	}
-	bootStrapData.Pathz=pathzUploadReq
+	bootStrapData.Pathz = pathzUploadReq
 
-	bootStrapData.BootPasswordHash=chassisConf.GetBootloaderPasswordHash()
-	bootStrapData.SerialNum= cc.SerialNumber
-	
-	bootStrapData.IntendedImage.Name=chassisConf.SoftwareImage.Name
-	bootStrapData.IntendedImage.OsImageHash=chassisConf.SoftwareImage.OsImageHash
-	bootStrapData.IntendedImage.Url=chassisConf.SoftwareImage.Url
-	bootStrapData.IntendedImage.Version=chassisConf.SoftwareImage.Version
-	bootStrapData.IntendedImage.HashAlgorithm=chassisConf.SoftwareImage.HashAlgorithm
+	bootStrapData.BootPasswordHash = chassisConf.GetBootloaderPasswordHash()
+	bootStrapData.SerialNum = cc.SerialNumber
 
-	// TODO 
+	bootStrapData.IntendedImage.Name = chassisConf.SoftwareImage.Name
+	bootStrapData.IntendedImage.OsImageHash = chassisConf.SoftwareImage.OsImageHash
+	bootStrapData.IntendedImage.Url = chassisConf.SoftwareImage.Url
+	bootStrapData.IntendedImage.Version = chassisConf.SoftwareImage.Version
+	bootStrapData.IntendedImage.HashAlgorithm = chassisConf.SoftwareImage.HashAlgorithm
+
+	// TODO
 	//bootStrapData.ServerTrustCert:= readServerCert()
-
 
 	return bootStrapData, nil
 }
@@ -191,30 +201,24 @@ func (*InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse) error {
 	return nil
 }
 
-func New(chassisConfigFile string) (service.EntityManager, error){
-	newManager:=&InMemoryEntityManager{}
-	if chassisConfigFile==""{
-		return newManager,nil
+func New(chassisConfigFile string) (service.EntityManager, error) {
+	newManager := &InMemoryEntityManager{}
+	if chassisConfigFile == "" {
+		return newManager, nil
 	}
 	protoTextFile, err := os.ReadFile(chassisConfigFile)
-    if err != nil {
-        log.Errorf("Error in opening file %s : #%v ", chassisConfigFile, err)
+	if err != nil {
+		log.Errorf("Error in opening file %s : #%v ", chassisConfigFile, err)
 		return nil, err
-    }
+	}
 	//newManager.devices=map[string]device{}
-	entities :=epb.Entities{}
-    err = prototext.Unmarshal(protoTextFile, &entities)
-    if err != nil {
-        log.Errorf("Error in un-marshalling %s: %v", protoTextFile, err)
+	entities := epb.Entities{}
+	err = prototext.Unmarshal(protoTextFile, &entities)
+	if err != nil {
+		log.Errorf("Error in un-marshalling %s: %v", protoTextFile, err)
 		return nil, err
-    }
+	}
 	log.Printf("New entity manager is initialized successfully from chassis config file %s", chassisConfigFile)
-	newManager.chassisConfigs= entities.GetChassis()
-	return  newManager,nil
+	newManager.chassisConfigs = entities.GetChassis()
+	return newManager, nil
 }
-
-
-
-
-
-
