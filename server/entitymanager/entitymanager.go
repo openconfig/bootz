@@ -82,7 +82,7 @@ func (m *InMemoryEntityManager) SetStatus(req *bootz.ReportStatusRequest) error 
 }
 
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
-func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, priv *rsa.PrivateKey) error {
+func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, serial string, priv *rsa.PrivateKey) error {
 	if resp.GetSignedResponse() == nil {
 		return status.Errorf(codes.InvalidArgument, "empty signed response")
 	}
@@ -96,6 +96,12 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, priv 
 		return err
 	}
 	resp.ResponseSignature = string(sig)
+	// Populate the OV
+	ov, err := m.FetchOwnershipVoucher(serial)
+	if err != nil {
+		return err
+	}
+	resp.OwnershipVoucher = []byte(ov)
 	return nil
 }
 

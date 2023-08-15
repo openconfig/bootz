@@ -44,7 +44,7 @@ type EntityManager interface {
 	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
 	GetBootstrapData(*bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
 	SetStatus(*bootz.ReportStatusRequest) error
-	Sign(*bootz.GetBootstrapDataResponse, *rsa.PrivateKey) error
+	Sign(*bootz.GetBootstrapDataResponse, string, *rsa.PrivateKey) error
 	FetchOwnershipVoucher(string) (string, error)
 }
 
@@ -87,14 +87,8 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 	if errs.Err() != nil {
 		return nil, errs.Err()
 	}
-	// Fetch the OV of the active control card
-	ov, err := s.em.FetchOwnershipVoucher(req.GetControlCardState().GetSerialNumber())
-	if err != nil {
-		return nil, err
-	}
 
 	resp := &bootz.GetBootstrapDataResponse{
-		OwnershipVoucher: []byte(ov),
 		SignedResponse: &bootz.BootstrapDataSigned{
 			Responses: responses,
 		},
@@ -102,7 +96,7 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 	// Sign the response if Nonce is provided.
 	// TODO: Populate Sign() with an RSA key.
 	if req.Nonce != "" {
-		if err := s.em.Sign(resp, nil); err != nil {
+		if err := s.em.Sign(resp, req.GetControlCardState().GetSerialNumber(), nil); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
 		}
 	}

@@ -97,11 +97,14 @@ func TestResolveChassis(t *testing.T) {
 func TestSign(t *testing.T) {
 	tests := []struct {
 		desc    string
+		serial  string
 		resp    *bootz.GetBootstrapDataResponse
+		wantOV  string
 		wantErr bool
 	}{
 		{
-			desc: "Success",
+			desc:   "Success",
+			serial: "123A",
 			resp: &bootz.GetBootstrapDataResponse{
 				SignedResponse: &bootz.BootstrapDataSigned{
 					Responses: []*bootz.BootstrapDataResponse{
@@ -109,6 +112,7 @@ func TestSign(t *testing.T) {
 					},
 				},
 			},
+			wantOV:  "test_ov",
 			wantErr: false,
 		},
 		{
@@ -118,7 +122,6 @@ func TestSign(t *testing.T) {
 		},
 	}
 
-	em := New(nil)
 	priv, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +129,12 @@ func TestSign(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			err := em.Sign(test.resp, priv)
+			artifacts := &service.SecurityArtifacts{
+				OV: service.OVList{test.serial: test.wantOV},
+			}
+			em := New(artifacts)
+
+			err := em.Sign(test.resp, test.serial, priv)
 			if err != nil {
 				if test.wantErr {
 					t.Skip()
@@ -141,6 +149,9 @@ func TestSign(t *testing.T) {
 			err = rsa.VerifyPKCS1v15(&priv.PublicKey, crypto.SHA256, hashed[:], []byte(test.resp.GetResponseSignature()))
 			if err != nil {
 				t.Errorf("Sign() err == %v, want %v", err, test.wantErr)
+			}
+			if got, want := string(test.resp.GetOwnershipVoucher()), test.wantOV; got != want {
+				t.Errorf("Sign() ov = %v, want %v", got, want)
 			}
 		})
 	}
