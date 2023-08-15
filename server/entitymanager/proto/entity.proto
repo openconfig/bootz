@@ -102,11 +102,21 @@ message gNSIConfig {
 
 }
  message  DHCPConfig {
-    // mac address of the management interface that will be used to get dhcp address
-    repeated string hardware_ethernet = 1;
 
-    // address to be assigned by dhcp server to chassis
-    repeated string fixed_address = 2;
+    // mac address of the management interface that will be used to get dhcp address
+    string hardware_address = 1;
+
+    // ip to be assigned to the chassis
+    string ip = 2;
+
+    // netmask to be assigned to the chassis
+    string netmask = 3; 
+
+    // gateway address to be assigned to the chassis
+    string gateway = 4 ; 
+
+    // bootz server address
+    string bootzserver = 5; 
 }
 
 // A Chassis entity.

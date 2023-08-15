@@ -245,4 +245,26 @@ func TestResolve (t *testing.T) {
 
 }
 
+func TestBootStrapResponse(t *testing.T) {
+	tests:= []test{
+		{name: "t1",
+		 chassisConfig: entity.Entities{},
+		 chassisDesc: bootz.ChassisDescriptor{},
+		 wantErr: "",
+
+	    },
+	}
+	for _,tt := range tests  {
+		t.Run(tt.name, func(t *testing.T) {
+			em:= InMemoryEntityManager{
+				chassisConfigs: tt.chassisConfig.Chassis,
+			}
+			_,err:=em.ResolveChassis(&tt.chassisDesc)
+			if s := errdiff.Check(err, tt.wantErr); s != "" {
+				t.Errorf("Expected error %s, but got error %v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
 
