@@ -30,7 +30,7 @@ option go_package = "github.com/openconfig/bootz/server/entitymanager/proto/enti
 message Options {
   // global gnsi config for all entities. Device level 
   // config will take precedence if is defined
-  gNSIConfig gnsi_global_config = 1;
+  GNSIConfig gnsi_global_config = 1;
 
   // server trust bundle that is used by clients to authenticate bootz server 
   string server_trust_bundle_file = 2;
@@ -55,7 +55,7 @@ message Config {
   DHCPConfig dhcp_config =2 ;
 
   // gnsi config
-  gNSIConfig gnsi_config =3 ;
+  GNSIConfig gnsi_config =3 ;
 
 }
 
@@ -148,7 +148,7 @@ message Chassis {
   bootz.SoftwareImage software_image = 8; 
 
   // control cards. 
-  repeated bootz.ControlCard controller_cards = 9;
+  repeated bootz.ControlCard controller_card = 9;
 
   // config to be loaded on the chassis
   Config config = 10; 
