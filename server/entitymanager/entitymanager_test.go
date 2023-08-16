@@ -235,7 +235,7 @@ func TestResolve(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			em := InMemoryEntityManager{
+			em := entityManager{
 				chassisConfigs: tt.chassisConfig.Chassis,
 			}
 			_, err := em.ResolveChassis(&tt.chassisDesc)
@@ -257,7 +257,7 @@ func TestBootStrapResponse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			em := InMemoryEntityManager{
+			em := entityManager{
 				chassisConfigs: tt.chassisConfig.Chassis,
 			}
 			_, err := em.ResolveChassis(&tt.chassisDesc)
