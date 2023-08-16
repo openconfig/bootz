@@ -17,7 +17,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	//"github.com/openconfig/bootz/dhcp"
+	"github.com/openconfig/bootz/dhcp"
 	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
@@ -89,7 +89,7 @@ func main() {
 		Certificates: []tls.Certificate{serverCert},
 		RootCAs:      ca,
 	}
-	/*if *dhcpServerAddress!="" {
+	if *dhcpServerAddress!="" {
 		dhcpSrv, err := dhcp.New(em)
 		if err != nil {
 			log.Exitf("Failed to create dhcp server: %v", err)
@@ -100,7 +100,7 @@ func main() {
 			log.Exitf("Could not start dhcp server: %v", err)
 		}
 		defer dhcpSrv.Stop()
-	}*/
+	}
 
 	if *imageServerAddress != "" {
 		go func() {

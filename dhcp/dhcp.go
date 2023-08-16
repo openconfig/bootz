@@ -13,7 +13,6 @@ import (
 	plnetmask "github.com/coredhcp/coredhcp/plugins/netmask"
 	plrouter "github.com/coredhcp/coredhcp/plugins/router"
 	plbootz "github.com/openconfig/bootz/dhcp/plugins"
-	bootzsrv "github.com/openconfig/bootz/server/service"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 
 
