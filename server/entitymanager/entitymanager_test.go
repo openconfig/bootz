@@ -248,7 +248,7 @@ func TestResolve(t *testing.T) {
 }
 
 func TestBootStrapResponse(t *testing.T) {
-	tests := []test{
+	tests := []*test{
 		{name: "t1",
 			chassisConfig: entity.Entities{},
 			chassisDesc:   bootz.ChassisDescriptor{},
