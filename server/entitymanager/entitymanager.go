@@ -1,14 +1,11 @@
 package entitymanager
 
 import (
-	//"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"time"
-
-	//"crypto/sha512"
-
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -18,18 +15,16 @@ import (
 	certz "github.com/openconfig/gnsi/certz"
 	pathz "github.com/openconfig/gnsi/pathz"
 
-	//credz "github.com/openconfig/gnsi/credentialz"
-
+	log "github.com/golang/glog"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/protobuf/encoding/prototext"
-	log "github.com/golang/glog"
-
 )
 
-type InMemoryEntityManager struct {
+type entityManager struct {
 	chassisConfigs            []*epb.Chassis
 	bootzServerDefaultAddress string
 	imageServerDefaultAddress string
+	mu                        sync.Mutex
 }
 
 type bootLog struct {
@@ -42,26 +37,30 @@ type bootLog struct {
 	Err            error
 }
 
-func (m *InMemoryEntityManager) GetDHCPConfig() []*epb.DHCPConfig {
+func (em *entityManager) GetDHCPConfig() []*epb.DHCPConfig {
+	em.mu.Lock()
+	defer em.mu.Unlock()
 	dhcpEntities := []*epb.DHCPConfig{}
-	for _, chassis := range m.chassisConfigs {
+	for _, chassis := range em.chassisConfigs {
 		if chassis.GetConfig().GetDhcpConfig().Bootzserver == "" {
-			chassis.GetConfig().GetDhcpConfig().Bootzserver = m.bootzServerDefaultAddress
+			chassis.GetConfig().GetDhcpConfig().Bootzserver = em.bootzServerDefaultAddress
 		}
 		dhcpEntities = append(dhcpEntities, chassis.GetConfig().GetDhcpConfig())
 	}
 	return dhcpEntities
 }
 
-func (m *InMemoryEntityManager) ResolveChassis(chassDesc *bootz.ChassisDescriptor) (*service.ChassisEntity, error) {
-	for _, chassConf := range m.chassisConfigs {
+func (em *entityManager) ResolveChassis(chassDesc *bootz.ChassisDescriptor) (*service.ChassisEntity, error) {
+	em.mu.Lock()
+	defer em.mu.Unlock()
+	for _, chassConf := range em.chassisConfigs {
 		// matching on Manufacturer and serial number is the must
 		if chassConf.GetManufacturer() == chassDesc.GetManufacturer() && chassConf.SerialNumber == chassDesc.GetSerialNumber() {
 			// only check part number if is specified on both side
 			if chassConf.GetPartNumber() != "" && chassDesc.GetPartNumber() != chassConf.GetPartNumber() {
 				continue
 			}
-			// check for controller match if they provided in config
+			// do controller match if they are in config
 			found := 0
 			opts := []cmp.Option{
 				cmpopts.IgnoreUnexported(bootz.ControlCard{}),
@@ -87,8 +86,10 @@ func (m *InMemoryEntityManager) ResolveChassis(chassDesc *bootz.ChassisDescripto
 	return nil, fmt.Errorf("could not resolve chassis with serial#: %s and manufacturer: %s", chassDesc.GetSerialNumber(), chassDesc.GetManufacturer())
 }
 
-func (m *InMemoryEntityManager) GetChassisConfig(name string) *epb.Chassis {
-	for _, chassic := range m.chassisConfigs {
+func (em *entityManager) Get(name string) *epb.Chassis {
+	em.mu.Lock()
+	defer em.mu.Unlock()
+	for _, chassic := range em.chassisConfigs {
 		if chassic.Name == name {
 			return chassic
 		}
@@ -181,13 +182,13 @@ func populateCredzConfig(conf *epb.GNSIConfig) (*bootz.Credentials, error) {
 	// TODO
 }
 
-func (m *InMemoryEntityManager) GetBootstrapData(bootRequest *bootz.GetBootstrapDataRequest, cc *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
+func (em *entityManager) GetBootstrapData(bootRequest *bootz.GetBootstrapDataRequest, cc *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
 	chDesc := bootRequest.GetChassisDescriptor()
-	chassicEn, err := m.ResolveChassis(chDesc)
+	chassicEn, err := em.ResolveChassis(chDesc)
 	if err != nil {
 		return nil, err
 	}
-	chassisConf := m.GetChassisConfig(chassicEn.Name)
+	chassisConf := em.Get(chassicEn.Name)
 
 	bootStrapData := &bootz.BootstrapDataResponse{}
 
@@ -212,22 +213,23 @@ func (m *InMemoryEntityManager) GetBootstrapData(bootRequest *bootz.GetBootstrap
 	bootStrapData.Pathz = pathzUploadReq
 
 	bootStrapData.BootPasswordHash = chassisConf.GetBootloaderPasswordHash()
-	bootStrapData.SerialNum = cc.SerialNumber
+	bootStrapData.SerialNum = cc.GetSerialNumber()
 
-	bootStrapData.IntendedImage = chassisConf.SoftwareImage
+	bootStrapData.IntendedImage = chassisConf.GetSoftwareImage()
 
 	// TODO
 	//bootStrapData.ServerTrustCert:= readServerCert()
+	// TODO Voucher config and ...
 
 	return bootStrapData, nil
 }
 
-func (*InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse) error {
+func (em *entityManager) Sign(resp *bootz.GetBootstrapDataResponse) error {
 	return nil
 }
 
-func New(chassisConfigFile string) (service.EntityManager, error) {
-	newManager := &InMemoryEntityManager{}
+func New(chassisConfigFile string) (*entityManager, error) {
+	newManager := &entityManager{}
 	if chassisConfigFile == "" {
 		return newManager, nil
 	}
@@ -236,7 +238,6 @@ func New(chassisConfigFile string) (service.EntityManager, error) {
 		log.Errorf("Error in opening file %s : #%v ", chassisConfigFile, err)
 		return nil, err
 	}
-	//newManager.devices=map[string]device{}
 	entities := epb.Entities{}
 	err = prototext.Unmarshal(protoTextFile, &entities)
 	if err != nil {
@@ -246,4 +247,31 @@ func New(chassisConfigFile string) (service.EntityManager, error) {
 	log.Infof("New entity manager is initialized successfully from chassis config file %s", chassisConfigFile)
 	newManager.chassisConfigs = entities.GetChassis()
 	return newManager, nil
+}
+
+func (em *entityManager) ReplaceDevice(name string, config epb.Chassis) (*epb.Chassis, error) {
+	// TODO
+	return nil, nil
+
+}
+
+func (em *entityManager) DeleteDevice(name string, config epb.Chassis) error {
+	// TODO
+	return nil
+}
+
+func (em *entityManager) GetDevice(name string) (*epb.Chassis, error) {
+	// TODO
+	return nil, nil
+
+}
+
+func (em *entityManager) GetAll(name string) ([]*epb.Chassis, error) {
+	// TODO
+	return nil, nil
+}
+
+func (em *entityManager) ValidateConfig(config *epb.Chassis) error {
+	//TODO
+	return nil
 }

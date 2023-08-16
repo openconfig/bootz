@@ -8,12 +8,12 @@ chassis {
     controller_cards {
         serial_number: "123A"
 		slot:         1
-		partNumber:   "123A"
+		part_number:   "123A"
     }
     controller_cards {
         serial_number: "123B"
 		slot:         2
-		partNumber:   "123B"
+		part_number:   "123B"
     }
     software_image {
 

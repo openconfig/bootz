@@ -14,6 +14,8 @@ import (
 	plrouter "github.com/coredhcp/coredhcp/plugins/router"
 	plbootz "github.com/openconfig/bootz/dhcp/plugins"
 	bootzsrv "github.com/openconfig/bootz/server/service"
+	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
+
 
 	log "github.com/golang/glog"
 )
@@ -48,7 +50,11 @@ type DHCPServerConfig struct {
 	BootzServerAddr string
 }
 
-func New(em bootzsrv.EntityManager) (*dhcpServer, error) {
+type DHCPEntityManager interface  {
+	GetDHCPConfig() []*epb.DHCPConfig
+}
+
+func New(em DHCPEntityManager) (*dhcpServer, error) {
 	leaseFile, err := os.CreateTemp("", "coredhcp_leases_*.txt")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create lease file: %v", err)

@@ -17,7 +17,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"github.com/openconfig/bootz/dhcp"
+	//"github.com/openconfig/bootz/dhcp"
 	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
@@ -27,17 +27,14 @@ import (
 )
 
 var (
-	insecureBoot 	 	= flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
-	bootzAddress          	= flag.String("address", "8008", "The [ip:]port to listen for the bootz server. when ip is not given, the server will listen on local host. ip should be specific (other than local host) when the client does not run on the local hos.")
-	rootCA       	 	= flag.String("root_ca_cert_path", "entitymanager/testdata/ca.cert.pem", "The relative path to a file contained a PEM encoded certificate for the root CA.")
-	cert       		 	= flag.String("server_cert_path", "entitymanager/testdata/bootz.cert.pem", "The relative path to a file contained a PEM encoded certificate for the bootz server, that can be verified using root ca.")
-	key      		 	= flag.String("server_key_path", "entitymanager/testdata/bootz.key.pem", "The relative path to a file contained a PEM encoded private key for the bootz server, that can be verified using root ca.")
-	dhcpServerAddress       	= flag.String("dhcp_address", "", "The ip to listen for the dhcp server. when ip is not given, the dhcp server will not start. root access is required for dhcp.")
-	imageServerAddress  = flag.String("image_server_address", "", "The ip to listen for the image server. When ip is not given, the image server will not start, and for external client the ip should be specific.")
-	imagesLocation      = flag.String("image_location", "/tmp/bootz/images", "The directory where the images will reside. The defaults is /tmp/bootz/images") 
-	devicesBootConfig   = flag.String("device_boot_config_path", "entitymanager/testdata/chassis.prototxt", "The relative path to a file containing boot config for devices")
-
-
+	bootzAddress       = flag.String("address", "8008", "The [ip:]port to listen for the bootz server. when ip is not given, the server will listen on local host. ip should be specific (other than local host) when the client does not run on the local hos.")
+	rootCA             = flag.String("root_ca_cert_path", "entitymanager/testdata/ca.cert.pem", "The relative path to a file contained a PEM encoded certificate for the root CA.")
+	cert               = flag.String("server_cert_path", "entitymanager/testdata/bootz.cert.pem", "The relative path to a file contained a PEM encoded certificate for the bootz server, that can be verified using root ca.")
+	key                = flag.String("server_key_path", "entitymanager/testdata/bootz.key.pem", "The relative path to a file contained a PEM encoded private key for the bootz server, that can be verified using root ca.")
+	dhcpServerAddress  = flag.String("dhcp_address", "", "The ip to listen for the dhcp server. when ip is not given, the dhcp server will not start. root access is required for dhcp.")
+	imageServerAddress = flag.String("image_server_address", "", "The ip to listen for the image server. When ip is not given, the image server will not start, and for external client the ip should be specific.")
+	imagesLocation     = flag.String("image_location", "/tmp/bootz/images", "The directory where the images will reside. The defaults is /tmp/bootz/images")
+	devicesBootConfig  = flag.String("device_boot_config_path", "entitymanager/testdata/chassis.prototxt", "The relative path to a file containing boot config for devices")
 )
 
 // load trust bundle and client key and certificate
@@ -73,14 +70,15 @@ func convertAddress(addr string) string {
 func main() {
 	flag.Parse()
 
-	em, err := entitymanager.New(*devicesBootConfig); if err!=nil {
+	em, err := entitymanager.New(*devicesBootConfig)
+	if err != nil {
 		log.Exitf("Could not initialize an entity manage %v", err)
 	}
 	c := service.New(em)
 
 	// load ca certificate
 	if *rootCA == "" || *cert == "" || *key == "" {
-		log.Exitf("No root CA certificate (root_ca_cert_path), or server certificate (server_cert_path), or server private key (server_key_path) not specified")
+		log.Exitf("Root CA certificate (root_ca_cert_path), or server certificate (server_cert_path), or server private key (server_key_path) is not specified")
 	}
 	ca, serverCert, err := loadCertificates(*rootCA, *cert, *key)
 	if err != nil {
@@ -91,28 +89,28 @@ func main() {
 		Certificates: []tls.Certificate{serverCert},
 		RootCAs:      ca,
 	}
-
-	dhcpSrv, err := dhcp.New(em)
-	if err != nil {
-		log.Exitf("Failed to create dhcp server: %v", err)
-	}
-
-	err = dhcpSrv.Start()
-	if err != nil {
-		log.Exitf("Could not start dhcp server: %v", err)
-	}
-	defer dhcpSrv.Stop()
-
-	go func() {
-		// code to start image server
-		// exit the code if the address is given, but server can not be started
-		// use the same certificate loaded above for image server
-		fs := http.FileServer(http.Dir(*imagesLocation))
-		http.Handle("/", fs)
-		if err := http.ListenAndServeTLS(convertAddress(*imageServerAddress), *cert, *key, fs); err != nil {
-			log.Fatalf("Error starting image server: %v", err)
+	/*if *dhcpServerAddress!="" {
+		dhcpSrv, err := dhcp.New(em)
+		if err != nil {
+			log.Exitf("Failed to create dhcp server: %v", err)
 		}
-	}()
+
+		err = dhcpSrv.Start()
+		if err != nil {
+			log.Exitf("Could not start dhcp server: %v", err)
+		}
+		defer dhcpSrv.Stop()
+	}*/
+
+	if *imageServerAddress != "" {
+		go func() {
+			fs := http.FileServer(http.Dir(*imagesLocation))
+			http.Handle("/", fs)
+			if err := http.ListenAndServeTLS(convertAddress(*imageServerAddress), *cert, *key, fs); err != nil {
+				log.Fatalf("Error starting image server: %v", err)
+			}
+		}()
+	}
 
 	tlsConfig := credentials.NewTLS(tls)
 	opts = append(opts, grpc.Creds(tlsConfig))

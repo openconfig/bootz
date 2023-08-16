@@ -217,7 +217,7 @@ func main() {
 	if *port == "" {
 		log.Exitf("No port provided.")
 	}
-	bootzAddress := fmt.Sprintf("127.0.0.1:%v", *port)
+	bootzAddress := fmt.Sprintf("localhost:%v", *port)
 	log.Infof("Connecting to bootz server at address %q", bootzAddress)
 
 	// 2. Bootstrapping Service

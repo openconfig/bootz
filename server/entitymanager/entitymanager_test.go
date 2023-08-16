@@ -10,27 +10,29 @@ import (
 
 func TestNew(t *testing.T) {
 	t.Run("Test New with config file", func(t *testing.T) {
-		_,err:= New("testdata/chassis.prototxt"); if err!=nil {
+		_, err := New("testdata/chassis.prototxt")
+		if err != nil {
 			t.Fatalf("Could not instantiate entity manager from testdata/chassis.prototxt, err: %v", err)
 		}
 	})
 
 	t.Run("Test New with config file", func(t *testing.T) {
-		_,err:= New(""); if err!=nil {
+		_, err := New("")
+		if err != nil {
 			t.Fatalf("Could not instantiate entity manager without config file, err: %v", err)
 		}
 	})
 }
 
 type test struct {
-	name string 
+	name          string
 	chassisConfig entity.Entities
-	chassisDesc bootz.ChassisDescriptor
-	wantErr string
-}  
+	chassisDesc   bootz.ChassisDescriptor
+	wantErr       string
+}
 
-func TestResolve (t *testing.T) {
-	tests:=[]*test{
+func TestResolve(t *testing.T) {
+	tests := []*test{
 		{
 			name: "Successful Resolve with Serial and Manufacture ",
 			chassisConfig: entity.Entities{
@@ -39,7 +41,7 @@ func TestResolve (t *testing.T) {
 						SerialNumber: "1234",
 						Manufacturer: "cisco",
 					},
-				},		
+				},
 			},
 			chassisDesc: bootz.ChassisDescriptor{
 				Manufacturer: "cisco",
@@ -55,7 +57,7 @@ func TestResolve (t *testing.T) {
 						SerialNumber: "1232",
 						Manufacturer: "cisco",
 					},
-				},		
+				},
 			},
 			chassisDesc: bootz.ChassisDescriptor{
 				Manufacturer: "cisco",
@@ -70,9 +72,9 @@ func TestResolve (t *testing.T) {
 					{
 						SerialNumber: "1234",
 						Manufacturer: "cisco",
-						PartNumber: "1234",
+						PartNumber:   "1234",
 					},
-				},		
+				},
 			},
 			chassisDesc: bootz.ChassisDescriptor{
 				Manufacturer: "cisco",
@@ -87,14 +89,14 @@ func TestResolve (t *testing.T) {
 					{
 						SerialNumber: "1234",
 						Manufacturer: "cisco",
-						PartNumber: "1234",
+						PartNumber:   "1234",
 					},
-				},		
+				},
 			},
 			chassisDesc: bootz.ChassisDescriptor{
 				Manufacturer: "cisco",
 				SerialNumber: "1234",
-				PartNumber: "1234",
+				PartNumber:   "1234",
 			},
 			wantErr: "",
 		},
@@ -105,24 +107,24 @@ func TestResolve (t *testing.T) {
 					{
 						SerialNumber: "1234",
 						Manufacturer: "cisco",
-						PartNumber: "1234",
+						PartNumber:   "1234",
 						ControllerCards: []*bootz.ControlCard{
 							{
 								SerialNumber: "1234",
-								PartNumber: "321",
+								PartNumber:   "321",
 							},
 						},
 					},
-				},		
+				},
 			},
 			chassisDesc: bootz.ChassisDescriptor{
 				Manufacturer: "cisco",
 				SerialNumber: "1234",
-				PartNumber: "1234",
+				PartNumber:   "1234",
 			},
 			wantErr: "could not resolve chassis with serial#: 1234 and manufacturer: cisco",
 		},
-		
+
 		{
 			name: "Successful Resolve with matching controller cards",
 			chassisConfig: entity.Entities{
@@ -130,23 +132,23 @@ func TestResolve (t *testing.T) {
 					{
 						SerialNumber: "1234",
 						Manufacturer: "cisco",
-						PartNumber: "1234",
+						PartNumber:   "1234",
 						ControllerCards: []*bootz.ControlCard{
 							{
 								SerialNumber: "1234",
-								PartNumber: "321",
+								PartNumber:   "321",
 							},
 						},
 					},
-				},		
+				},
 			},
 			chassisDesc: bootz.ChassisDescriptor{
 				Manufacturer: "cisco",
 				SerialNumber: "1234",
-				PartNumber: "1234",
+				PartNumber:   "1234",
 				ControlCards: []*bootz.ControlCard{
 					{
-						PartNumber: "321",
+						PartNumber:   "321",
 						SerialNumber: "1234",
 					},
 				},
@@ -160,31 +162,31 @@ func TestResolve (t *testing.T) {
 					{
 						SerialNumber: "1234",
 						Manufacturer: "cisco",
-						PartNumber: "1234",
+						PartNumber:   "1234",
 						ControllerCards: []*bootz.ControlCard{
 							{
 								SerialNumber: "1234",
-								PartNumber: "321",
+								PartNumber:   "321",
 							},
 							{
-								PartNumber: "1111",
+								PartNumber:   "1111",
 								SerialNumber: "2222",
 							},
 						},
 					},
-				},		
+				},
 			},
 			chassisDesc: bootz.ChassisDescriptor{
 				Manufacturer: "cisco",
 				SerialNumber: "1234",
-				PartNumber: "1234",
+				PartNumber:   "1234",
 				ControlCards: []*bootz.ControlCard{
 					{
-						PartNumber: "321",
+						PartNumber:   "321",
 						SerialNumber: "1234",
 					},
 					{
-						PartNumber: "1111",
+						PartNumber:   "1111",
 						SerialNumber: "2222",
 					},
 				},
@@ -198,31 +200,31 @@ func TestResolve (t *testing.T) {
 					{
 						SerialNumber: "1234",
 						Manufacturer: "cisco",
-						PartNumber: "1234",
+						PartNumber:   "1234",
 						ControllerCards: []*bootz.ControlCard{
 							{
 								SerialNumber: "1234",
-								PartNumber: "321",
+								PartNumber:   "321",
 							},
 							{
-								PartNumber: "1111",
+								PartNumber:   "1111",
 								SerialNumber: "2222",
 							},
 						},
 					},
-				},		
+				},
 			},
 			chassisDesc: bootz.ChassisDescriptor{
 				Manufacturer: "cisco",
 				SerialNumber: "1234",
-				PartNumber: "1234",
+				PartNumber:   "1234",
 				ControlCards: []*bootz.ControlCard{
 					{
-						PartNumber: "321",
+						PartNumber:   "321",
 						SerialNumber: "1234",
 					},
 					{
-						PartNumber: "32233331",
+						PartNumber:   "32233331",
 						SerialNumber: "12444434",
 					},
 				},
@@ -231,12 +233,12 @@ func TestResolve (t *testing.T) {
 		},
 	}
 
-	for _,tt := range tests  {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			em:= InMemoryEntityManager{
+			em := InMemoryEntityManager{
 				chassisConfigs: tt.chassisConfig.Chassis,
 			}
-			_,err:=em.ResolveChassis(&tt.chassisDesc)
+			_, err := em.ResolveChassis(&tt.chassisDesc)
 			if s := errdiff.Check(err, tt.wantErr); s != "" {
 				t.Errorf("Expected error %s, but got error %v", tt.wantErr, err)
 			}
@@ -246,25 +248,22 @@ func TestResolve (t *testing.T) {
 }
 
 func TestBootStrapResponse(t *testing.T) {
-	tests:= []test{
+	tests := []test{
 		{name: "t1",
-		 chassisConfig: entity.Entities{},
-		 chassisDesc: bootz.ChassisDescriptor{},
-		 wantErr: "",
-
-	    },
+			chassisConfig: entity.Entities{},
+			chassisDesc:   bootz.ChassisDescriptor{},
+			wantErr:       "",
+		},
 	}
-	for _,tt := range tests  {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			em:= InMemoryEntityManager{
+			em := InMemoryEntityManager{
 				chassisConfigs: tt.chassisConfig.Chassis,
 			}
-			_,err:=em.ResolveChassis(&tt.chassisDesc)
+			_, err := em.ResolveChassis(&tt.chassisDesc)
 			if s := errdiff.Check(err, tt.wantErr); s != "" {
 				t.Errorf("Expected error %s, but got error %v", tt.wantErr, err)
 			}
 		})
 	}
 }
-
-
