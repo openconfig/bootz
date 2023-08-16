@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
+	"sync"
 
 	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/bootz/server/service"
@@ -25,6 +26,7 @@ type InMemoryEntityManager struct {
 	// represents the current status of known control cards
 	controlCardStatuses map[string]bootz.ControlCardState_ControlCardStatus
 	artifacts           *service.SecurityArtifacts
+	mu                  sync.Mutex
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
@@ -72,6 +74,8 @@ func (m *InMemoryEntityManager) SetStatus(req *bootz.ReportStatusRequest) error 
 	}
 	log.Infof("Bootstrap Status: %v: Status message: %v", req.GetStatus(), req.GetStatusMessage())
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, c := range req.GetStates() {
 		previousStatus, ok := m.controlCardStatuses[c.GetSerialNumber()]
 		if !ok {
@@ -128,20 +132,23 @@ func (m *InMemoryEntityManager) FetchOwnershipVoucher(serial string) (string, er
 
 // AddControlCard adds a new control card to the entity manager.
 func (m *InMemoryEntityManager) AddControlCard(serial string) *InMemoryEntityManager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.controlCardStatuses[serial] = bootz.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
 	return m
 }
 
 // AddChassis adds a new chassis to the entity manager.
 func (m *InMemoryEntityManager) AddChassis(bootMode bootz.BootMode, manufacturer string, serial string) *InMemoryEntityManager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	l := service.EntityLookup{
 		Manufacturer: manufacturer,
 		SerialNumber: serial,
 	}
-	e := service.ChassisEntity{
+	m.chassisInventory[l] = &service.ChassisEntity{
 		BootMode: bootMode,
 	}
-	m.chassisInventory[l] = &e
 	return m
 }
 

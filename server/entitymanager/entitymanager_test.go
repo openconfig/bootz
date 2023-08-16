@@ -21,19 +21,16 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 		serial  string
 		want    string
 		wantErr bool
-	}{
-		{
-			desc:    "Missing OV",
-			serial:  "123B",
-			wantErr: true,
-		},
-		{
-			desc:    "Found OV",
-			serial:  "123A",
-			want:    "test_ov",
-			wantErr: false,
-		},
-	}
+	}{{
+		desc:    "Missing OV",
+		serial:  "123B",
+		wantErr: true,
+	}, {
+		desc:    "Found OV",
+		serial:  "123A",
+		want:    "test_ov",
+		wantErr: false,
+	}}
 
 	artifacts := &service.SecurityArtifacts{
 		OV: service.OVList{"123A": "test_ov"},
