@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -15,7 +16,6 @@ import (
 	"os"
 	"strings"
 	"time"
-	"crypto/tls"
 
 	log "github.com/golang/glog"
 
@@ -23,8 +23,8 @@ import (
 	"go.mozilla.org/pkcs7"
 	"google.golang.org/grpc"
 	//"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/proto"
 	//"google.golang.org/grpc/credentials/insecure"
 )
 

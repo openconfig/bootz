@@ -15,7 +15,6 @@ import (
 	plbootz "github.com/openconfig/bootz/dhcp/plugins"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 
-
 	log "github.com/golang/glog"
 )
 
@@ -49,7 +48,7 @@ type DHCPServerConfig struct {
 	BootzServerAddr string
 }
 
-type DHCPEntityManager interface  {
+type DHCPEntityManager interface {
 	GetDHCPConfig() []*epb.DHCPConfig
 }
 

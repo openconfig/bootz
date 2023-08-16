@@ -89,7 +89,7 @@ func main() {
 		Certificates: []tls.Certificate{serverCert},
 		RootCAs:      ca,
 	}
-	if *dhcpServerAddress!="" {
+	if *dhcpServerAddress != "" {
 		dhcpSrv, err := dhcp.New(em)
 		if err != nil {
 			log.Exitf("Failed to create dhcp server: %v", err)
