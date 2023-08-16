@@ -249,13 +249,13 @@ func New(chassisConfigFile string) (*entityManager, error) {
 	return newManager, nil
 }
 
-func (em *entityManager) ReplaceDevice(name string, config epb.Chassis) (*epb.Chassis, error) {
+func (em *entityManager) ReplaceDevice(name string, config *epb.Chassis) (*epb.Chassis, error) {
 	// TODO
 	return nil, nil
 
 }
 
-func (em *entityManager) DeleteDevice(name string, config epb.Chassis) error {
+func (em *entityManager) DeleteDevice(name string, config *epb.Chassis) error {
 	// TODO
 	return nil
 }
