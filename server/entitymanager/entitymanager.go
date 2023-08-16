@@ -22,6 +22,7 @@ import (
 
 type entityManager struct {
 	chassisConfigs            []*epb.Chassis
+	// todo: move the default addresses to options in entity.proto
 	bootzServerDefaultAddress string
 	imageServerDefaultAddress string
 	mu                        sync.Mutex
