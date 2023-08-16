@@ -16,7 +16,6 @@ syntax = "proto3";
 
 package entity;
 import "google/protobuf/struct.proto";
-//import "bootz/proto/bootz.proto";
 
 import "github.com/openconfig/gnsi/authz/authz.proto";
 import "github.com/openconfig/gnsi/certz/certz.proto";
@@ -29,7 +28,8 @@ import "proto/bootz.proto";
 option go_package = "github.com/openconfig/bootz/server/entitymanager/proto/entity";
 
 message Options {
-  // global gnsi config for all entities. Device level config will take precedence if is defined
+  // global gnsi config for all entities. Device level 
+  // config will take precedence if is defined
   gNSIConfig gnsi_global_config = 1;
 
   // server trust bundle that is used by clients to authenticate bootz server 
@@ -75,7 +75,7 @@ message BootConfig {
   google.protobuf.Struct bootloader_config = 4;
 }  
 
-message gNSIConfig {
+message GNSIConfig {
   // path to authz upload file
   string authz_upload_file = 1;
 
@@ -101,22 +101,23 @@ message gNSIConfig {
   bootz.Credentials credentials = 8;
 
 }
- message  DHCPConfig {
+message  DHCPConfig {
 
-    // mac address of the management interface that will be used to get dhcp address
-    string hardware_address = 1;
+  // mac address of the management interface 
+  // that will be used to get dhcp address
+  string hardware_address = 1;
 
-    // ip to be assigned to the chassis
-    string ip = 2;
+  // ip to be assigned to the chassis
+  string ip = 2;
 
-    // netmask to be assigned to the chassis
-    string netmask = 3; 
+  // netmask to be assigned to the chassis
+  string netmask = 3; 
 
-    // gateway address to be assigned to the chassis
-    string gateway = 4 ; 
+  // gateway address to be assigned to the chassis
+  string gateway = 4 ; 
 
-    // bootz server address
-    string bootzserver = 5; 
+  // bootz server address
+  string bootzserver = 5; 
 }
 
 // A Chassis entity.
@@ -147,7 +148,7 @@ message Chassis {
   bootz.SoftwareImage software_image = 8; 
 
   // control cards. 
-  repeated bootz.ControlCard controller_card = 9;
+  repeated bootz.ControlCard controller_cards = 9;
 
   // config to be loaded on the chassis
   Config config = 10; 
