@@ -25,7 +25,7 @@ import "proto/bootz.proto";
 
 
 
-option go_package = "github.com/openconfig/bootz/server/entitymanager/proto/entity";
+//go_package = "github.com/openconfig/bootz/server/entitymanager/proto/entity";
 
 message Options {
   // global gnsi config for all entities. Device level 
@@ -148,7 +148,7 @@ message Chassis {
   bootz.SoftwareImage software_image = 8; 
 
   // control cards. 
-  repeated bootz.ControlCard controller_card = 9;
+  repeated bootz.ControlCard controller_cards = 9;
 
   // config to be loaded on the chassis
   Config config = 10; 
