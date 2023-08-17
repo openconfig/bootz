@@ -31,7 +31,7 @@ const nonceLength = 16
 var (
 	insecureBoot = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
 	port         = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
-	rootCA       = flag.String("root_ca_cert_path", "../testdata/ca.pem", "The relative path to a file contained a PEM encoded certificate for the manufacturer CA.")
+	rootCA       = flag.String("root_ca_cert_path", "../testdata/vendorca_pub.pem", "The relative path to a file containing a PEM encoded certificate for the manufacturer CA.")
 )
 
 type OwnershipVoucher struct {
@@ -134,11 +134,15 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 		return err
 	}
 	hashed := sha256.Sum256(signedResponseBytes)
+	decodedSig, err := base64.StdEncoding.DecodeString(resp.GetResponseSignature())
+	if err != nil {
+		return err
+	}
 
 	// Verify the signature with the ownership certificate's public key. Currently only RSA keys are supported.
 	switch pub := ocCert.PublicKey.(type) {
 	case *rsa.PublicKey:
-		err = rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], []byte(resp.GetResponseSignature()))
+		err = rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], decodedSig)
 		if err != nil {
 			return fmt.Errorf("signature not verified: %v", err)
 		}
@@ -165,7 +169,7 @@ func generateNonce() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(b), nil
+	return base64.StdEncoding.EncodeToString(b), nil
 }
 
 func main() {

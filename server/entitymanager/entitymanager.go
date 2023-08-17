@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"sync"
 
@@ -110,7 +111,7 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, seria
 	if err != nil {
 		return err
 	}
-	resp.ResponseSignature = string(sig)
+	resp.ResponseSignature = base64.StdEncoding.EncodeToString(sig)
 	// Populate the OV
 	ov, err := m.FetchOwnershipVoucher(serial)
 	if err != nil {

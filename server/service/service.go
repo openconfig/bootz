@@ -52,7 +52,7 @@ type Service struct {
 	em EntityManager
 }
 
-func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
+func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
 	if len(req.ChassisDescriptor.ControlCards) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 	}
@@ -104,7 +104,7 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 }
 
 func (s *Service) ReportStatus(ctx context.Context, req *bootz.ReportStatusRequest) (*bootz.EmptyResponse, error) {
-	return nil, s.em.SetStatus(req)
+	return &bootz.EmptyResponse{}, s.em.SetStatus(req)
 }
 
 // Public API for allowing the device configuration to be set for each device the
