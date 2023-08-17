@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"testing"
 
@@ -155,7 +156,11 @@ func TestSign(t *testing.T) {
 				t.Fatal(err)
 			}
 			hashed := sha256.Sum256(signedResponseBytes)
-			err = rsa.VerifyPKCS1v15(&priv.PublicKey, crypto.SHA256, hashed[:], []byte(test.resp.GetResponseSignature()))
+			sigDecoded, err := base64.StdEncoding.DecodeString(test.resp.GetResponseSignature())
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = rsa.VerifyPKCS1v15(&priv.PublicKey, crypto.SHA256, hashed[:], sigDecoded)
 			if err != nil {
 				t.Errorf("Sign() err == %v, want %v", err, test.wantErr)
 			}
