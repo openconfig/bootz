@@ -57,26 +57,24 @@ func TestResolveChassis(t *testing.T) {
 		input   *service.EntityLookup
 		want    *service.ChassisEntity
 		wantErr bool
-	}{
-		{
-			desc: "Default device",
-			input: &service.EntityLookup{
-				SerialNumber: "123",
-				Manufacturer: "Cisco",
-			},
-			want: &service.ChassisEntity{
-				BootMode: bootz.BootMode_BOOT_MODE_SECURE,
-			},
+	}{{
+		desc: "Default device",
+		input: &service.EntityLookup{
+			SerialNumber: "123",
+			Manufacturer: "Cisco",
 		},
-		{
-			desc: "Chassis Not Found",
-			input: &service.EntityLookup{
-				SerialNumber: "456",
-				Manufacturer: "Cisco",
-			},
-			want:    nil,
-			wantErr: true,
+		want: &service.ChassisEntity{
+			BootMode: bootz.BootMode_BOOT_MODE_SECURE,
 		},
+	}, {
+		desc: "Chassis Not Found",
+		input: &service.EntityLookup{
+			SerialNumber: "456",
+			Manufacturer: "Cisco",
+		},
+		want:    nil,
+		wantErr: true,
+	},
 	}
 
 	em := New(nil).AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
@@ -102,26 +100,24 @@ func TestSign(t *testing.T) {
 		wantOV  string
 		wantOC  string
 		wantErr bool
-	}{
-		{
-			desc:   "Success",
-			serial: "123A",
-			resp: &bootz.GetBootstrapDataResponse{
-				SignedResponse: &bootz.BootstrapDataSigned{
-					Responses: []*bootz.BootstrapDataResponse{
-						{SerialNum: "123A"},
-					},
+	}{{
+		desc:   "Success",
+		serial: "123A",
+		resp: &bootz.GetBootstrapDataResponse{
+			SignedResponse: &bootz.BootstrapDataSigned{
+				Responses: []*bootz.BootstrapDataResponse{
+					{SerialNum: "123A"},
 				},
 			},
-			wantOV:  "test_ov",
-			wantOC:  "test_oc",
-			wantErr: false,
 		},
-		{
-			desc:    "Empty response",
-			resp:    &bootz.GetBootstrapDataResponse{},
-			wantErr: true,
-		},
+		wantOV:  "test_ov",
+		wantOC:  "test_oc",
+		wantErr: false,
+	}, {
+		desc:    "Empty response",
+		resp:    &bootz.GetBootstrapDataResponse{},
+		wantErr: true,
+	},
 	}
 
 	priv, err := rsa.GenerateKey(rand.Reader, 4096)
@@ -179,43 +175,40 @@ func TestSetStatus(t *testing.T) {
 		desc    string
 		input   *bootz.ReportStatusRequest
 		wantErr bool
-	}{
-		{
-			desc: "No control card states",
-			input: &bootz.ReportStatusRequest{
-				Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
-				StatusMessage: "Bootstrap status succeeded",
-			},
-			wantErr: true,
+	}{{
+		desc: "No control card states",
+		input: &bootz.ReportStatusRequest{
+			Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+			StatusMessage: "Bootstrap status succeeded",
 		},
-		{
-			desc: "Control card initialized",
-			input: &bootz.ReportStatusRequest{
-				Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
-				StatusMessage: "Bootstrap status succeeded",
-				States: []*bootz.ControlCardState{
-					{
-						SerialNumber: "123A",
-						Status:       *bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
-					},
+		wantErr: true,
+	}, {
+		desc: "Control card initialized",
+		input: &bootz.ReportStatusRequest{
+			Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+			StatusMessage: "Bootstrap status succeeded",
+			States: []*bootz.ControlCardState{
+				{
+					SerialNumber: "123A",
+					Status:       *bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
 				},
 			},
-			wantErr: false,
 		},
-		{
-			desc: "Unknown control card",
-			input: &bootz.ReportStatusRequest{
-				Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
-				StatusMessage: "Bootstrap status succeeded",
-				States: []*bootz.ControlCardState{
-					{
-						SerialNumber: "123C",
-						Status:       *bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
-					},
+		wantErr: false,
+	}, {
+		desc: "Unknown control card",
+		input: &bootz.ReportStatusRequest{
+			Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+			StatusMessage: "Bootstrap status succeeded",
+			States: []*bootz.ControlCardState{
+				{
+					SerialNumber: "123C",
+					Status:       *bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
 				},
 			},
-			wantErr: true,
 		},
+		wantErr: true,
+	},
 	}
 
 	em := New(nil).AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
@@ -236,43 +229,40 @@ func TestGetBootstrapData(t *testing.T) {
 		input   *bootz.ControlCard
 		want    *bootz.BootstrapDataResponse
 		wantErr bool
-	}{
-		{
-			desc:    "No serial number",
-			input:   &bootz.ControlCard{},
-			wantErr: true,
+	}{{
+		desc:    "No serial number",
+		input:   &bootz.ControlCard{},
+		wantErr: true,
+	}, {
+		desc: "Control card not found",
+		input: &bootz.ControlCard{
+			SerialNumber: "456A",
 		},
-		{
-			desc: "Control card not found",
-			input: &bootz.ControlCard{
-				SerialNumber: "456A",
-			},
-			wantErr: true,
+		wantErr: true,
+	}, {
+		desc: "Successful bootstrap",
+		input: &bootz.ControlCard{
+			SerialNumber: "123A",
 		},
-		{
-			desc: "Successful bootstrap",
-			input: &bootz.ControlCard{
-				SerialNumber: "123A",
+		want: &bootz.BootstrapDataResponse{
+			SerialNum: "123A",
+			IntendedImage: &bootz.SoftwareImage{
+				Name:          "Default Image",
+				Version:       "1.0",
+				Url:           "https://path/to/image",
+				OsImageHash:   "ABCDEF",
+				HashAlgorithm: "SHA256",
 			},
-			want: &bootz.BootstrapDataResponse{
-				SerialNum: "123A",
-				IntendedImage: &bootz.SoftwareImage{
-					Name:          "Default Image",
-					Version:       "1.0",
-					Url:           "https://path/to/image",
-					OsImageHash:   "ABCDEF",
-					HashAlgorithm: "SHA256",
-				},
-				BootPasswordHash: "ABCD123",
-				ServerTrustCert:  "FakeTLSCert",
-				BootConfig: &bootz.BootConfig{
-					VendorConfig: []byte("Vendor Config"),
-					OcConfig:     []byte("OC Config"),
-				},
-				Credentials: &bootz.Credentials{},
+			BootPasswordHash: "ABCD123",
+			ServerTrustCert:  "FakeTLSCert",
+			BootConfig: &bootz.BootConfig{
+				VendorConfig: []byte("Vendor Config"),
+				OcConfig:     []byte("OC Config"),
 			},
-			wantErr: false,
+			Credentials: &bootz.Credentials{},
 		},
+		wantErr: false,
+	},
 	}
 
 	em := New(nil).AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")

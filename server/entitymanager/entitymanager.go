@@ -22,12 +22,13 @@ import (
 // InMemoryEntityManager provides a simple in memory handler
 // for Entities.
 type InMemoryEntityManager struct {
+	mu sync.Mutex
 	// inventory represents an organization's inventory of owned chassis.
 	chassisInventory map[service.EntityLookup]*service.ChassisEntity
 	// represents the current status of known control cards
 	controlCardStatuses map[string]bootz.ControlCardState_ControlCardStatus
-	artifacts           *service.SecurityArtifacts
-	mu                  sync.Mutex
+	// stores the security artifacts required by Bootz Server (OVs, OC and PDC)
+	artifacts *service.SecurityArtifacts
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
@@ -90,7 +91,6 @@ func (m *InMemoryEntityManager) SetStatus(req *bootz.ReportStatusRequest) error 
 
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
 func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, serial string) error {
-	// Sign the response
 	block, _ := pem.Decode([]byte(m.artifacts.OC.Key))
 	if block == nil {
 		return status.Errorf(codes.Internal, "unable to decode OC private key")
@@ -107,6 +107,7 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, seria
 		return err
 	}
 	hashed := sha256.Sum256(signedResponseBytes)
+	// TODO: Add support for EC keys too.
 	sig, err := rsa.SignPKCS1v15(nil, priv, crypto.SHA256, hashed[:])
 	if err != nil {
 		return err
