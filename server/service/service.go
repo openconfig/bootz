@@ -20,11 +20,19 @@ type KeyPair struct {
 }
 
 // SecurityArtifacts contains all KeyPairs and OVs needed for the Bootz Server.
+// Currently, RSA is the only encryption standard supported by these artifacts.
 type SecurityArtifacts struct {
-	OC         *KeyPair
-	PDC        *KeyPair
-	VendorCA   *KeyPair
-	OV         OVList
+	// The Ownership Certificate is an x509 certificate/private key pair signed by the PDC.
+	// The certificate is presented to the device during bootstrapping and is used to validate the Ownership Voucher.
+	OC *KeyPair
+	// The Pinned Domain Certificate is an x509 certificate/private key pair which acts as a certificate authority on the owner's side.
+	// This certificate is included in OVs and is also used to generate a server TLS Cert in this implementation.
+	PDC *KeyPair
+	// The Vendor CA represents a certificate authority on the vendor side. This CA signs Ownership Vouchers which are verified by the device.
+	VendorCA *KeyPair
+	// Ownership Vouchers are a list of PKCS7 messages signed by the Vendor CA. There is one per control card.
+	OV OVList
+	// The TLSKeypair is a TLS certificate used to secure connections between device and server. It is derived from the Pinned Domain Cert.
 	TLSKeypair *tls.Certificate
 }
 
