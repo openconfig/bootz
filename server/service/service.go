@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/tls"
 
 	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/gnmi/errlist"
@@ -20,10 +21,11 @@ type KeyPair struct {
 
 // SecurityArtifacts contains all KeyPairs and OVs needed for the Bootz Server.
 type SecurityArtifacts struct {
-	OC       *KeyPair
-	PDC      *KeyPair
-	VendorCA *KeyPair
-	OV       OVList
+	OC         *KeyPair
+	PDC        *KeyPair
+	VendorCA   *KeyPair
+	OV         OVList
+	TLSKeypair *tls.Certificate
 }
 
 // EntityLookup provides a way to resolve chassis and control cards
@@ -93,7 +95,6 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 		},
 	}
 	// Sign the response if Nonce is provided.
-	// TODO: Populate Sign() with an RSA key.
 	if req.Nonce != "" {
 		resp.SignedResponse.Nonce = req.Nonce
 		if err := s.em.Sign(resp, req.GetControlCardState().GetSerialNumber()); err != nil {

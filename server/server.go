@@ -6,6 +6,8 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
 	"net"
@@ -17,6 +19,7 @@ import (
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	log "github.com/golang/glog"
 )
@@ -67,6 +70,15 @@ func readOVs() (service.OVList, error) {
 	return ovs, err
 }
 
+// generateServerTlsCert creates a new TLS keypair from the PDC.
+func generateServerTlsCert(pdc *service.KeyPair) (*tls.Certificate, error) {
+	tlsCert, err := tls.X509KeyPair([]byte(pdc.Cert), []byte(pdc.Key))
+	if err != nil {
+		return nil, fmt.Errorf("unable to generate Server TLS Certificate from PDC %v", err)
+	}
+	return &tlsCert, err
+}
+
 // parseSecurityArtifacts reads from the specified directory to find the required keypairs and ownership vouchers.
 func parseSecurityArtifacts() (*service.SecurityArtifacts, error) {
 	oc, err := readKeypair("oc")
@@ -85,11 +97,16 @@ func parseSecurityArtifacts() (*service.SecurityArtifacts, error) {
 	if err != nil {
 		return nil, err
 	}
+	tlsCert, err := generateServerTlsCert(pdc)
+	if err != nil {
+		return nil, err
+	}
 	return &service.SecurityArtifacts{
-		OC:       oc,
-		PDC:      pdc,
-		VendorCA: vendorCA,
-		OV:       ovs,
+		OC:         oc,
+		PDC:        pdc,
+		VendorCA:   vendorCA,
+		OV:         ovs,
+		TLSKeypair: tlsCert,
 	}, nil
 }
 
@@ -109,7 +126,16 @@ func main() {
 	em := entitymanager.New(sa)
 	em.AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A").AddControlCard("123B")
 	c := service.New(em)
-	s := grpc.NewServer()
+
+	trustBundle := x509.NewCertPool()
+	if !trustBundle.AppendCertsFromPEM([]byte(sa.PDC.Cert)) {
+		log.Exitf("unable to add PDC cert to trust pool")
+	}
+	tls := &tls.Config{
+		Certificates: []tls.Certificate{*sa.TLSKeypair},
+		RootCAs:      trustBundle,
+	}
+	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)))
 
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", *port))
 	if err != nil {

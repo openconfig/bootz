@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -21,7 +22,7 @@ import (
 	"github.com/openconfig/bootz/proto/bootz"
 	"go.mozilla.org/pkcs7"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -223,8 +224,8 @@ func main() {
 
 	// 2. Bootstrapping Service
 	// Device initiates a TLS-secured gRPC connection with the Bootz server.
-	// TODO: Make this use TLS.
-	conn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// For the initial bootstrap, TLS certificates presented by the server are implicitly trusted.
+	conn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
 	if err != nil {
 		log.Exitf("Unable to connect to Bootstrap Server: %v", err)
 	}
