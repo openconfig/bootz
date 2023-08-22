@@ -28,7 +28,8 @@ real world, a reliable CA chain should be used instead.
 ### pdc_{pub|priv}.pem
 
 This is an x509 certificate/RSA keypair that represents the owner's Pinned
-Domain Cert.
+Domain Cert. This keypair is also used to create a TLS certificate for a
+secure connection.
 
 Note: In this example these certifcates are self-signed for convenience. In the
 real world, a reliable CA chain should be used instead.
