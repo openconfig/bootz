@@ -30,9 +30,10 @@ import (
 const nonceLength = 16
 
 var (
-	insecureBoot = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
-	port         = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
-	rootCA       = flag.String("root_ca_cert_path", "../testdata/vendorca_pub.pem", "The relative path to a file containing a PEM encoded certificate for the manufacturer CA.")
+	verifyTLSCert = flag.Bool("verify_tls_cert", false, "Whether to verify the TLS certificate presented by the Bootz server. If false, all TLS connections are implicity trusted.")
+	insecureBoot  = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
+	port          = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
+	rootCA        = flag.String("root_ca_cert_path", "../testdata/vendorca_pub.pem", "The relative path to a file containing a PEM encoded certificate for the manufacturer CA.")
 )
 
 type OwnershipVoucher struct {
@@ -224,8 +225,8 @@ func main() {
 
 	// 2. Bootstrapping Service
 	// Device initiates a TLS-secured gRPC connection with the Bootz server.
-	// For the initial bootstrap, TLS certificates presented by the server are implicitly trusted.
-	conn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	tlsConfig := &tls.Config{InsecureSkipVerify: !*verifyTLSCert}
+	conn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	if err != nil {
 		log.Exitf("Unable to connect to Bootstrap Server: %v", err)
 	}
