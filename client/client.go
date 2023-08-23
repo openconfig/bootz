@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -21,7 +22,7 @@ import (
 	"github.com/openconfig/bootz/proto/bootz"
 	"go.mozilla.org/pkcs7"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -29,9 +30,10 @@ import (
 const nonceLength = 16
 
 var (
-	insecureBoot = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
-	port         = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
-	rootCA       = flag.String("root_ca_cert_path", "../testdata/ca.pem", "The relative path to a file contained a PEM encoded certificate for the manufacturer CA.")
+	verifyTLSCert = flag.Bool("verify_tls_cert", false, "Whether to verify the TLS certificate presented by the Bootz server. If false, all TLS connections are implicity trusted.")
+	insecureBoot  = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
+	port          = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
+	rootCA        = flag.String("root_ca_cert_path", "../testdata/vendorca_pub.pem", "The relative path to a file containing a PEM encoded certificate for the manufacturer CA.")
 )
 
 type OwnershipVoucher struct {
@@ -134,11 +136,15 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 		return err
 	}
 	hashed := sha256.Sum256(signedResponseBytes)
+	decodedSig, err := base64.StdEncoding.DecodeString(resp.GetResponseSignature())
+	if err != nil {
+		return err
+	}
 
 	// Verify the signature with the ownership certificate's public key. Currently only RSA keys are supported.
 	switch pub := ocCert.PublicKey.(type) {
 	case *rsa.PublicKey:
-		err = rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], []byte(resp.GetResponseSignature()))
+		err = rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], decodedSig)
 		if err != nil {
 			return fmt.Errorf("signature not verified: %v", err)
 		}
@@ -165,7 +171,7 @@ func generateNonce() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(b), nil
+	return base64.StdEncoding.EncodeToString(b), nil
 }
 
 func main() {
@@ -219,8 +225,8 @@ func main() {
 
 	// 2. Bootstrapping Service
 	// Device initiates a TLS-secured gRPC connection with the Bootz server.
-	// TODO: Make this use TLS.
-	conn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	tlsConfig := &tls.Config{InsecureSkipVerify: !*verifyTLSCert}
+	conn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	if err != nil {
 		log.Exitf("Unable to connect to Bootstrap Server: %v", err)
 	}

@@ -2,12 +2,39 @@ package service
 
 import (
 	"context"
+	"crypto/tls"
 
 	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// OVList is a mapping of control card serial number to ownership voucher.
+type OVList map[string]string
+
+// KeyPair is a struct containing PEM-encoded certificates and private keys.
+type KeyPair struct {
+	Cert string
+	Key  string
+}
+
+// SecurityArtifacts contains all KeyPairs and OVs needed for the Bootz Server.
+// Currently, RSA is the only encryption standard supported by these artifacts.
+type SecurityArtifacts struct {
+	// The Ownership Certificate is an x509 certificate/private key pair signed by the PDC.
+	// The certificate is presented to the device during bootstrapping and is used to validate the Ownership Voucher.
+	OC *KeyPair
+	// The Pinned Domain Certificate is an x509 certificate/private key pair which acts as a certificate authority on the owner's side.
+	// This certificate is included in OVs and is also used to generate a server TLS Cert in this implementation.
+	PDC *KeyPair
+	// The Vendor CA represents a certificate authority on the vendor side. This CA signs Ownership Vouchers which are verified by the device.
+	VendorCA *KeyPair
+	// Ownership Vouchers are a list of PKCS7 messages signed by the Vendor CA. There is one per control card.
+	OV OVList
+	// The TLSKeypair is a TLS certificate used to secure connections between device and server. It is derived from the Pinned Domain Cert.
+	TLSKeypair *tls.Certificate
+}
 
 // EntityLookup provides a way to resolve chassis and control cards
 // in the EntityManager.
@@ -26,7 +53,8 @@ type EntityManager interface {
 	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
 	GetBootstrapData(*bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
 	SetStatus(*bootz.ReportStatusRequest) error
-	Sign(*bootz.GetBootstrapDataResponse) error
+	Sign(*bootz.GetBootstrapDataResponse, string) error
+	FetchOwnershipVoucher(string) (string, error)
 }
 
 type Service struct {
@@ -34,7 +62,7 @@ type Service struct {
 	em EntityManager
 }
 
-func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
+func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
 	if len(req.ChassisDescriptor.ControlCards) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 	}
@@ -68,6 +96,7 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 	if errs.Err() != nil {
 		return nil, errs.Err()
 	}
+
 	resp := &bootz.GetBootstrapDataResponse{
 		SignedResponse: &bootz.BootstrapDataSigned{
 			Responses: responses,
@@ -75,7 +104,8 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 	}
 	// Sign the response if Nonce is provided.
 	if req.Nonce != "" {
-		if err := s.em.Sign(resp); err != nil {
+		resp.SignedResponse.Nonce = req.Nonce
+		if err := s.em.Sign(resp, req.GetControlCardState().GetSerialNumber()); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
 		}
 	}
@@ -83,7 +113,7 @@ func (s *Service) GetBootstrapRequest(ctx context.Context, req *bootz.GetBootstr
 }
 
 func (s *Service) ReportStatus(ctx context.Context, req *bootz.ReportStatusRequest) (*bootz.EmptyResponse, error) {
-	return nil, s.em.SetStatus(req)
+	return &bootz.EmptyResponse{}, s.em.SetStatus(req)
 }
 
 // Public API for allowing the device configuration to be set for each device the
