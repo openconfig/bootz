@@ -8,6 +8,8 @@ import (
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	log "github.com/golang/glog"
 )
 
 // OVList is a mapping of control card serial number to ownership voucher.
@@ -63,9 +65,13 @@ type Service struct {
 }
 
 func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
+	log.Infof("=============================================================================")
+	log.Infof("==================== Received request for bootstrap data ====================")
+	log.Infof("=============================================================================")
 	if len(req.ChassisDescriptor.ControlCards) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 	}
+	log.Infof("Requesting for %v chassis %v", req.ChassisDescriptor.Manufacturer, req.ChassisDescriptor.SerialNumber)
 	lookup := &EntityLookup{
 		Manufacturer: req.ChassisDescriptor.Manufacturer,
 		SerialNumber: req.ChassisDescriptor.SerialNumber,
@@ -76,6 +82,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v", req.ChassisDescriptor)
 	}
+	log.Infof("Verified server can resolve chassis")
 
 	// If chassis can only be booted into secure mode then return error
 	if chassis.BootMode == bootz.BootMode_BOOT_MODE_SECURE && req.Nonce == "" {
@@ -85,34 +92,50 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 	// Iterate over the control cards and fetch data for each card.
 	var errs errlist.List
 
+	log.Infof("=============================================================================")
+	log.Infof("==================== Fetching data for each control card ====================")
+	log.Infof("=============================================================================")
 	var responses []*bootz.BootstrapDataResponse
 	for _, v := range req.ChassisDescriptor.ControlCards {
 		bootdata, err := s.em.GetBootstrapData(v)
 		if err != nil {
 			errs.Add(err)
+			log.Infof("Error occurred while retrieving data for Serial Number %v", v.SerialNumber)
 		}
 		responses = append(responses, bootdata)
 	}
 	if errs.Err() != nil {
 		return nil, errs.Err()
 	}
+	log.Infof("Successfully fetched data for each control card")
+	log.Infof("=============================================================================")
 
 	resp := &bootz.GetBootstrapDataResponse{
 		SignedResponse: &bootz.BootstrapDataSigned{
 			Responses: responses,
 		},
 	}
+	log.Infof("Response set")
+
 	// Sign the response if Nonce is provided.
 	if req.Nonce != "" {
+		log.Infof("=============================================================================")
+		log.Infof("====================== Signing the response with nonce ======================")
+		log.Infof("=============================================================================")
 		resp.SignedResponse.Nonce = req.Nonce
 		if err := s.em.Sign(resp, req.GetControlCardState().GetSerialNumber()); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
 		}
+		log.Infof("Signed with nonce")
 	}
+	log.Infof("Returning response")
 	return resp, nil
 }
 
 func (s *Service) ReportStatus(ctx context.Context, req *bootz.ReportStatusRequest) (*bootz.EmptyResponse, error) {
+	log.Infof("=============================================================================")
+	log.Infof("========================== Status report received ===========================")
+	log.Infof("=============================================================================")
 	return &bootz.EmptyResponse{}, s.em.SetStatus(req)
 }
 
