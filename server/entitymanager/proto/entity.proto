@@ -1,0 +1,164 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package entity;
+import "google/protobuf/struct.proto";
+
+import "github.com/openconfig/gnsi/authz/authz.proto";
+import "github.com/openconfig/gnsi/certz/certz.proto";
+import "github.com/openconfig/gnsi/credentialz/credentialz.proto";
+import "github.com/openconfig/gnsi/pathz/pathz.proto";
+import "proto/bootz.proto";
+
+
+
+//go_package = "github.com/openconfig/bootz/server/entitymanager/proto/entity";
+
+message Options {
+  // global gnsi config for all entities. Device level 
+  // config will take precedence if is defined
+  GNSIConfig gnsi_global_config = 1;
+
+  // server trust bundle that is used by clients to authenticate bootz server 
+  string server_trust_bundle_file = 2;
+
+}
+
+// A binding configuration.
+message Entities {
+  // configs to be applied globally
+  Options options = 1;
+
+  // chassis to be servered with the inventory manager
+  repeated Chassis chassis = 2;
+}
+
+// Config for resetting the device before the test run.
+message Config {
+  // boot config
+  BootConfig boot_config =1 ;
+
+  // dhcp config
+  DHCPConfig dhcp_config =2 ;
+
+  // gnsi config
+  GNSIConfig gnsi_config =3 ;
+
+}
+
+message BootConfig {
+  // Proprietary key-value parameters that are required as part of boot
+  // configuration (e.g., feature flags, or vendor-specific hardware knobs).
+  google.protobuf.Struct metadata = 1;
+
+  // Native format vendor configuration file
+  string vendor_config_file = 2;
+
+  // JSON rendered OC configuration file
+  string oc_config_file = 3;
+
+  // Bootloader key-value parameters that are required as part of boot
+  // configuration.
+  google.protobuf.Struct bootloader_config = 4;
+}  
+
+message GNSIConfig {
+  // path to authz upload file
+  string authz_upload_file = 1;
+
+  // authz upload request
+  gnsi.authz.v1.UploadRequest authz_upload = 2;
+
+  //pathz upload file
+  string pathz_upload_file = 3;
+
+  //pathz upload 
+  gnsi.pathz.v1.UploadRequest pathz_upload = 4;
+
+  // certificate upload request
+  gnsi.certz.v1.UploadRequest certz_upload = 5;
+
+  // path to certz certificate file
+  string certz_upload_file = 6;
+
+  // path to credz policy file
+  string credentials_file = 7;
+
+  //  gnsi credentail config
+  bootz.Credentials credentials = 8;
+
+}
+
+message  DHCPConfig {
+  // mac address of the management interface 
+  // that will be used to get dhcp address
+  string hardware_address = 1;
+
+  // ipv4 to be assigned to the chassis
+  string ipv4 = 2;
+
+  // netmask to be assigned to the chassis
+  string netmask = 3; 
+
+  // gateway address to be assigned to the chassis
+  string gateway = 4; 
+
+  // ipv6 to be assigned to the chassis
+  string ipv6 = 5;
+
+  // gateway address to be assigned to the chassis
+  string prefix = 6; 
+
+  // bootz server address
+  string bootzserver = 7; 
+} 
+
+// A Chassis entity.
+message Chassis {
+
+  // Chassis Serial Number
+  string serial_number = 1;
+
+  // Chassis name
+  string name = 2;
+
+  // Chassis Part Number
+  string part_number = 3;
+
+  // Chassis Manufacturer
+  string manufacturer = 4;
+
+  // Chassis OwnerShip Voucher
+  string ownership_voucher = 5;
+
+  // Password for bootloader password
+  string bootloader_password_hash = 6;
+
+  // Boot mode defines the boot mode that can be secure/UnSecure 
+  bootz.BootMode boot_mode =7;
+
+  // Software image to be loaded on the chassis
+  bootz.SoftwareImage software_image = 8; 
+
+  // control cards. 
+  repeated bootz.ControlCard controller_cards = 9;
+
+  // config to be loaded on the chassis
+  Config config = 10; 
+
+}
+
+
