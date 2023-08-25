@@ -4,3 +4,6 @@
 .vscode/
 bazel-*
 
+# Adding binary files here so they are not included during commits.
+client
+server
