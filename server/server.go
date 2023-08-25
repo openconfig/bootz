@@ -129,7 +129,7 @@ func main() {
 	if err != nil {
 		log.Exit(err)
 	}
-	
+
 	log.Infof("Setting up entities")
 	em := entitymanager.New(sa)
 	em.AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A").AddControlCard("123B")

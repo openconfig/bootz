@@ -277,7 +277,7 @@ func main() {
 	// This is the active control card making the bootz request.
 	log.Infof("=============================================================================")
 	log.Infof("Setting active control card with serial number: %v, slot: %v, part number: %v",
-	 chassis.ControlCards[0].SerialNumber, chassis.ControlCards[0].Slot, chassis.ControlCards[0].PartNumber)
+		chassis.ControlCards[0].SerialNumber, chassis.ControlCards[0].Slot, chassis.ControlCards[0].PartNumber)
 	activeControlCard := chassis.ControlCards[0]
 
 	nonce := ""
