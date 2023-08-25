@@ -32,8 +32,11 @@ message Options {
   // config will take precedence if is defined
   GNSIConfig gnsi_global_config = 1;
 
-  // server trust bundle that is used by clients to authenticate bootz server 
-  string server_trust_bundle_file = 2;
+  // bootz server address, device level config will take precedence if is defined
+  string bootzserver = 2; 
+
+  // The directory to look into for certificates, private keys and OVs.
+  string artifact_dir = 11;
 
 }
 
@@ -126,7 +129,16 @@ message  DHCPConfig {
   string bootzserver = 7; 
 } 
 
+message ControlCard {
+  string part_number = 1;
+  string serial_number = 2;
+
+  //  OwnerShip Voucher
+  string ownership_voucher = 3;
+}
+
 // A Chassis entity.
+
 message Chassis {
 
   // Chassis Serial Number
@@ -139,26 +151,26 @@ message Chassis {
   string part_number = 3;
 
   // Chassis Manufacturer
-  string manufacturer = 4;
-
-  // Chassis OwnerShip Voucher
-  string ownership_voucher = 5;
+  string  manufacturer = 4;
 
   // Password for bootloader password
-  string bootloader_password_hash = 6;
+  string bootloader_password_hash = 5;
 
   // Boot mode defines the boot mode that can be secure/UnSecure 
-  bootz.BootMode boot_mode =7;
+  bootz.BootMode boot_mode =6;
 
   // Software image to be loaded on the chassis
-  bootz.SoftwareImage software_image = 8; 
+  bootz.SoftwareImage software_image = 7; 
 
   // control cards. 
-  repeated bootz.ControlCard controller_cards = 9;
+  repeated ControlCard controller_cards = 8;
 
   // config to be loaded on the chassis
-  Config config = 10; 
-
+  Config config = 9; 
+   
+  // The directory to look into for certificates, private keys and OVs.
+  string artifact_dir = 10; 
 }
+
 
 
