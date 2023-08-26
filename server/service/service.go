@@ -51,9 +51,9 @@ type ChassisEntity struct {
 
 type EntityManager interface {
 	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
-	GetBootstrapData(*EntityLookup,*bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
+	GetBootstrapData(*EntityLookup, *bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
 	SetStatus(*bootz.ReportStatusRequest) error
-	Sign(*bootz.GetBootstrapDataResponse,*EntityLookup,string) error
+	Sign(*bootz.GetBootstrapDataResponse, *EntityLookup, string) error
 }
 
 type Service struct {
@@ -86,7 +86,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 
 	var responses []*bootz.BootstrapDataResponse
 	for _, v := range req.ChassisDescriptor.ControlCards {
-		bootdata, err := s.em.GetBootstrapData(lookup,v)
+		bootdata, err := s.em.GetBootstrapData(lookup, v)
 		if err != nil {
 			errs.Add(err)
 		}
@@ -104,7 +104,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 	// Sign the response if Nonce is provided.
 	if req.Nonce != "" {
 		resp.SignedResponse.Nonce = req.Nonce
-		if err := s.em.Sign(resp,lookup ,req.GetControlCardState().GetSerialNumber()); err != nil {
+		if err := s.em.Sign(resp, lookup, req.GetControlCardState().GetSerialNumber()); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
 		}
 	}

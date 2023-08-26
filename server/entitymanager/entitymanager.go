@@ -7,16 +7,14 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/pem"
-	"sync"
-	"os"
-	"fmt"
 	"encoding/json"
+	"encoding/pem"
+	"fmt"
+	"os"
 	"path/filepath"
+	"sync"
 	//"strings"
 	"crypto/tls"
-
-
 
 	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/bootz/server/service"
@@ -38,24 +36,25 @@ type InMemoryEntityManager struct {
 	chassisInventory map[service.EntityLookup]*epb.Chassis
 	// represents the current status of known control cards
 	controlCardStatuses map[string]bootz.ControlCardState_ControlCardStatus
-	// stores the security artifacts required by Bootz Server (OVs, OC and PDC). 
-	defaults  *epb.Options
+	// stores the security artifacts required by Bootz Server (OVs, OC and PDC).
+	defaults *epb.Options
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
 func (m *InMemoryEntityManager) ResolveChassis(chassis *service.EntityLookup) (*service.ChassisEntity, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	ch, ok := m.chassisInventory[*chassis]; if !ok {
-		return nil, status.Errorf(codes.NotFound,"Could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
+	ch, ok := m.chassisInventory[*chassis]
+	if !ok {
+		return nil, status.Errorf(codes.NotFound, "Could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
 	}
-	return &service.ChassisEntity{BootMode: ch.GetBootMode(),},nil
+	return &service.ChassisEntity{BootMode: ch.GetBootMode()}, nil
 }
 
 func loadAndValidateJSONfile(jsonFilePath string) ([]byte, error) {
 	jsonByte, err := os.ReadFile(string(jsonFilePath))
 	if err != nil {
-		return nil, status.Errorf(codes.Internal,"Could not parse a json file %v", err)
+		return nil, status.Errorf(codes.Internal, "Could not parse a json file %v", err)
 	}
 	if !json.Valid(jsonByte) {
 		return nil, status.Errorf(codes.Internal, "File %s config is not a valid json", jsonFilePath)
@@ -75,7 +74,7 @@ func populateBootConfig(conf *epb.BootConfig) (*bootz.BootConfig, error) {
 	if conf.GetVendorConfigFile() != "" {
 		cliConf, err := os.ReadFile(string(conf.VendorConfigFile))
 		if err != nil {
-			return nil, status.Errorf(codes.Internal,"Could not populate vendor config %v", err)
+			return nil, status.Errorf(codes.Internal, "Could not populate vendor config %v", err)
 		}
 		bootConfig.VendorConfig = cliConf
 	}
@@ -84,8 +83,6 @@ func populateBootConfig(conf *epb.BootConfig) (*bootz.BootConfig, error) {
 	bootConfig.BootloaderConfig = conf.GetBootloaderConfig()
 	return bootConfig, nil
 }
-
-
 
 func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, controllerCard *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
 	// First check if we are expecting this control card.
@@ -96,34 +93,36 @@ func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, 
 	// check if the controller card and related chassis can be solved
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	ch, ok := m.chassisInventory[*chassis]; if !ok {
-		return nil, status.Errorf(codes.NotFound,"could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
+	ch, ok := m.chassisInventory[*chassis]
+	if !ok {
+		return nil, status.Errorf(codes.NotFound, "could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
 	}
-	found:=false
+	found := false
 	for _, c := range ch.GetControllerCards() {
-		if c.GetSerialNumber()== controllerCard.GetSerialNumber() && c.GetPartNumber()==controllerCard.PartNumber {
-			found=true
+		if c.GetSerialNumber() == controllerCard.GetSerialNumber() && c.GetPartNumber() == controllerCard.PartNumber {
+			found = true
 			break
 		}
 	}
 	if !found {
-		return nil, status.Errorf(codes.NotFound,"could not find Controller with serial#: %s and manufacturer: %s belonging to chassis %s", controllerCard.GetSerialNumber(),controllerCard.GetPartNumber(),chassis.SerialNumber)
+		return nil, status.Errorf(codes.NotFound, "could not find Controller with serial#: %s and manufacturer: %s belonging to chassis %s", controllerCard.GetSerialNumber(), controllerCard.GetPartNumber(), chassis.SerialNumber)
 	}
 	//TODO: for now add  status for the controller card.  We may need to move all runtime info to bootz service.
 	m.controlCardStatuses[controllerCard.GetSerialNumber()] = bootz.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
 
-	bootCfg, err:= populateBootConfig(ch.GetConfig().GetBootConfig()); if err!= nil {
+	bootCfg, err := populateBootConfig(ch.GetConfig().GetBootConfig())
+	if err != nil {
 		return nil, err
 	}
 	// Construct the response. This emulator hardcodes these values but a real Bootz server would not.
 	// TODO: Populate these placeholders with realistic ones.
 	return &bootz.BootstrapDataResponse{
-		SerialNum: controllerCard.SerialNumber,
-		IntendedImage: ch.GetSoftwareImage(),
+		SerialNum:        controllerCard.SerialNumber,
+		IntendedImage:    ch.GetSoftwareImage(),
 		BootPasswordHash: ch.BootloaderPasswordHash,
 		ServerTrustCert:  "FakeTLSCert",
-		BootConfig: bootCfg,
-		Credentials: &bootz.Credentials{},
+		BootConfig:       bootCfg,
+		Credentials:      &bootz.Credentials{},
 		// TODO: Populate pathz, authz and certificates.
 	}, nil
 }
@@ -175,11 +174,11 @@ func loadServerTlsCert(pdc *service.KeyPair) (*tls.Certificate, error) {
 
 // parseSecurityArtifacts reads from the specified directory to find the required keypairs and ownership vouchers.
 func parseSecurityArtifacts(artifactDir string) (*service.SecurityArtifacts, error) {
-	oc, err := readKeypair(artifactDir,"oc")
+	oc, err := readKeypair(artifactDir, "oc")
 	if err != nil {
 		return nil, err
 	}
-	pdc, err := readKeypair(artifactDir,"pdc")
+	pdc, err := readKeypair(artifactDir, "pdc")
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +186,7 @@ func parseSecurityArtifacts(artifactDir string) (*service.SecurityArtifacts, err
 	if err != nil {
 		return nil, err
 	}
-    // use pdc key as server cer
+	// use pdc key as server cer
 	tlsCert, err := loadServerTlsCert(pdc)
 	if err != nil {
 		return nil, err
@@ -200,12 +199,11 @@ func parseSecurityArtifacts(artifactDir string) (*service.SecurityArtifacts, err
 	}, nil
 }
 
-
-
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
 func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
-	// get security artifacts for the device 
-	secArtifact, err := parseSecurityArtifacts(m.defaults.ArtifactDir); if err!= nil {
+	// get security artifacts for the device
+	secArtifact, err := parseSecurityArtifacts(m.defaults.ArtifactDir)
+	if err != nil {
 		return status.Errorf(codes.Internal, "unable to load keys: %v", err)
 	}
 	block, _ := pem.Decode([]byte(secArtifact.OC.Key))
@@ -243,16 +241,17 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chass
 
 // FetchOwnershipVoucher retrieves the ownership voucher for a control card
 func (m *InMemoryEntityManager) FetchOwnershipVoucher(chassis *service.EntityLookup, controllerCard string) (string, error) {
-	ch, ok := m.chassisInventory[*chassis]; if !ok {
-		return "", status.Errorf(codes.NotFound,"could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
+	ch, ok := m.chassisInventory[*chassis]
+	if !ok {
+		return "", status.Errorf(codes.NotFound, "could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
 	}
 	//cc:=&bootz.ControlCard{}
 	for _, c := range ch.GetControllerCards() {
-		if c.GetSerialNumber()== controllerCard  {
-			return c.GetOwnershipVoucher(),nil
+		if c.GetSerialNumber() == controllerCard {
+			return c.GetOwnershipVoucher(), nil
 		}
 	}
-	return "", status.Errorf(codes.NotFound,"could not find Controller with serial#: %s belonging to chassis %s", controllerCard,chassis.SerialNumber)
+	return "", status.Errorf(codes.NotFound, "could not find Controller with serial#: %s belonging to chassis %s", controllerCard, chassis.SerialNumber)
 }
 
 // AddControlCard adds a new control card to the entity manager.
@@ -274,7 +273,7 @@ func (m *InMemoryEntityManager) AddChassis(bootMode bootz.BootMode, manufacturer
 	m.chassisInventory[l] = &epb.Chassis{
 		Manufacturer: manufacturer,
 		SerialNumber: serial,
-		BootMode: bootMode,
+		BootMode:     bootMode,
 	}
 	return m
 }
@@ -282,7 +281,7 @@ func (m *InMemoryEntityManager) AddChassis(bootMode bootz.BootMode, manufacturer
 // New returns a new in-memory entity manager.
 func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
 	newManager := &InMemoryEntityManager{
-		chassisInventory: map[service.EntityLookup]*epb.Chassis{},
+		chassisInventory:    map[service.EntityLookup]*epb.Chassis{},
 		controlCardStatuses: map[string]bootz.ControlCardState_ControlCardStatus{},
 	}
 	if chassisConfigFile == "" {
@@ -300,13 +299,13 @@ func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
 		return nil, err
 	}
 	log.Infof("New entity manager is initialized successfully from chassis config file %s", chassisConfigFile)
-	for _,ch := range entities.Chassis {
-		lookup:=service.EntityLookup{
+	for _, ch := range entities.Chassis {
+		lookup := service.EntityLookup{
 			Manufacturer: ch.GetManufacturer(),
 			SerialNumber: ch.GetSerialNumber(),
 		}
-		newManager.chassisInventory[lookup]= ch
+		newManager.chassisInventory[lookup] = ch
 	}
-	newManager.defaults=entities.GetOptions()
+	newManager.defaults = entities.GetOptions()
 	return newManager, nil
 }
