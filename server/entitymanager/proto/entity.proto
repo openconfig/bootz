@@ -32,7 +32,8 @@ message Options {
   // config will take precedence if is defined
   GNSIConfig gnsi_global_config = 1;
 
-  // bootz server address, device level config will take precedence if is defined
+  // bootz server address, device level 
+  // config will take precedence if is defined
   string bootzserver = 2; 
 
   // The directory to look into for certificates, private keys and OVs.
