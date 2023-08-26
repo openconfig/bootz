@@ -123,7 +123,9 @@ func main() {
 	if err != nil {
 		log.Exit(err)
 	}
-	em := entitymanager.New(sa)
+	em, err := entitymanager.New("../testdata/inventory.prototxt"); if err!=nil {
+		log.Exitf("unable to initiate inventory manager %v", err)
+	}
 	em.AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A").AddControlCard("123B")
 	c := service.New(em)
 

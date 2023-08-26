@@ -240,18 +240,18 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chass
 }
 
 // FetchOwnershipVoucher retrieves the ownership voucher for a control card
-func (m *InMemoryEntityManager) FetchOwnershipVoucher(chassis *service.EntityLookup, controllerCard string) (string, error) {
+func (m *InMemoryEntityManager) FetchOwnershipVoucher(chassis *service.EntityLookup, ccSerial string) (string, error) {
 	ch, ok := m.chassisInventory[*chassis]
 	if !ok {
 		return "", status.Errorf(codes.NotFound, "could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
 	}
 	//cc:=&bootz.ControlCard{}
 	for _, c := range ch.GetControllerCards() {
-		if c.GetSerialNumber() == controllerCard {
+		if c.GetSerialNumber() == ccSerial {
 			return c.GetOwnershipVoucher(), nil
 		}
 	}
-	return "", status.Errorf(codes.NotFound, "could not find Controller with serial#: %s belonging to chassis %s", controllerCard, chassis.SerialNumber)
+	return "", status.Errorf(codes.NotFound, "could not find Controller with serial#: %s belonging to chassis %s", ccSerial, chassis.SerialNumber)
 }
 
 // AddControlCard adds a new control card to the entity manager.

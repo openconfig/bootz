@@ -245,7 +245,7 @@ func TestSign(t *testing.T) {
 
 			block, _ := pem.Decode([]byte(artifacts.OC.Key))
 			if block == nil {
-				t.Errorf("unable to decode OC private key")
+				t.Fatal("unable to decode OC private key")
 			}
 			priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 			if err != nil {
