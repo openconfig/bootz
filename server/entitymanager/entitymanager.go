@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -13,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"crypto/tls"
 
 	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/bootz/server/service"
@@ -115,8 +115,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, 
 	}
 	log.Infof("Control card located in inventory")
 
-	// Construct the response. This emulator hardcodes these values but a real Bootz server would not.
-	// TODO: Populate these placeholders with realistic ones.
+	// TODO: Populate ServerTrustCert and gnsi config
 	return &bootz.BootstrapDataResponse{
 		SerialNum:        controllerCard.SerialNumber,
 		IntendedImage:    ch.GetSoftwareImage(),
@@ -202,6 +201,8 @@ func parseSecurityArtifacts(artifactDir string) (*service.SecurityArtifacts, err
 
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
 func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	// get security artifacts for the device
 	secArtifact, err := parseSecurityArtifacts(m.defaults.ArtifactDir)
 	if err != nil {
@@ -241,7 +242,7 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chass
 	log.Infof("Response signature set")
 
 	// Populate the OV
-	ov, err := m.FetchOwnershipVoucher(chassis, controllerCard)
+	ov, err := m.fetchOwnershipVoucher(chassis, controllerCard)
 	if err != nil {
 		return err
 	}
@@ -255,7 +256,7 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chass
 }
 
 // FetchOwnershipVoucher retrieves the ownership voucher for a control card
-func (m *InMemoryEntityManager) FetchOwnershipVoucher(chassis *service.EntityLookup, ccSerial string) (string, error) {
+func (m *InMemoryEntityManager) fetchOwnershipVoucher(chassis *service.EntityLookup, ccSerial string) (string, error) {
 	ch, ok := m.chassisInventory[*chassis]
 	if !ok {
 		return "", status.Errorf(codes.NotFound, "could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
