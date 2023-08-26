@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	//"strings"
 	"crypto/tls"
 
 	"github.com/openconfig/bootz/proto/bootz"
@@ -89,10 +88,10 @@ func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, 
 	if controllerCard.SerialNumber == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "no serial number provided")
 	}
-
 	// check if the controller card and related chassis can be solved
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	log.Infof("Fetching data for %v", controllerCard.SerialNumber)
 	ch, ok := m.chassisInventory[*chassis]
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
@@ -114,6 +113,8 @@ func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, 
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Control card located in inventory")
+
 	// Construct the response. This emulator hardcodes these values but a real Bootz server would not.
 	// TODO: Populate these placeholders with realistic ones.
 	return &bootz.BootstrapDataResponse{
@@ -206,10 +207,13 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chass
 	if err != nil {
 		return status.Errorf(codes.Internal, "unable to load keys: %v", err)
 	}
+	log.Infof("Decoding the OC private key...")
 	block, _ := pem.Decode([]byte(secArtifact.OC.Key))
 	if block == nil {
 		return status.Errorf(codes.Internal, "unable to decode OC private key")
 	}
+	log.Infof("Decoded the OC private key")
+
 	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
 		return err
@@ -217,25 +221,36 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chass
 	if resp.GetSignedResponse() == nil {
 		return status.Errorf(codes.InvalidArgument, "empty signed response")
 	}
+
+	log.Infof("Marshalling the response...")
 	signedResponseBytes, err := proto.Marshal(resp.GetSignedResponse())
 	if err != nil {
 		return err
 	}
+	log.Infof("Sucessfully serialized the response")
+
+	log.Infof("Calculating the sha256 sum to encrypt the response...")
 	hashed := sha256.Sum256(signedResponseBytes)
 	// TODO: Add support for EC keys too.
+	log.Infof("Encrypting the response...")
 	sig, err := rsa.SignPKCS1v15(nil, priv, crypto.SHA256, hashed[:])
 	if err != nil {
 		return err
 	}
 	resp.ResponseSignature = base64.StdEncoding.EncodeToString(sig)
+	log.Infof("Response signature set")
+
 	// Populate the OV
 	ov, err := m.FetchOwnershipVoucher(chassis, controllerCard)
 	if err != nil {
 		return err
 	}
 	resp.OwnershipVoucher = []byte(ov)
+	log.Infof("OV populated")
+
 	// Populate the OC
 	resp.OwnershipCertificate = []byte(secArtifact.OC.Cert)
+	log.Infof("OC populated")
 	return nil
 }
 
@@ -259,6 +274,7 @@ func (m *InMemoryEntityManager) AddControlCard(serial string) *InMemoryEntityMan
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.controlCardStatuses[serial] = bootz.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
+	log.Infof("Added control card %v to server entity manager", serial)
 	return m
 }
 
@@ -275,6 +291,7 @@ func (m *InMemoryEntityManager) AddChassis(bootMode bootz.BootMode, manufacturer
 		SerialNumber: serial,
 		BootMode:     bootMode,
 	}
+	log.Infof("Added %v chassis %v to server entity manager", manufacturer, serial)
 	return m
 }
 
