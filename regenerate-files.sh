@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-BASE=$(bazelisk  info bazel-genfiles)
+BASE=$(bazel  info bazel-genfiles)
 BOOTZ_NS='github.com/openconfig/bootz/proto'
 ENTITY_NS='github.com/openconfig/bootz/server/entitymanager/proto'
 
@@ -17,7 +17,7 @@ copy_generated() {
   done
 }
 
-bazelisk build //proto:all
+bazel build //proto:all
 # first args in the package name, second arg is namespace for the package, and thrid is the location where the generated will be saved. 
 copy_generated "bootz"  ${BOOTZ_NS}   "proto/"
 copy_generated "entity"  ${ENTITY_NS} "server/entitymanager/proto/"  
