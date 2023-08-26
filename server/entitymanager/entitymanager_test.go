@@ -217,14 +217,14 @@ func TestSign(t *testing.T) {
 	},
 	}
 
+	em, _ := New("../../testdata/inventory.prototxt")
+	artifacts, err := parseSecurityArtifacts(em.defaults.GetArtifactDir())
+	if err != nil {
+		t.Fatalf("Could not load security artifacts: %v", err)
+	}
+
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-
-			em, _ := New("../../testdata/inventory.prototxt")
-			artifacts, err := parseSecurityArtifacts(em.defaults.GetArtifactDir())
-			if err != nil {
-				t.Errorf("Could not load security artifacts: %v", err)
-			}
 
 			err = em.Sign(test.resp, &test.chassis, test.serial)
 			if err != nil {
@@ -249,7 +249,7 @@ func TestSign(t *testing.T) {
 			}
 			priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 			if err != nil {
-				t.Errorf("unable to parse OC private key")
+				t.Fatal("unable to parse OC private key")
 			}
 
 			err = rsa.VerifyPKCS1v15(&priv.PublicKey, crypto.SHA256, hashed[:], sigDecoded)
