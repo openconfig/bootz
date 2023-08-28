@@ -37,9 +37,8 @@ type InMemoryEntityManager struct {
 	controlCardStatuses map[string]bootz.ControlCardState_ControlCardStatus
 	// stores the defaut config such as security artifacts dir.
 	defaults *epb.Options
-
 	// security artifacts  (OVs, OC and PDC).
-	// TODO: handle the mutlti-vendor case
+	// TODO: handle mutlti-vendor case
 	secArtifacts *service.SecurityArtifacts
 }
 
