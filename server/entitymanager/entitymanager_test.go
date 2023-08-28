@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -68,6 +67,11 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
+			desc:        "Unsuccessful with wrong security artifacts",
+			chassisConf: "../../testdata/inventorywithwrongsec.prototxt",
+			wantErr:     "security artifacts",
+		},
+		{
 			desc:        "Unsuccessful new with wrong file",
 			chassisConf: "../../testdata/wronginventory.prototxt",
 			inventory:   map[service.EntityLookup]*entity.Chassis{},
@@ -100,7 +104,6 @@ func TestNew(t *testing.T) {
 					t.Errorf("Inventory list is not as expected, Diff: %s", cmp.Diff(inv.defaults, test.defaults, opts...))
 				}
 			}
-			fmt.Printf("err: %v", err)
 			if s := errdiff.Substring(err, test.wantErr); s != "" {
 				t.Errorf("Expected error %s, but got error %v", test.wantErr, err)
 			}

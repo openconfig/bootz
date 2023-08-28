@@ -35,8 +35,12 @@ type InMemoryEntityManager struct {
 	chassisInventory map[service.EntityLookup]*epb.Chassis
 	// represents the current status of known control cards
 	controlCardStatuses map[string]bootz.ControlCardState_ControlCardStatus
-	// stores the security artifacts required by Bootz Server (OVs, OC and PDC).
+	// stores the defaut config such as security artifacts dir.
 	defaults *epb.Options
+
+	// security artifacts  (OVs, OC and PDC).
+	// TODO: handle the mutlti-vendor case
+	secArtifacts *service.SecurityArtifacts
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
@@ -203,13 +207,12 @@ func parseSecurityArtifacts(artifactDir string) (*service.SecurityArtifacts, err
 func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// get security artifacts for the device
-	secArtifact, err := parseSecurityArtifacts(m.defaults.ArtifactDir)
-	if err != nil {
-		return status.Errorf(codes.Internal, "unable to load keys: %v", err)
+	// check if sec artifacts areprovided for signing
+	if m.secArtifacts == nil {
+		return status.Errorf(codes.Internal, "security artifact is missing")
 	}
 	log.Infof("Decoding the OC private key...")
-	block, _ := pem.Decode([]byte(secArtifact.OC.Key))
+	block, _ := pem.Decode([]byte(m.secArtifacts.OC.Key))
 	if block == nil {
 		return status.Errorf(codes.Internal, "unable to decode OC private key")
 	}
@@ -250,7 +253,7 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chass
 	log.Infof("OV populated")
 
 	// Populate the OC
-	resp.OwnershipCertificate = []byte(secArtifact.OC.Cert)
+	resp.OwnershipCertificate = []byte(m.secArtifacts.OC.Cert)
 	log.Infof("OC populated")
 	return nil
 }
@@ -325,5 +328,13 @@ func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
 		newManager.chassisInventory[lookup] = ch
 	}
 	newManager.defaults = entities.GetOptions()
+	if newManager.defaults.ArtifactDir != "" {
+		newManager.secArtifacts, err = parseSecurityArtifacts(entities.Options.ArtifactDir)
+		if err != nil {
+			log.Errorf("Error in parsing security artifacts : %v", err)
+			return nil, fmt.Errorf("error in parsing security artifacts : %v", err)
+		}
+	}
+
 	return newManager, nil
 }
