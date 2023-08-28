@@ -107,7 +107,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, 
 		}
 	}
 	if !found {
-		return nil, status.Errorf(codes.NotFound, "could not find Controller with serial#: %s and manufacturer: %s belonging to chassis %s", controllerCard.GetSerialNumber(), controllerCard.GetPartNumber(), chassis.SerialNumber)
+		return nil, status.Errorf(codes.NotFound, "could not find Controller with serial#: %s and partnumber: %s belonging to chassis %s", controllerCard.GetSerialNumber(), controllerCard.GetPartNumber(), chassis.SerialNumber)
 	}
 	//TODO: for now add  status for the controller card.  We may need to move all runtime info to bootz service.
 	m.controlCardStatuses[controllerCard.GetSerialNumber()] = bootz.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
