@@ -54,11 +54,6 @@ func (m *InMemoryEntityManager) ResolveChassis(chassis *service.EntityLookup) (*
 }
 
 func readOCConfig(path string) ([]byte, error) {
-	/*gpb.SetRequest{
-		Delete: []*gpb.Path{
-
-		},
-	}*/
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Error opening file %s: %v", path, err)

@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	port              = flag.String("port", "8008", "The port to start the Bootz server on localhost")
+	port              = flag.String("port", "", "The port to start the Bootz server on localhost")
 	artifactDirectory = flag.String("artifact_dir", "../testdata/", "The relative directory to look into for certificates, private keys and OVs.")
 )
 
