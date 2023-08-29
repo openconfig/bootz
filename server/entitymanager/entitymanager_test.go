@@ -74,12 +74,12 @@ func TestNew(t *testing.T) {
 		},
 		{
 			desc:        "Unsuccessful with wrong security artifacts",
-			chassisConf: "../../testdata/inventorywithwrongsec.prototxt",
+			chassisConf: "../../testdata/inv_with_wrong_sec.prototxt",
 			wantErr:     "security artifacts",
 		},
 		{
 			desc:        "Unsuccessful new with wrong file",
-			chassisConf: "../../testdata/wronginventory.prototxt",
+			chassisConf: "../../testdata/wrong_inventory.prototxt",
 			inventory:   map[service.EntityLookup]*entity.Chassis{},
 			wantErr:     "proto:",
 		},
@@ -385,6 +385,103 @@ func TestGetBootstrapData(t *testing.T) {
 			if !proto.Equal(got, test.want) {
 				t.Errorf("GetBootstrapData(%v) \n got: %v, \n want: %v", test.input, got, test.want)
 			}
+		})
+	}
+}
+
+func TestLoadConfig(t *testing.T) {
+	vendorCliConfig := `!! IOS XR Configuration 7.4.1
+!! Last configuration change at Wed Aug 18 19:55:09 2021 by cisco
+!
+username cisco
+ group root-lr
+ group cisco-support
+ password 7 01100F175804575D72
+!
+interface Loopback0
+ ipv4 address 44.44.44.44 255.255.255.255
+ ipv6 address 44::44/128
+!
+grpc
+ dscp cs4
+ port 57400
+ max-streams 128
+ max-streams-per-user 128
+ address-family dual
+ max-request-total 256
+ max-request-per-user 32
+!
+hw-module profile pbr vrf-redirect
+ssh server vrf default
+end`
+	tests := []struct {
+		desc             string
+		bootConfig       *entity.BootConfig
+		wantBootConfig   *bootz.BootConfig
+		wantVendorConfig []byte
+		wantErr          string
+	}{
+		{
+			desc: "Suceffull OC/vendor config",
+			bootConfig: &entity.BootConfig{
+				VendorConfigFile: "../../testdata/cisco.cfg",
+				OcConfigFile:     "../../testdata/oc_config.prototext",
+			},
+			wantBootConfig: &bootz.BootConfig{
+				VendorConfig: []byte(vendorCliConfig),
+			},
+			wantVendorConfig: []byte{},
+			wantErr:          "",
+		},
+		{
+			desc: "UnSuceffull OC config",
+			bootConfig: &entity.BootConfig{
+				VendorConfigFile: "../../testdata/cisco.cfg",
+				OcConfigFile:     "../../testdata/wrong_oc_config.prototext",
+			},
+			wantBootConfig: &bootz.BootConfig{
+				VendorConfig: []byte(vendorCliConfig),
+			},
+			wantVendorConfig: []byte{},
+			wantErr:          "proto",
+		},
+		{
+			desc: "UnSuceffull OC config due to path",
+			bootConfig: &entity.BootConfig{
+				VendorConfigFile: "../../testdata/cisco.cfg",
+				OcConfigFile:     "../../wrong_path.prototext",
+			},
+			wantBootConfig: &bootz.BootConfig{
+				VendorConfig: []byte(vendorCliConfig),
+			},
+			wantVendorConfig: []byte{},
+			wantErr:          "file",
+		},
+		{
+			desc: "UnSuceffull vendor config due to path",
+			bootConfig: &entity.BootConfig{
+				VendorConfigFile: "../../wrong/path",
+				OcConfigFile:     "../../testdata/oc_config.prototext",
+			},
+			wantBootConfig: &bootz.BootConfig{
+				VendorConfig: []byte(vendorCliConfig),
+			},
+			wantVendorConfig: []byte{},
+			wantErr:          "file",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			gotBootConfig, err := populateBootConfig(test.bootConfig)
+			if err == nil {
+				if diff := cmp.Diff(test.wantBootConfig.GetVendorConfig(), gotBootConfig.GetVendorConfig()); diff != "" {
+					t.Fatalf("wanted vendor config differs from the got config %s", diff)
+				}
+			}
+			if errdiff.Substring(err, test.wantErr) != "" {
+				t.Errorf("Unexocted error, %s", errdiff.Text(err, test.wantErr))
+			}
+
 		})
 	}
 }

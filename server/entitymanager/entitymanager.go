@@ -8,7 +8,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -25,6 +24,7 @@ import (
 
 	log "github.com/golang/glog"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
+	gpb "github.com/openconfig/gnmi/proto/gnmi"
 )
 
 // InMemoryEntityManager provides a simple in memory handler
@@ -53,21 +53,27 @@ func (m *InMemoryEntityManager) ResolveChassis(chassis *service.EntityLookup) (*
 	return &service.ChassisEntity{BootMode: ch.GetBootMode()}, nil
 }
 
-func loadAndValidateJSONfile(jsonFilePath string) ([]byte, error) {
-	jsonByte, err := os.ReadFile(string(jsonFilePath))
+func readOCConfig(path string) ([]byte, error) {
+	/*gpb.SetRequest{
+		Delete: []*gpb.Path{
+
+		},
+	}*/
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not parse a json file %v", err)
+		return nil, status.Errorf(codes.Internal, "Error opening file %s: %v", path, err)
 	}
-	if !json.Valid(jsonByte) {
-		return nil, status.Errorf(codes.Internal, "File %s config is not a valid json", jsonFilePath)
+	req := &gpb.SetRequest{}
+	if err := prototext.Unmarshal(data, req); err != nil {
+		return nil, status.Errorf(codes.Internal, "File %s config is not a valid gnmi Setrequest: %v", path, err)
 	}
-	return jsonByte, err
+	return data, nil
 }
 
 func populateBootConfig(conf *epb.BootConfig) (*bootz.BootConfig, error) {
 	bootConfig := &bootz.BootConfig{}
 	if conf.GetOcConfigFile() != "" {
-		ocConf, err := loadAndValidateJSONfile(conf.GetOcConfigFile())
+		ocConf, err := readOCConfig(conf.GetOcConfigFile())
 		if err != nil {
 			return nil, err
 		}
