@@ -32,7 +32,7 @@ const nonceLength = 16
 var (
 	verifyTLSCert = flag.Bool("verify_tls_cert", false, "Whether to verify the TLS certificate presented by the Bootz server. If false, all TLS connections are implicity trusted.")
 	insecureBoot  = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
-	port          = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
+	bootzAddress  = flag.String("address", "8008", "The [ip:]port to listen for the bootz server to connect. when ip is not given, the server will connect to localhost.")
 	rootCA        = flag.String("root_ca_cert_path", "../testdata/vendorca_pub.pem", "The relative path to a file containing a PEM encoded certificate for the manufacturer CA.")
 )
 
@@ -53,6 +53,16 @@ type OwnershipVoucherInner struct {
 // pemEncodeCert adds the correct PEM headers and footers to a raw certificate block.
 func pemEncodeCert(contents string) string {
 	return strings.Join([]string{"-----BEGIN CERTIFICATE-----", contents, "-----END CERTIFICATE-----"}, "\n")
+}
+
+// convert address to localhost when no ip is specefied
+func convertAddress(addr string) string {
+	items := strings.Split(addr, ":")
+	listenAddr := addr
+	if len(items) == 1 {
+		listenAddr = fmt.Sprintf("localhost:%v", addr)
+	}
+	return listenAddr
 }
 
 // validateArtifacts checks the signed artifacts in a GetBootstrapDataResponse. Specifically, it:
@@ -256,10 +266,10 @@ func main() {
 	log.Infof("=============================================================================")
 	log.Infof("================ Starting DHCP discovery of bootstrap server ================")
 	log.Infof("=============================================================================")
-	if *port == "" {
+	if *bootzAddress == "" {
 		log.Exitf("No port provided.")
 	}
-	bootzAddress := fmt.Sprintf("localhost:%v", *port)
+	bootzAddress := fmt.Sprintf("localhost:%v", convertAddress(*bootzAddress))
 	log.Infof("Connecting to bootz server at address %q", bootzAddress)
 
 	// 2. Bootstrapping Service

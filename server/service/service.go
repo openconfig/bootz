@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
+	"sync"
+	"time"
 
 	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/gnmi/errlist"
@@ -51,6 +54,18 @@ type ChassisEntity struct {
 	BootMode bootz.BootMode
 }
 
+// an struct to record the boot logs for connected chassis
+type bootLog struct {
+	BootMode       bootz.BootMode
+	StartTimeStamp uint64
+	EndTimeStamp   uint64
+	Status         []bootz.ControlCardState_ControlCardStatus
+	LastStatus     bootz.ControlCardState_ControlCardStatus
+	BootResponse   *bootz.BootstrapDataResponse
+	BootRequest    *bootz.GetBootstrapDataRequest
+	Err            error
+}
+
 type EntityManager interface {
 	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
 	GetBootstrapData(*bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
@@ -61,14 +76,21 @@ type EntityManager interface {
 
 type Service struct {
 	bootz.UnimplementedBootstrapServer
-	em EntityManager
+	em               EntityManager
+	mu               sync.Mutex
+	connectedChassis map[EntityLookup]bool
+	activeBoots      map[string]*bootLog
+	failedRequest    map[*bootz.GetBootstrapDataRequest]error
 }
 
 func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
 	log.Infof("=============================================================================")
 	log.Infof("==================== Received request for bootstrap data ====================")
 	log.Infof("=============================================================================")
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if len(req.ChassisDescriptor.ControlCards) == 0 {
+		s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
 	}
 	log.Infof("Requesting for %v chassis %v", req.ChassisDescriptor.Manufacturer, req.ChassisDescriptor.SerialNumber)
@@ -80,9 +102,11 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 	chassis, err := s.em.ResolveChassis(lookup)
 
 	if err != nil {
+		s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v", req.ChassisDescriptor)
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v", req.ChassisDescriptor)
 	}
 	log.Infof("Verified server can resolve chassis")
+	s.connectedChassis[*lookup] = true
 
 	// If chassis can only be booted into secure mode then return error
 	if chassis.BootMode == bootz.BootMode_BOOT_MODE_SECURE && req.Nonce == "" {
@@ -97,11 +121,19 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 	log.Infof("=============================================================================")
 	var responses []*bootz.BootstrapDataResponse
 	for _, v := range req.ChassisDescriptor.ControlCards {
+		s.activeBoots[v.GetSerialNumber()] = &bootLog{
+			BootMode:       chassis.BootMode,
+			StartTimeStamp: uint64(time.Now().UnixMilli()),
+			BootRequest:    req,
+			LastStatus:     bootz.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED,
+		}
 		bootdata, err := s.em.GetBootstrapData(v)
 		if err != nil {
+			s.activeBoots[v.GetSerialNumber()].Err = err
 			errs.Add(err)
 			log.Infof("Error occurred while retrieving data for Serial Number %v", v.SerialNumber)
 		}
+		s.activeBoots[v.GetSerialNumber()].BootResponse = bootdata
 		responses = append(responses, bootdata)
 	}
 	if errs.Err() != nil {
@@ -136,7 +168,49 @@ func (s *Service) ReportStatus(ctx context.Context, req *bootz.ReportStatusReque
 	log.Infof("=============================================================================")
 	log.Infof("========================== Status report received ===========================")
 	log.Infof("=============================================================================")
-	return &bootz.EmptyResponse{}, s.em.SetStatus(req)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := s.em.SetStatus(req)
+	if err != nil {
+		for _, stat := range req.GetStates() {
+			s.activeBoots[stat.GetSerialNumber()].LastStatus = stat.GetStatus()
+			s.activeBoots[stat.SerialNumber].Status = append(s.activeBoots[stat.SerialNumber].Status, stat.GetStatus())
+			if stat.GetStatus() == bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED {
+				s.activeBoots[stat.SerialNumber].EndTimeStamp = uint64(time.Now().UnixMilli())
+			}
+		}
+		return &bootz.EmptyResponse{}, nil
+	}
+	return nil, err
+
+}
+
+// IsChassisConnected checks if a device is connected to bootzServer
+func (s *Service) IsChassisConnected(chassis EntityLookup) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.connectedChassis[chassis]
+}
+
+// ResetStatus clears boot log for devices.
+// This is intended to use for testing and can be used to clear logs without restarting servive.
+func (s *Service) ResetStatus(chassis EntityLookup) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.connectedChassis = map[EntityLookup]bool{}
+	s.failedRequest = map[*bootz.GetBootstrapDataRequest]error{}
+	s.activeBoots = map[string]*bootLog{}
+}
+
+// GetBootStatus return boot log for a controller card. This is intended to use for testing.
+func (s *Service) GetBootStatus(serial string) (bootLog, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, ok := s.activeBoots[serial]
+	if !ok {
+		return bootLog{}, fmt.Errorf("no boot log found for controller card %s", serial)
+	}
+	return *b, nil
 }
 
 // Public API for allowing the device configuration to be set for each device the
@@ -147,6 +221,9 @@ func (s *Service) SetDeviceConfiguration(ctx context.Context) error {
 
 func New(em EntityManager) *Service {
 	return &Service{
-		em: em,
+		em:               em,
+		connectedChassis: map[EntityLookup]bool{},
+		failedRequest:    map[*bootz.GetBootstrapDataRequest]error{},
+		activeBoots:      map[string]*bootLog{},
 	}
 }
