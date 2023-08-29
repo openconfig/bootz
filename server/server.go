@@ -40,7 +40,7 @@ import (
 )
 
 var (
-	port              = flag.String("port", "15006", "The port to start the Bootz server on localhost")
+	bootzAddress      = flag.String("address", "8008", "The [ip:]port to listen for the bootz request. when ip is not given, the server will listen on localhost.")
 	dhcpIntf          = flag.String("dhcp_intf", "", "Network interface to use for dhcp server.")
 	artifactDirectory = flag.String("artifact_dir", "../testdata/", "The relative directory to look into for certificates, private keys and OVs.")
 	inventoryConfig   = flag.String("inv_config", "../testdata/inventory_local.prototxt", "Devices' config files to be loaded by inventory manager")
@@ -49,6 +49,16 @@ var (
 type server struct {
 	serv *grpc.Server
 	lis  net.Listener
+}
+
+// convert address to localhost when no ip is specefied
+func convertAddress(addr string) string {
+	items := strings.Split(addr, ":")
+	listenAddr := addr
+	if len(items) == 1 {
+		listenAddr = fmt.Sprintf("localhost:%v", addr)
+	}
+	return listenAddr
 }
 
 // readKeyPair reads the cert/key pair from the specified artifacts directory.
@@ -142,8 +152,8 @@ func (s *server) Stop() {
 
 // newServer creates a new Bootz gRPC server from flags.
 func newServer() (*server, error) {
-	if *port == "" {
-		return nil, fmt.Errorf("no port selected. specify with the --port flag")
+	if *bootzAddress == "" {
+		log.Exitf("no port selected. specify with the -port flag")
 	}
 	if *artifactDirectory == "" {
 		return nil, fmt.Errorf("no artifact directory selected. specify with the --artifact_dir flag")
@@ -181,7 +191,7 @@ func newServer() (*server, error) {
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)))
 	bpb.RegisterBootstrapServer(s, c)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", *port))
+	lis, err := net.Listen("tcp", convertAddress(*bootzAddress))
 	if err != nil {
 		return nil, fmt.Errorf("error listening on port: %v", err)
 	}
