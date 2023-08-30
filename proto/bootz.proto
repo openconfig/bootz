@@ -35,7 +35,8 @@ service Bootstrap {
   // This RPC returns the data required to put the device in a known state
   // (i.e. OS, bootloader password, etc) and applies an initial device
   // configuration.
-  rpc GetBootstrapData(GetBootstrapDataRequest) returns (GetBootstrapDataResponse) {}
+  rpc GetBootstrapData(GetBootstrapDataRequest)
+      returns (GetBootstrapDataResponse) {}
 
   // This RPC is used by the device to indicate successful application of
   // BootstrappingData. The Bootz system will proceed to the next step if
