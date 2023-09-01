@@ -14,6 +14,7 @@ require (
 
 require (
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/h-fam/errdiff v1.0.2 // indirect
 	github.com/openconfig/gnoi v0.0.0-20220809151450-6bddacd72ef8 // indirect
 	golang.org/x/net v0.9.0 // indirect
 	golang.org/x/sys v0.7.0 // indirect
