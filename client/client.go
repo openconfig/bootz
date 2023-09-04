@@ -1,3 +1,18 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Bootz client reference implementation.
 package main
 
 import (
@@ -36,11 +51,12 @@ var (
 	rootCA        = flag.String("root_ca_cert_path", "../testdata/vendorca_pub.pem", "The relative path to a file containing a PEM encoded certificate for the manufacturer CA.")
 )
 
+// OwnershipVoucher wraps OwnershipVoucherInner.
 type OwnershipVoucher struct {
 	OV OwnershipVoucherInner `json:"ietf-voucher:voucher"`
 }
 
-// Defines the Ownership Voucher format. See https://www.rfc-editor.org/rfc/rfc8366.html.
+// OwnershipVoucherInner defines the Ownership Voucher format. See https://www.rfc-editor.org/rfc/rfc8366.html.
 type OwnershipVoucherInner struct {
 	CreatedOn                  string `json:"created-on"`
 	ExpiresOn                  string `json:"expires-on"`

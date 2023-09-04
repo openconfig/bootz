@@ -1,7 +1,7 @@
 // Bootz server reference implementation.
 //
 // The bootz server will provide a simple file based bootstrap
-// implementation for devices.  The service can be extended by
+// implementation for devices. The service can be extended by
 // provding your own implementation of the entity manager.
 package main
 
@@ -70,8 +70,8 @@ func readOVs() (service.OVList, error) {
 	return ovs, err
 }
 
-// generateServerTlsCert creates a new TLS keypair from the PDC.
-func generateServerTlsCert(pdc *service.KeyPair) (*tls.Certificate, error) {
+// generateServerTLSCert creates a new TLS keypair from the PDC.
+func generateServerTLSCert(pdc *service.KeyPair) (*tls.Certificate, error) {
 	tlsCert, err := tls.X509KeyPair([]byte(pdc.Cert), []byte(pdc.Key))
 	if err != nil {
 		return nil, fmt.Errorf("unable to generate Server TLS Certificate from PDC %v", err)
@@ -97,7 +97,7 @@ func parseSecurityArtifacts() (*service.SecurityArtifacts, error) {
 	if err != nil {
 		return nil, err
 	}
-	tlsCert, err := generateServerTlsCert(pdc)
+	tlsCert, err := generateServerTLSCert(pdc)
 	if err != nil {
 		return nil, err
 	}

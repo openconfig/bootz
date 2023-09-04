@@ -1,3 +1,18 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Service that receives bootstrap requests and responds with the relevant data.
 package service
 
 import (
@@ -49,6 +64,7 @@ type ChassisEntity struct {
 	BootMode bootz.BootMode
 }
 
+// EntityManager maintains the entities and their states.
 type EntityManager interface {
 	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
 	GetBootstrapData(*bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
@@ -57,6 +73,7 @@ type EntityManager interface {
 	FetchOwnershipVoucher(string) (string, error)
 }
 
+// Service represents the server and entity manager.
 type Service struct {
 	bootz.UnimplementedBootstrapServer
 	em EntityManager
@@ -116,12 +133,13 @@ func (s *Service) ReportStatus(ctx context.Context, req *bootz.ReportStatusReque
 	return &bootz.EmptyResponse{}, s.em.SetStatus(req)
 }
 
-// Public API for allowing the device configuration to be set for each device the
+// SetDeviceConfiguration is a public API for allowing the device configuration to be set for each device the
 // will be responsible for configuring.  This will be only availble for testing.
 func (s *Service) SetDeviceConfiguration(ctx context.Context) error {
 	return status.Errorf(codes.Unimplemented, "Unimplemented")
 }
 
+// New creates a new service.
 func New(em EntityManager) *Service {
 	return &Service{
 		em: em,

@@ -40,16 +40,74 @@ func (m *InMemoryEntityManager) ResolveChassis(lookup *service.EntityLookup) (*s
 	return nil, status.Errorf(codes.NotFound, "chassis %+v not found in inventory", *lookup)
 }
 
-func (m *InMemoryEntityManager) GetBootstrapData(c *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
+func readOCConfig(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Error opening file %s: %v", path, err)
+	}
+	req := &gpb.SetRequest{}
+	if err := prototext.Unmarshal(data, req); err != nil {
+		return nil, status.Errorf(codes.Internal, "File %s config is not a valid gnmi Setrequest: %v", path, err)
+	}
+	return data, nil
+}
+
+func populateBootConfig(conf *epb.BootConfig) (*bootz.BootConfig, error) {
+	bootConfig := &bootz.BootConfig{}
+	if conf.GetOcConfigFile() != "" {
+		ocConf, err := readOCConfig(conf.GetOcConfigFile())
+		if err != nil {
+			return nil, err
+		}
+		bootConfig.OcConfig = ocConf
+	}
+	if conf.GetVendorConfigFile() != "" {
+		cliConf, err := os.ReadFile(string(conf.VendorConfigFile))
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not populate vendor config %v", err)
+		}
+		bootConfig.VendorConfig = cliConf
+	}
+	// TODO: validate OC and CLI may be added. However, this may prevent negative testing
+	bootConfig.Metadata = conf.GetMetadata()
+	bootConfig.BootloaderConfig = conf.GetBootloaderConfig()
+	return bootConfig, nil
+}
+
+// GetBootstrapData fetches and returns the bootstrap data response from the server.
+func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, controllerCard *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
 	// First check if we are expecting this control card.
 	if c.SerialNumber == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "no serial number provided")
 	}
-	if _, ok := m.controlCardStatuses[c.GetSerialNumber()]; !ok {
-		return nil, status.Errorf(codes.NotFound, "control card %v not found in inventory", c.GetSerialNumber())
+	// Check if the controller card and related chassis can be solved.
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	log.Infof("Fetching data for %v", controllerCard.SerialNumber)
+	ch, ok := m.chassisInventory[*chassis]
+	if !ok {
+		return nil, status.Errorf(codes.NotFound, "could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
 	}
-	// Construct the response. This emulator hardcodes these values but a real Bootz server would not.
-	// TODO: Populate these placeholders with realistic ones.
+	found := false
+	for _, c := range ch.GetControllerCards() {
+		if c.GetSerialNumber() == controllerCard.GetSerialNumber() && c.GetPartNumber() == controllerCard.PartNumber {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, status.Errorf(codes.NotFound, "could not find Controller with serial#: %s and partnumber: %s belonging to chassis %s", controllerCard.GetSerialNumber(), controllerCard.GetPartNumber(), chassis.SerialNumber)
+	}
+	// TODO: for now add status for the controller card. We may need to move all runtime info to bootz service.
+	m.controlCardStatuses[controllerCard.GetSerialNumber()] = bootz.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
+
+	bootCfg, err := populateBootConfig(ch.GetConfig().GetBootConfig())
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Control card located in inventory")
+
+	// TODO: Populate ServerTrustCert and gnsi config
 	return &bootz.BootstrapDataResponse{
 		SerialNum: c.SerialNumber,
 		IntendedImage: &bootz.SoftwareImage{
@@ -70,6 +128,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(c *bootz.ControlCard) (*bootz.B
 	}, nil
 }
 
+// SetStatus updates the status for each control card on the chassis.
 func (m *InMemoryEntityManager) SetStatus(req *bootz.ReportStatusRequest) error {
 	if len(req.GetStates()) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no control card states provided")
@@ -87,6 +146,59 @@ func (m *InMemoryEntityManager) SetStatus(req *bootz.ReportStatusRequest) error 
 		m.controlCardStatuses[c.GetSerialNumber()] = c.GetStatus()
 	}
 	return nil
+}
+
+// // readKeyPair reads the cert/key pair from the specified directory.
+// Certs must have the format {name}_pub.pem and keys must have the format {name}_priv.pem
+func readKeypair(dir, name string) (*service.KeyPair, error) {
+	cert, err := os.ReadFile(filepath.Join(dir, fmt.Sprintf("%v_pub.pem", name)))
+	if err != nil {
+		return nil, fmt.Errorf("unable to read %v cert: %v", name, err)
+	}
+	key, err := os.ReadFile(filepath.Join(dir, fmt.Sprintf("%v_priv.pem", name)))
+	if err != nil {
+		return nil, fmt.Errorf("unable to read %v key: %v", name, err)
+	}
+	return &service.KeyPair{
+		Cert: string(cert),
+		Key:  string(key),
+	}, nil
+}
+
+// loadServerTLSCert uses the PDC key as the server certificate.
+func loadServerTLSCert(pdc *service.KeyPair) (*tls.Certificate, error) {
+	tlsCert, err := tls.X509KeyPair([]byte(pdc.Cert), []byte(pdc.Key))
+	if err != nil {
+		return nil, fmt.Errorf("unable to load PDC keys %v", err)
+	}
+	return &tlsCert, err
+}
+
+// parseSecurityArtifacts reads from the specified directory to find the required keypairs and ownership vouchers.
+func parseSecurityArtifacts(artifactDir string) (*service.SecurityArtifacts, error) {
+	oc, err := readKeypair(artifactDir, "oc")
+	if err != nil {
+		return nil, err
+	}
+	pdc, err := readKeypair(artifactDir, "pdc")
+	if err != nil {
+		return nil, err
+	}
+	vendorCA, err := readKeypair(artifactDir, "vendorca")
+	if err != nil {
+		return nil, err
+	}
+	// use pdc key as server cer
+	tlsCert, err := loadServerTLSCert(pdc)
+	if err != nil {
+		return nil, err
+	}
+	return &service.SecurityArtifacts{
+		OC:         oc,
+		PDC:        pdc,
+		VendorCA:   vendorCA,
+		TLSKeypair: tlsCert,
+	}, nil
 }
 
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
