@@ -67,10 +67,9 @@ type ChassisEntity struct {
 
 type EntityManager interface {
 	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
-	GetBootstrapData(*bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
+	GetBootstrapData(*EntityLookup, *bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
 	SetStatus(*bootz.ReportStatusRequest) error
-	Sign(*bootz.GetBootstrapDataResponse, string) error
-	FetchOwnershipVoucher(string) (string, error)
+	Sign(*bootz.GetBootstrapDataResponse, *EntityLookup, string) error
 }
 
 type Service struct {
@@ -111,7 +110,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 	log.Infof("=============================================================================")
 	var responses []*bootz.BootstrapDataResponse
 	for _, v := range req.ChassisDescriptor.ControlCards {
-		bootdata, err := s.em.GetBootstrapData(v)
+		bootdata, err := s.em.GetBootstrapData(lookup, v)
 		if err != nil {
 			errs.Add(err)
 			log.Infof("Error occurred while retrieving data for Serial Number %v", v.SerialNumber)
@@ -137,7 +136,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 		log.Infof("====================== Signing the response with nonce ======================")
 		log.Infof("=============================================================================")
 		resp.SignedResponse.Nonce = req.Nonce
-		if err := s.em.Sign(resp, req.GetControlCardState().GetSerialNumber()); err != nil {
+		if err := s.em.Sign(resp, lookup, req.GetControlCardState().GetSerialNumber()); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
 		}
 		log.Infof("Signed with nonce")

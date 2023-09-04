@@ -16,21 +16,154 @@ package entitymanager
 
 import (
 	"crypto"
-	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/h-fam/errdiff"
 	"github.com/openconfig/bootz/proto/bootz"
+	"github.com/openconfig/bootz/server/entitymanager/proto/entity"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/protobuf/proto"
 )
 
+func TestNew(t *testing.T) {
+	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
+	ov2 := readTextFromFile(t, "../../testdata/ov_123B.txt")
+	chassis := entity.Chassis{
+		Name:                   "test",
+		SerialNumber:           "123",
+		Manufacturer:           "Cisco",
+		BootloaderPasswordHash: "ABCD123",
+		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
+		Config: &entity.Config{
+			BootConfig: &entity.BootConfig{},
+			DhcpConfig: &entity.DHCPConfig{},
+			GnsiConfig: &entity.GNSIConfig{},
+		},
+		SoftwareImage: &bootz.SoftwareImage{
+			Name:          "Default Image",
+			Version:       "1.0",
+			Url:           "https://path/to/image",
+			OsImageHash:   "ABCDEF",
+			HashAlgorithm: "SHA256",
+		},
+		ControllerCards: []*entity.ControlCard{
+			{
+				SerialNumber:     "123A",
+				PartNumber:       "123A",
+				OwnershipVoucher: ov1,
+			},
+			{
+				SerialNumber:     "123B",
+				PartNumber:       "123B",
+				OwnershipVoucher: ov2,
+			},
+		},
+	}
+	tests := []struct {
+		desc        string
+		chassisConf string
+		inventory   map[service.EntityLookup]*entity.Chassis
+		defaults    *entity.Options
+		wantErr     string
+	}{
+		{
+			desc:        "Successful new with file",
+			chassisConf: "../../testdata/inventory.prototxt",
+			inventory: map[service.EntityLookup]*entity.Chassis{{SerialNumber: chassis.SerialNumber,
+				Manufacturer: chassis.Manufacturer}: &chassis},
+			defaults: &entity.Options{
+				Bootzserver: "bootzip:....",
+				ArtifactDir: "../../testdata/",
+			},
+		},
+		{
+			desc:        "Unsuccessful with wrong security artifacts",
+			chassisConf: "../../testdata/inv_with_wrong_sec.prototxt",
+			wantErr:     "security artifacts",
+		},
+		{
+			desc:        "Unsuccessful new with wrong file",
+			chassisConf: "../../testdata/wrong_inventory.prototxt",
+			inventory:   map[service.EntityLookup]*entity.Chassis{},
+			wantErr:     "proto:",
+		},
+		{
+			desc:        "Unsuccessful new with wrong file path",
+			chassisConf: "not/valid/path",
+			inventory:   map[service.EntityLookup]*entity.Chassis{},
+			wantErr:     "no such file or directory",
+		},
+		{
+			desc:        "Successful new with empty file path",
+			chassisConf: "",
+			inventory:   map[service.EntityLookup]*entity.Chassis{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			inv, err := New(test.chassisConf)
+			if err == nil {
+				opts := []cmp.Option{
+					cmpopts.IgnoreUnexported(entity.Chassis{}, entity.Options{}, bootz.SoftwareImage{}, entity.DHCPConfig{}, entity.GNSIConfig{}, entity.BootConfig{}, entity.Config{}, entity.BootConfig{}, entity.ControlCard{}, service.EntityLookup{}),
+				}
+				if !cmp.Equal(inv.chassisInventory, test.inventory, opts...) {
+					t.Errorf("Inventory list is not as expected, Diff: %s", cmp.Diff(inv.chassisInventory, test.inventory, opts...))
+				}
+				if !cmp.Equal(inv.defaults, test.defaults, opts...) {
+					t.Errorf("Inventory list is not as expected, Diff: %s", cmp.Diff(inv.defaults, test.defaults, opts...))
+				}
+			}
+			if s := errdiff.Substring(err, test.wantErr); s != "" {
+				t.Errorf("Expected error %s, but got error %v", test.wantErr, err)
+			}
+		})
+	}
+
+}
+
 func TestFetchOwnershipVoucher(t *testing.T) {
+	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
+	ov2 := readTextFromFile(t, "../../testdata/ov_123B.txt")
+	chassis := entity.Chassis{
+		Name:                   "test",
+		SerialNumber:           "123",
+		Manufacturer:           "Cisco",
+		BootloaderPasswordHash: "ABCD123",
+		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
+		Config: &entity.Config{
+			BootConfig: &entity.BootConfig{},
+			DhcpConfig: &entity.DHCPConfig{},
+			GnsiConfig: &entity.GNSIConfig{},
+		},
+		SoftwareImage: &bootz.SoftwareImage{
+			Name:          "Default Image",
+			Version:       "1.0",
+			Url:           "https://path/to/image",
+			OsImageHash:   "ABCDEF",
+			HashAlgorithm: "SHA256",
+		},
+		ControllerCards: []*entity.ControlCard{
+			{
+				SerialNumber:     "123A",
+				PartNumber:       "123A",
+				OwnershipVoucher: ov1,
+			},
+			{
+				SerialNumber:     "123B",
+				PartNumber:       "123B",
+				OwnershipVoucher: ov2,
+			},
+		},
+	}
 	tests := []struct {
 		desc    string
 		serial  string
@@ -38,23 +171,22 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 		wantErr bool
 	}{{
 		desc:    "Missing OV",
-		serial:  "123B",
+		serial:  "MissingSerial",
 		wantErr: true,
 	}, {
 		desc:    "Found OV",
 		serial:  "123A",
-		want:    "test_ov",
+		want:    ov1,
 		wantErr: false,
 	}}
 
-	artifacts := &service.SecurityArtifacts{
-		OV: service.OVList{"123A": "test_ov"},
-	}
-	em := New(artifacts)
+	em, _ := New("")
+
+	em.chassisInventory[service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}] = &chassis
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.FetchOwnershipVoucher(test.serial)
+			got, err := em.fetchOwnershipVoucher(&service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}, test.serial)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("FetchOwnershipVoucher(%v) err = %v, want %v", test.serial, err, test.wantErr)
 			}
@@ -90,8 +222,8 @@ func TestResolveChassis(t *testing.T) {
 		wantErr: true,
 	},
 	}
-
-	em := New(nil).AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
+	em, _ := New("")
+	em.AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
@@ -107,15 +239,21 @@ func TestResolveChassis(t *testing.T) {
 }
 
 func TestSign(t *testing.T) {
+	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
 	tests := []struct {
 		desc    string
+		chassis service.EntityLookup
 		serial  string
 		resp    *bootz.GetBootstrapDataResponse
 		wantOV  string
-		wantOC  string
+		wantOC  bool
 		wantErr bool
 	}{{
-		desc:   "Success",
+		desc: "Success",
+		chassis: service.EntityLookup{
+			Manufacturer: "Cisco",
+			SerialNumber: "123",
+		},
 		serial: "123A",
 		resp: &bootz.GetBootstrapDataResponse{
 			SignedResponse: &bootz.BootstrapDataSigned{
@@ -124,8 +262,8 @@ func TestSign(t *testing.T) {
 				},
 			},
 		},
-		wantOV:  "test_ov",
-		wantOC:  "test_oc",
+		wantOV:  ov1,
+		wantOC:  true,
 		wantErr: false,
 	}, {
 		desc:    "Empty response",
@@ -134,27 +272,16 @@ func TestSign(t *testing.T) {
 	},
 	}
 
-	priv, err := rsa.GenerateKey(rand.Reader, 4096)
+	em, _ := New("../../testdata/inventory.prototxt")
+	artifacts, err := parseSecurityArtifacts(em.defaults.GetArtifactDir())
 	if err != nil {
-		t.Fatal(err)
-	}
-	privPEM := &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(priv),
+		t.Fatalf("Could not load security artifacts: %v", err)
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			artifacts := &service.SecurityArtifacts{
-				OV: service.OVList{test.serial: test.wantOV},
-				OC: &service.KeyPair{
-					Cert: test.wantOC,
-					Key:  string(pem.EncodeToMemory(privPEM)),
-				},
-			}
-			em := New(artifacts)
 
-			err := em.Sign(test.resp, test.serial)
+			err = em.Sign(test.resp, &test.chassis, test.serial)
 			if err != nil {
 				if test.wantErr {
 					t.Skip()
@@ -170,6 +297,16 @@ func TestSign(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			block, _ := pem.Decode([]byte(artifacts.OC.Key))
+			if block == nil {
+				t.Fatal("unable to decode OC private key")
+			}
+			priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+			if err != nil {
+				t.Fatal("unable to parse OC private key")
+			}
+
 			err = rsa.VerifyPKCS1v15(&priv.PublicKey, crypto.SHA256, hashed[:], sigDecoded)
 			if err != nil {
 				t.Errorf("Sign() err == %v, want %v", err, test.wantErr)
@@ -177,8 +314,10 @@ func TestSign(t *testing.T) {
 			if gotOV, wantOV := string(test.resp.GetOwnershipVoucher()), test.wantOV; gotOV != wantOV {
 				t.Errorf("Sign() ov = %v, want %v", gotOV, wantOV)
 			}
-			if gotOC, wantOC := string(test.resp.GetOwnershipCertificate()), test.wantOC; gotOC != wantOC {
-				t.Errorf("Sign() oc = %v, want %v", gotOC, wantOC)
+			if test.wantOC {
+				if gotOC, wantOC := string(test.resp.GetOwnershipCertificate()), artifacts.OC.Cert; gotOC != wantOC {
+					t.Errorf("Sign() oc = %v, want %v", gotOC, wantOC)
+				}
 			}
 		})
 	}
@@ -224,8 +363,8 @@ func TestSetStatus(t *testing.T) {
 		wantErr: true,
 	},
 	}
-
-	em := New(nil).AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
+	em, _ := New("")
+	em.AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
@@ -238,6 +377,39 @@ func TestSetStatus(t *testing.T) {
 }
 
 func TestGetBootstrapData(t *testing.T) {
+	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
+	ov2 := readTextFromFile(t, "../../testdata/ov_123B.txt")
+	chassis := entity.Chassis{
+		Name:                   "test",
+		SerialNumber:           "123",
+		Manufacturer:           "Cisco",
+		BootloaderPasswordHash: "ABCD123",
+		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
+		Config: &entity.Config{
+			BootConfig: &entity.BootConfig{},
+			DhcpConfig: &entity.DHCPConfig{},
+			GnsiConfig: &entity.GNSIConfig{},
+		},
+		SoftwareImage: &bootz.SoftwareImage{
+			Name:          "Default Image",
+			Version:       "1.0",
+			Url:           "https://path/to/image",
+			OsImageHash:   "ABCDEF",
+			HashAlgorithm: "SHA256",
+		},
+		ControllerCards: []*entity.ControlCard{
+			{
+				SerialNumber:     "123A",
+				PartNumber:       "123A",
+				OwnershipVoucher: ov1,
+			},
+			{
+				SerialNumber:     "123B",
+				PartNumber:       "123B",
+				OwnershipVoucher: ov2,
+			},
+		},
+	}
 	tests := []struct {
 		desc    string
 		input   *bootz.ControlCard
@@ -257,6 +429,7 @@ func TestGetBootstrapData(t *testing.T) {
 		desc: "Successful bootstrap",
 		input: &bootz.ControlCard{
 			SerialNumber: "123A",
+			PartNumber:   "123A",
 		},
 		want: &bootz.BootstrapDataResponse{
 			SerialNum: "123A",
@@ -270,8 +443,8 @@ func TestGetBootstrapData(t *testing.T) {
 			BootPasswordHash: "ABCD123",
 			ServerTrustCert:  "FakeTLSCert",
 			BootConfig: &bootz.BootConfig{
-				VendorConfig: []byte("Vendor Config"),
-				OcConfig:     []byte("OC Config"),
+				VendorConfig: []byte(""),
+				OcConfig:     []byte(""),
 			},
 			Credentials: &bootz.Credentials{},
 		},
@@ -279,17 +452,100 @@ func TestGetBootstrapData(t *testing.T) {
 	},
 	}
 
-	em := New(nil).AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
+	em, _ := New("")
+	em.chassisInventory[service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}] = &chassis
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.GetBootstrapData(test.input)
+			got, err := em.GetBootstrapData(&service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}, test.input)
 			if (err != nil) != test.wantErr {
 				t.Errorf("GetBootstrapData(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
 			if !proto.Equal(got, test.want) {
-				t.Errorf("GetBootstrapData(%v) got %v, want %v", test.input, got, test.want)
+				t.Errorf("GetBootstrapData(%v) \n got: %v, \n want: %v", test.input, got, test.want)
 			}
+		})
+	}
+}
+
+func readTextFromFile(t *testing.T, file string) string {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("Could not read file %s: v", file)
+	}
+	return string(data)
+}
+
+func TestLoadConfig(t *testing.T) {
+	vendorCliConfig := readTextFromFile(t, "../../testdata/cisco.cfg")
+	tests := []struct {
+		desc             string
+		bootConfig       *entity.BootConfig
+		wantBootConfig   *bootz.BootConfig
+		wantVendorConfig []byte
+		wantErr          string
+	}{
+		{
+			desc: "Successful OC/vendor config",
+			bootConfig: &entity.BootConfig{
+				VendorConfigFile: "../../testdata/cisco.cfg",
+				OcConfigFile:     "../../testdata/oc_config.prototext",
+			},
+			wantBootConfig: &bootz.BootConfig{
+				VendorConfig: []byte(vendorCliConfig),
+			},
+			wantVendorConfig: []byte{},
+			wantErr:          "",
+		},
+		{
+			desc: "Unsuccessful OC config",
+			bootConfig: &entity.BootConfig{
+				VendorConfigFile: "../../testdata/cisco.cfg",
+				OcConfigFile:     "../../testdata/wrong_oc_config.prototext",
+			},
+			wantBootConfig: &bootz.BootConfig{
+				VendorConfig: []byte(vendorCliConfig),
+			},
+			wantVendorConfig: []byte{},
+			wantErr:          "proto",
+		},
+		{
+			desc: "Unsuccessful OC config due to file path",
+			bootConfig: &entity.BootConfig{
+				VendorConfigFile: "../../testdata/cisco.cfg",
+				OcConfigFile:     "../../wrong_path.prototext",
+			},
+			wantBootConfig: &bootz.BootConfig{
+				VendorConfig: []byte(vendorCliConfig),
+			},
+			wantVendorConfig: []byte{},
+			wantErr:          "file",
+		},
+		{
+			desc: "Unsuccessful vendor config due to path",
+			bootConfig: &entity.BootConfig{
+				VendorConfigFile: "../../wrong/path",
+				OcConfigFile:     "../../testdata/oc_config.prototext",
+			},
+			wantBootConfig: &bootz.BootConfig{
+				VendorConfig: []byte(vendorCliConfig),
+			},
+			wantVendorConfig: []byte{},
+			wantErr:          "file",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			gotBootConfig, err := populateBootConfig(test.bootConfig)
+			if err == nil {
+				if diff := cmp.Diff(test.wantBootConfig.GetVendorConfig(), gotBootConfig.GetVendorConfig()); diff != "" {
+					t.Fatalf("wanted vendor config differs from the got config %s", diff)
+				}
+			}
+			if errdiff.Substring(err, test.wantErr) != "" {
+				t.Errorf("Unexocted error, %s", errdiff.Text(err, test.wantErr))
+			}
+
 		})
 	}
 }
