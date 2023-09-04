@@ -15,6 +15,8 @@
 //
 syntax = "proto3";
 
+package bootz.proto;
+
 import "google/protobuf/struct.proto";
 
 import "github.com/openconfig/gnsi/authz/authz.proto";
@@ -33,9 +35,9 @@ service Bootstrap {
   // This RPC returns the data required to put the device in a known state
   // (i.e. OS, bootloader password, etc) and applies an initial device
   // configuration.
-  rpc GetBootstrapData(GetBootstrapDataRequest) returns 
-    (GetBootstrapDataResponse) {}
-   
+  rpc GetBootstrapData(GetBootstrapDataRequest)
+      returns (GetBootstrapDataResponse) {}
+
   // This RPC is used by the device to indicate successful application of
   // BootstrappingData. The Bootz system will proceed to the next step if
   // a SUCCESS is reported, otherwise it will retry or put the device in an
@@ -96,11 +98,11 @@ message ControlCardState {
 
   enum ControlCardStatus {
     // the bootstrap process status is not reported.
-    CONTROL_CARD_STATUS_UNSPECIFIED = 0; 
+    CONTROL_CARD_STATUS_UNSPECIFIED = 0;
     // the bootstrap process has not successfully completed.
     CONTROL_CARD_STATUS_NOT_INITIALIZED = 1;
     // the bootstrap process has successfully completed.
-    CONTROL_CARD_STATUS_INITIALIZED = 2; 
+    CONTROL_CARD_STATUS_INITIALIZED = 2;
   }
 
   // Serial must align with the serial number of the provided
@@ -127,8 +129,7 @@ message BootstrapDataResponse {
   gnsi.pathz.v1.UploadRequest pathz = 7;
   gnsi.authz.v1.UploadRequest authz = 8;
   gnsi.certz.v1.UploadRequest certificates = 9;
-} 
-
+}
 
 // Container message that is signed by server.
 // the nonce is added to verify the contents from the client.
@@ -189,7 +190,7 @@ message BootConfig {
 }
 
 // The device reports the status of applying Bootstrap data using this service.
-// The status_message is a human-readable message indicating the nature of 
+// The status_message is a human-readable message indicating the nature of
 // failure, if any.
 message ReportStatusRequest {
   enum BootstrapStatus {

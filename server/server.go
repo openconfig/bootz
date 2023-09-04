@@ -113,18 +113,28 @@ func parseSecurityArtifacts() (*service.SecurityArtifacts, error) {
 func main() {
 	flag.Parse()
 
+	log.Infof("=============================================================================")
+	log.Infof("=========================== BootZ Server Emulator ===========================")
+	log.Infof("=============================================================================")
+
 	if *port == "" {
 		log.Exitf("no port selected. specify with the -port flag")
 	}
 	if *artifactDirectory == "" {
 		log.Exitf("no artifact directory specified")
 	}
+
+	log.Infof("Setting up server security artifacts: OC, OVs, PDC, VendorCA")
 	sa, err := parseSecurityArtifacts()
 	if err != nil {
 		log.Exit(err)
 	}
-	em := entitymanager.New(sa)
-	em.AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A").AddControlCard("123B")
+	log.Infof("Setting up entities")
+	em, err := entitymanager.New("../testdata/inventory.prototxt")
+	if err != nil {
+		log.Exitf("unable to initiate inventory manager %v", err)
+	}
+
 	c := service.New(em)
 
 	trustBundle := x509.NewCertPool()
@@ -135,13 +145,15 @@ func main() {
 		Certificates: []tls.Certificate{*sa.TLSKeypair},
 		RootCAs:      trustBundle,
 	}
+	log.Infof("Creating server...")
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)))
 
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", *port))
 	if err != nil {
 		log.Exitf("Error listening on port: %v", err)
 	}
-	log.Infof("Listening on %s", lis.Addr())
+	log.Infof("Server ready and listening on %s", lis.Addr())
+	log.Infof("=============================================================================")
 	bootz.RegisterBootstrapServer(s, c)
 	err = s.Serve(lis)
 	if err != nil {

@@ -58,6 +58,11 @@ bazel_gazelle()
 load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
 
 
+local_repository(
+  name = "local_repo_root",
+  path = "./",
+)
+
 load("@rules_proto_grpc//go:repositories.bzl", rules_proto_grpc_go_repos = "go_repos")
 load("//:deps.bzl", "go_dependencies")
 

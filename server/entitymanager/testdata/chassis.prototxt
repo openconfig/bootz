@@ -1,0 +1,34 @@
+chassis {
+    name: "test"
+    serial_number: "123"
+    part_number: ""
+    manufacturer: "Cisco"
+    ownership_voucher: ""
+    bootloader_password_hash: ""
+    controller_cards {
+        serial_number: "123A"
+		slot:         1
+		part_number:   "123A"
+    }
+    controller_cards {
+        serial_number: "123B"
+		slot:         2
+		part_number:   "123B"
+    }
+    software_image {
+
+    }
+    boot_mode: BOOT_MODE_INSECURE
+    config {
+        boot_config {
+
+        }
+        gnsi_config {
+
+        }
+        dhcp_config {
+            
+        }
+
+    }
+}
