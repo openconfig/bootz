@@ -87,7 +87,6 @@ func populateBootConfig(conf *epb.BootConfig) (*bootz.BootConfig, error) {
 	return bootConfig, nil
 }
 
-
 // GetBootstrapData fetches and returns the bootstrap data response from the server.
 func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, controllerCard *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
 	// First check if we are expecting this control card.
