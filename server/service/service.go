@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Service that receives bootstrap requests and responds with the relevant data.
+// Package service receives bootstrap requests and responds with the relevant data.
 package service
 
 import (
