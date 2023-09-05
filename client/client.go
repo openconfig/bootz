@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Bootz client reference implementation.
 package main
 
 import (
@@ -50,11 +51,12 @@ var (
 	rootCA        = flag.String("root_ca_cert_path", "../testdata/vendorca_pub.pem", "The relative path to a file containing a PEM encoded certificate for the manufacturer CA.")
 )
 
+// OwnershipVoucher wraps OwnershipVoucherInner.
 type OwnershipVoucher struct {
 	OV OwnershipVoucherInner `json:"ietf-voucher:voucher"`
 }
 
-// Defines the Ownership Voucher format. See https://www.rfc-editor.org/rfc/rfc8366.html.
+// OwnershipVoucherInner defines the Ownership Voucher format. See https://www.rfc-editor.org/rfc/rfc8366.html.
 type OwnershipVoucherInner struct {
 	CreatedOn                  string `json:"created-on"`
 	ExpiresOn                  string `json:"expires-on"`

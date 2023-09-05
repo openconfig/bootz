@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Service that receives bootstrap requests and responds with the relevant data.
 package service
 
 import (
@@ -65,6 +66,7 @@ type ChassisEntity struct {
 	BootMode bootz.BootMode
 }
 
+// EntityManager maintains the entities and their states.
 type EntityManager interface {
 	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
 	GetBootstrapData(*EntityLookup, *bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
@@ -72,6 +74,7 @@ type EntityManager interface {
 	Sign(*bootz.GetBootstrapDataResponse, *EntityLookup, string) error
 }
 
+// Service represents the server and entity manager.
 type Service struct {
 	bootz.UnimplementedBootstrapServer
 	em EntityManager
@@ -152,12 +155,13 @@ func (s *Service) ReportStatus(ctx context.Context, req *bootz.ReportStatusReque
 	return &bootz.EmptyResponse{}, s.em.SetStatus(req)
 }
 
-// Public API for allowing the device configuration to be set for each device the
+// SetDeviceConfiguration is a public API for allowing the device configuration to be set for each device the
 // will be responsible for configuring.  This will be only availble for testing.
 func (s *Service) SetDeviceConfiguration(ctx context.Context) error {
 	return status.Errorf(codes.Unimplemented, "Unimplemented")
 }
 
+// New creates a new service.
 func New(em EntityManager) *Service {
 	return &Service{
 		em: em,

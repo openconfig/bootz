@@ -101,12 +101,13 @@ func populateBootConfig(conf *epb.BootConfig) (*bootz.BootConfig, error) {
 	return bootConfig, nil
 }
 
+// GetBootstrapData fetches and returns the bootstrap data response from the server.
 func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, controllerCard *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
 	// First check if we are expecting this control card.
 	if controllerCard.SerialNumber == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "no serial number provided")
 	}
-	// check if the controller card and related chassis can be solved
+	// Check if the controller card and related chassis can be solved.
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	log.Infof("Fetching data for %v", controllerCard.SerialNumber)
@@ -124,7 +125,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, 
 	if !found {
 		return nil, status.Errorf(codes.NotFound, "could not find Controller with serial#: %s and partnumber: %s belonging to chassis %s", controllerCard.GetSerialNumber(), controllerCard.GetPartNumber(), chassis.SerialNumber)
 	}
-	//TODO: for now add  status for the controller card.  We may need to move all runtime info to bootz service.
+	// TODO: for now add status for the controller card. We may need to move all runtime info to bootz service.
 	m.controlCardStatuses[controllerCard.GetSerialNumber()] = bootz.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
 
 	bootCfg, err := populateBootConfig(ch.GetConfig().GetBootConfig())
@@ -145,6 +146,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, 
 	}, nil
 }
 
+// SetStatus updates the status for each control card on the chassis.
 func (m *InMemoryEntityManager) SetStatus(req *bootz.ReportStatusRequest) error {
 	if len(req.GetStates()) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no control card states provided")
@@ -181,8 +183,8 @@ func readKeypair(dir, name string) (*service.KeyPair, error) {
 	}, nil
 }
 
-// generateServerTlsCert uses the PDC key as the server certificate.
-func loadServerTlsCert(pdc *service.KeyPair) (*tls.Certificate, error) {
+// loadServerTLSCert uses the PDC key as the server certificate.
+func loadServerTLSCert(pdc *service.KeyPair) (*tls.Certificate, error) {
 	tlsCert, err := tls.X509KeyPair([]byte(pdc.Cert), []byte(pdc.Key))
 	if err != nil {
 		return nil, fmt.Errorf("unable to load PDC keys %v", err)
@@ -205,7 +207,7 @@ func parseSecurityArtifacts(artifactDir string) (*service.SecurityArtifacts, err
 		return nil, err
 	}
 	// use pdc key as server cer
-	tlsCert, err := loadServerTlsCert(pdc)
+	tlsCert, err := loadServerTLSCert(pdc)
 	if err != nil {
 		return nil, err
 	}
