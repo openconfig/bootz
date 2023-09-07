@@ -355,8 +355,9 @@ func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
 	return newManager, nil
 }
 
+// ReplaceDevice replaces an existing chassis with a new chassis object.
 func (m *InMemoryEntityManager) ReplaceDevice(chassis *service.EntityLookup, newChassis *epb.Chassis) error {
-	// chassis: old device, newChassis: new device
+	// chassis: old device lookup, newChassis: new device
 
 	// todo: validate before replace
 	// todo: forward error from validateConfig
@@ -373,9 +374,11 @@ func (m *InMemoryEntityManager) ReplaceDevice(chassis *service.EntityLookup, new
 
 	m.chassisInventory[lookup] = newChassis
 
+	// will return error when validation is added
 	return nil
 }
 
+// DeleteDevice removes the chassis at the provided lookup from the entitymanager
 func (m *InMemoryEntityManager) DeleteDevice(chassis *service.EntityLookup) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -385,8 +388,8 @@ func (m *InMemoryEntityManager) DeleteDevice(chassis *service.EntityLookup) {
 	}
 }
 
+// GetDevice returns a copy of the chassis at the provided lookup
 func (m *InMemoryEntityManager) GetDevice(chassis *service.EntityLookup) (*epb.Chassis, error) {
-	// get clone of single chassis
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -397,8 +400,8 @@ func (m *InMemoryEntityManager) GetDevice(chassis *service.EntityLookup) (*epb.C
 	return nil, status.Errorf(codes.NotFound, "Could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
 }
 
+// GetAll returns a copy of the chassisInventory field
 func (m *InMemoryEntityManager) GetAll() map[service.EntityLookup]*epb.Chassis {
-	// get clone of chassisInventory map
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -409,8 +412,4 @@ func (m *InMemoryEntityManager) GetAll() map[service.EntityLookup]*epb.Chassis {
 	}
 
 	return chassisMapClone
-}
-
-func (m *InMemoryEntityManager) ValidateConfig(config *epb.Chassis) error {
-	return nil
 }
