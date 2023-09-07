@@ -383,9 +383,7 @@ func (m *InMemoryEntityManager) DeleteDevice(chassis *service.EntityLookup) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.chassisInventory[*chassis]; exists {
-		delete(m.chassisInventory, *chassis)
-	}
+	delete(m.chassisInventory, *chassis)
 }
 
 // GetDevice returns a copy of the chassis at the provided lookup
