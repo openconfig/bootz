@@ -149,8 +149,9 @@ func parseRecord6(r string) (string, net.IP, error) {
 	if len(parts) != 2 {
 		return "", nil, fmt.Errorf("invalid entry %v", r)
 	}
-	if ip := net.ParseIP(parts[1]); ip != nil {
-		return parts[0], ip, nil
+	ip, _, err := net.ParseCIDR(parts[1])
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid ip address %v", parts[1])
 	}
-	return "", nil, fmt.Errorf("invalid ip address %v", parts[1])
+	return parts[0], ip, nil
 }
