@@ -44,7 +44,6 @@ func TestNew(t *testing.T) {
 		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
 		Config: &entity.Config{
 			BootConfig: &entity.BootConfig{},
-			DhcpConfig: &entity.DHCPConfig{},
 			GnsiConfig: &entity.GNSIConfig{},
 		},
 		SoftwareImage: &bootz.SoftwareImage{
@@ -59,13 +58,16 @@ func TestNew(t *testing.T) {
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
 				OwnershipVoucher: ov1,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
 				OwnershipVoucher: ov2,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 		},
+		DhcpConfig: &entity.DHCPConfig{},
 	}
 	tests := []struct {
 		desc        string
@@ -141,7 +143,6 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
 		Config: &entity.Config{
 			BootConfig: &entity.BootConfig{},
-			DhcpConfig: &entity.DHCPConfig{},
 			GnsiConfig: &entity.GNSIConfig{},
 		},
 		SoftwareImage: &bootz.SoftwareImage{
@@ -156,11 +157,13 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
 				OwnershipVoucher: ov1,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
 				OwnershipVoucher: ov2,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 		},
 	}
@@ -227,7 +230,7 @@ func TestResolveChassis(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.ResolveChassis(test.input)
+			got, err := em.ResolveChassis(test.input, "")
 			if (err != nil) != test.wantErr {
 				t.Fatalf("ResolveChassis(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
@@ -387,7 +390,6 @@ func TestGetBootstrapData(t *testing.T) {
 		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
 		Config: &entity.Config{
 			BootConfig: &entity.BootConfig{},
-			DhcpConfig: &entity.DHCPConfig{},
 			GnsiConfig: &entity.GNSIConfig{},
 		},
 		SoftwareImage: &bootz.SoftwareImage{
@@ -402,22 +404,49 @@ func TestGetBootstrapData(t *testing.T) {
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
 				OwnershipVoucher: ov1,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
 				OwnershipVoucher: ov2,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 		},
 	}
 	tests := []struct {
-		desc    string
-		input   *bootz.ControlCard
-		want    *bootz.BootstrapDataResponse
-		wantErr bool
+		desc                string
+		input               *bootz.ControlCard
+		chassisSerial       string
+		chassisManufacturer string
+		want                *bootz.BootstrapDataResponse
+		wantErr             bool
 	}{{
-		desc:    "No serial number",
-		input:   &bootz.ControlCard{},
+		desc:                "No controller card, but valid chasis (success)",
+		input:               nil,
+		chassisSerial:       "123",
+		chassisManufacturer: "Cisco",
+		want: &bootz.BootstrapDataResponse{
+			SerialNum: "123",
+			IntendedImage: &bootz.SoftwareImage{
+				Name:          "Default Image",
+				Version:       "1.0",
+				Url:           "https://path/to/image",
+				OsImageHash:   "ABCDEF",
+				HashAlgorithm: "SHA256",
+			},
+			BootPasswordHash: "ABCD123",
+			ServerTrustCert:  "FakeTLSCert",
+			BootConfig: &bootz.BootConfig{
+				VendorConfig: []byte(""),
+				OcConfig:     []byte(""),
+			},
+			Credentials: &bootz.Credentials{},
+		},
+		wantErr: false,
+	}, {
+		desc:    "No controller card and no chaisis serail (fail)",
+		input:   nil,
 		wantErr: true,
 	}, {
 		desc: "Control card not found",
@@ -426,11 +455,13 @@ func TestGetBootstrapData(t *testing.T) {
 		},
 		wantErr: true,
 	}, {
-		desc: "Successful bootstrap",
+		desc: "Successful bootstrap, valid chasis serial and controller card",
 		input: &bootz.ControlCard{
 			SerialNumber: "123A",
 			PartNumber:   "123A",
 		},
+		chassisSerial:       "123",
+		chassisManufacturer: "Cisco",
 		want: &bootz.BootstrapDataResponse{
 			SerialNum: "123A",
 			IntendedImage: &bootz.SoftwareImage{
@@ -449,6 +480,41 @@ func TestGetBootstrapData(t *testing.T) {
 			Credentials: &bootz.Credentials{},
 		},
 		wantErr: false,
+	}, {
+		desc: "Successful bootstrap, no chasis serial but valid controller card",
+		input: &bootz.ControlCard{
+			SerialNumber: "123A",
+			PartNumber:   "123A",
+		},
+		chassisSerial:       "",
+		chassisManufacturer: "Cisco",
+		want: &bootz.BootstrapDataResponse{
+			SerialNum: "123A",
+			IntendedImage: &bootz.SoftwareImage{
+				Name:          "Default Image",
+				Version:       "1.0",
+				Url:           "https://path/to/image",
+				OsImageHash:   "ABCDEF",
+				HashAlgorithm: "SHA256",
+			},
+			BootPasswordHash: "ABCD123",
+			ServerTrustCert:  "FakeTLSCert",
+			BootConfig: &bootz.BootConfig{
+				VendorConfig: []byte(""),
+				OcConfig:     []byte(""),
+			},
+			Credentials: &bootz.Credentials{},
+		},
+		wantErr: false,
+	}, {
+		desc: "Unsuccessful bootstrap, no chasis serial, valid controller card, not matching manufacturer",
+		input: &bootz.ControlCard{
+			SerialNumber: "123A",
+			PartNumber:   "123A",
+		},
+		chassisSerial:       "",
+		chassisManufacturer: "",
+		wantErr:             true,
 	},
 	}
 
@@ -457,7 +523,7 @@ func TestGetBootstrapData(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.GetBootstrapData(&service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}, test.input)
+			got, err := em.GetBootstrapData(&service.EntityLookup{SerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
 			if (err != nil) != test.wantErr {
 				t.Errorf("GetBootstrapData(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
