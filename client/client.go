@@ -86,16 +86,9 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 		return fmt.Errorf("received empty ownership certificate from server")
 	}
 
-	// Decode the ownership voucher
-	log.Infof("Decoding ownership voucher...")
-	ov, err := base64.StdEncoding.DecodeString(string(ov64))
-	if err != nil {
-		return err
-	}
-
 	// Parse the PKCS7 message
 	log.Infof("Parsing PKCS7 message in OV...")
-	p7, err := pkcs7.Parse(ov)
+	p7, err := pkcs7.Parse(ov64)
 	if err != nil {
 		return err
 	}

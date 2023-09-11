@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 
 	"github.com/openconfig/bootz/proto/bootz"
@@ -39,6 +40,10 @@ import (
 	log "github.com/golang/glog"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
+)
+
+var (
+	rxBase64 = regexp.MustCompile("^(?:[A-Za-z0-9+\\/]{4})*(?:[A-Za-z0-9+\\/]{2}==|[A-Za-z0-9+\\/]{3}=|[A-Za-z0-9+\\/]{4})$")
 )
 
 // InMemoryEntityManager provides a simple in memory handler
@@ -265,6 +270,11 @@ func parseSecurityArtifacts(artifactDir string) (*service.SecurityArtifacts, err
 	}, nil
 }
 
+// ssBase64 check if a string is base64 encoded.
+func isBase64(str string) bool {
+	return rxBase64.MatchString(str)
+}
+
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
 func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
 	m.mu.Lock()
@@ -311,7 +321,14 @@ func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chass
 	if err != nil {
 		return err
 	}
-	resp.OwnershipVoucher = []byte(ov)
+	ovByte := []byte(ov)
+	if isBase64(ov) {
+		ovByte, err = base64.StdEncoding.DecodeString(ov)
+		if err != nil {
+			return status.Errorf(codes.Internal, "unable to decode ov from base64")
+		}
+	}
+	resp.OwnershipVoucher = ovByte
 	log.Infof("OV populated")
 
 	// Populate the OC
