@@ -196,15 +196,9 @@ func startDhcpServer(em *entitymanager.InMemoryEntityManager) error {
 			if key == "" {
 				key = c.GetSerialNumber()
 			}
-			if dhcpConf.GetIpv4() != "" {
-				conf.AddressMap[key] = &dhcp.DHCPEntry{
-					Ip: dhcpConf.GetIpv4(),
-					Gw: dhcpConf.GetGateway(),
-				}
-			} else if dhcpConf.GetIpv6() != "" {
-				conf.AddressMap[key] = &dhcp.DHCPEntry{
-					Ip: dhcpConf.GetIpv6(),
-				}
+			conf.AddressMap[key] = &dhcp.DHCPEntry{
+				Ip: dhcpConf.GetIpAddress(),
+				Gw: dhcpConf.GetGateway(),
 			}
 		}
 	}
