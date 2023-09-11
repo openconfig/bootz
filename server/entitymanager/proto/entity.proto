@@ -102,7 +102,7 @@ message GNSIConfig {
   string credentials_file = 7;
 
   //  gnsi credentail config
-  bootz.Credentials credentials = 8;
+  bootz.proto.Credentials credentials = 8;
 
 }
 
@@ -150,10 +150,10 @@ message Chassis {
   string bootloader_password_hash = 5;
 
   // Boot mode defines the boot mode that can be secure/UnSecure 
-  bootz.BootMode boot_mode =6;
+  bootz.proto.BootMode boot_mode =6;
 
   // Software image to be loaded on the chassis
-  bootz.SoftwareImage software_image = 7; 
+  bootz.proto.SoftwareImage software_image = 7; 
 
   // control cards. 
   repeated ControlCard controller_cards = 8;
