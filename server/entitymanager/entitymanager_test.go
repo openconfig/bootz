@@ -314,8 +314,12 @@ func TestSign(t *testing.T) {
 			if err != nil {
 				t.Errorf("Sign() err == %v, want %v", err, test.wantErr)
 			}
-			if gotOV, wantOV := string(test.resp.GetOwnershipVoucher()), test.wantOV; gotOV != wantOV {
-				t.Errorf("Sign() ov = %v, want %v", gotOV, wantOV)
+			wantOVByte, err := base64.StdEncoding.DecodeString(test.wantOV)
+			if err != nil {
+				t.Fatalf("Error duing Decoding base64 is not expected, %v", err)
+			}
+			if string(test.resp.GetOwnershipVoucher()) != string(wantOVByte) {
+				t.Errorf("Sign() ov = %v, want %v", test.resp.GetOwnershipVoucher(), test.wantOV)
 			}
 			if test.wantOC {
 				if gotOC, wantOC := string(test.resp.GetOwnershipCertificate()), artifacts.OC.Cert; gotOC != wantOC {
