@@ -41,6 +41,7 @@ import (
 var (
 	port              = flag.String("port", "", "The port to start the Bootz server on localhost")
 	artifactDirectory = flag.String("artifact_dir", "../testdata/", "The relative directory to look into for certificates, private keys and OVs.")
+	inventoryConfig   = flag.String("inv_config", "", "Devices' config files to be loaded by inventory manager")
 )
 
 // readKeyPair reads the cert/key pair from the specified artifacts directory.
@@ -145,7 +146,7 @@ func main() {
 	}
 
 	log.Infof("Setting up entities")
-	em, err := entitymanager.New("../testdata/inventory.prototxt")
+	em, err := entitymanager.New(*inventoryConfig)
 	if err != nil {
 		log.Exitf("unable to initiate inventory manager %v", err)
 	}
