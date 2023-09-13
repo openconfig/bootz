@@ -554,12 +554,12 @@ func TestLoadConfig(t *testing.T) {
 func TestGetDevice(t *testing.T) {
 	tests := []struct {
 		name             string
-		chassisInventory entity.Entities
+		chassisInventory *entity.Entities
 		wantErr          string
 	}{
 		{
 			name: "Successfully GetDevice",
-			chassisInventory: entity.Entities{
+			chassisInventory: &entity.Entities{
 				Chassis: []*entity.Chassis{
 					{
 						SerialNumber: "1234",
@@ -571,7 +571,7 @@ func TestGetDevice(t *testing.T) {
 		},
 		{
 			name: "Unsuccessfully GetDevice",
-			chassisInventory: entity.Entities{
+			chassisInventory: &entity.Entities{
 				Chassis: []*entity.Chassis{
 					{
 						PartNumber:   "5678",
@@ -611,12 +611,12 @@ func TestGetDevice(t *testing.T) {
 
 func TestGetAll(t *testing.T) {
 	tests := []struct {
+		chassisInventory *entity.Entities
 		name             string
-		chassisInventory entity.Entities
 	}{
 		{
 			name: "Successful GetAll",
-			chassisInventory: entity.Entities{
+			chassisInventory: &entity.Entities{
 				Chassis: []*entity.Chassis{
 					{
 						SerialNumber: "1234",
@@ -652,14 +652,14 @@ func TestGetAll(t *testing.T) {
 
 func TestReplaceDevice(t *testing.T) {
 	tests := []struct {
+		chassisInventory     *entity.Entities
+		wantChassisInventory *entity.Entities
 		name                 string
-		chassisInventory     entity.Entities
-		wantChassisInventory entity.Entities
 		wantErr              string
 	}{
 		{
 			name: "Successfully ReplaceDevice",
-			chassisInventory: entity.Entities{
+			chassisInventory: &entity.Entities{
 				Chassis: []*entity.Chassis{
 					{
 						SerialNumber: "1234",
@@ -667,7 +667,7 @@ func TestReplaceDevice(t *testing.T) {
 					},
 				},
 			},
-			wantChassisInventory: entity.Entities{
+			wantChassisInventory: &entity.Entities{
 				Chassis: []*entity.Chassis{
 					{
 						SerialNumber: "5678",
@@ -715,13 +715,13 @@ func TestReplaceDevice(t *testing.T) {
 
 func TestDeleteDevice(t *testing.T) {
 	tests := []struct {
+		chassisInventory     *entity.Entities
+		wantChassisInventory *entity.Entities
 		name                 string
-		chassisInventory     entity.Entities
-		wantChassisInventory entity.Entities
 	}{
 		{
 			name: "Successfully DeleteDevice",
-			chassisInventory: entity.Entities{
+			chassisInventory: &entity.Entities{
 				Chassis: []*entity.Chassis{
 					{
 						SerialNumber: "1234",
@@ -729,11 +729,11 @@ func TestDeleteDevice(t *testing.T) {
 					},
 				},
 			},
-			wantChassisInventory: entity.Entities{},
+			wantChassisInventory: &entity.Entities{},
 		},
 		{
 			name: "DeleteDevice nonexistent",
-			chassisInventory: entity.Entities{
+			chassisInventory: &entity.Entities{
 				Chassis: []*entity.Chassis{
 					{
 						SerialNumber: "5678",
@@ -741,7 +741,7 @@ func TestDeleteDevice(t *testing.T) {
 					},
 				},
 			},
-			wantChassisInventory: entity.Entities{
+			wantChassisInventory: &entity.Entities{
 				Chassis: []*entity.Chassis{
 					{
 						SerialNumber: "5678",
