@@ -34,18 +34,19 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/openconfig/bootz/proto/bootz"
 	"go.mozilla.org/pkcs7"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
+
+	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
 // Represents a 128 bit nonce.
 const nonceLength = 16
 
 var (
-	verifyTLSCert = flag.Bool("verify_tls_cert", false, "Whether to verify the TLS certificate presented by the Bootz server. If false, all TLS connections are implicity trusted.")
+	verifyTLSCert = flag.Bool("verify_tls_cert", false, "Whether to verify the TLS certificate presented by the Bootz server. If false, all TLS connections are implicitly trusted.")
 	insecureBoot  = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
 	port          = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
 	rootCA        = flag.String("root_ca_cert_path", "../testdata/vendorca_pub.pem", "The relative path to a file containing a PEM encoded certificate for the manufacturer CA.")
@@ -75,7 +76,7 @@ func pemEncodeCert(contents string) string {
 // - Checks that the OV in the response is signed by the manufacturer.
 // - Checks that the serial number in the OV matches the one in the original request.
 // - Verifies that the Ownership Certificate is in the chain of signers of the Pinned Domain Cert.
-func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse, rootCA []byte) error {
+func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, rootCA []byte) error {
 	ov64 := resp.GetOwnershipVoucher()
 	if len(ov64) == 0 {
 		return fmt.Errorf("received empty ownership voucher from server")
@@ -170,7 +171,7 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 	if err != nil {
 		return err
 	}
-	log.Infof("Sucessfully serialized the response")
+	log.Infof("Successfully serialized the response")
 
 	log.Infof("Calculating the sha256 sum to validate the response signature...")
 	hashed := sha256.Sum256(signedResponseBytes)
@@ -247,10 +248,10 @@ func main() {
 	log.Infof("=============================================================================")
 	// Construct the fake device.
 	// TODO: Allow these values to be set e.g. via a flag.
-	chassis := bootz.ChassisDescriptor{
+	chassis := bpb.ChassisDescriptor{
 		Manufacturer: "Cisco",
 		SerialNumber: "123",
-		ControlCards: []*bootz.ControlCard{
+		ControlCards: []*bpb.ControlCard{
 			{
 				SerialNumber: "123A",
 				Slot:         1,
@@ -287,7 +288,7 @@ func main() {
 	}
 	defer conn.Close()
 	log.Infof("Creating a new bootstrap client")
-	c := bootz.NewBootstrapClient(conn)
+	c := bpb.NewBootstrapClient(conn)
 	log.Infof("Client connected to bootz server")
 
 	// This is the active control card making the bootz request.
@@ -311,12 +312,12 @@ func main() {
 	log.Infof("======================== Retrieving bootstrap data ==========================")
 	log.Infof("=============================================================================")
 	log.Infof("Building bootstrap data request")
-	req := &bootz.GetBootstrapDataRequest{
+	req := &bpb.GetBootstrapDataRequest{
 		ChassisDescriptor: &chassis,
 		// This is the active control card, e.g. the one making the bootz request.
-		ControlCardState: &bootz.ControlCardState{
+		ControlCardState: &bpb.ControlCardState{
 			SerialNumber: activeControlCard.GetSerialNumber(),
-			Status:       bootz.ControlCardState_CONTROL_CARD_STATUS_NOT_INITIALIZED,
+			Status:       bpb.ControlCardState_CONTROL_CARD_STATUS_NOT_INITIALIZED,
 		},
 		Nonce: nonce,
 	}
@@ -366,16 +367,16 @@ func main() {
 	// 6. ReportProgress
 	log.Infof("=========================== Sending Status Report ===========================")
 	log.Infof("=============================================================================")
-	statusReq := &bootz.ReportStatusRequest{
-		Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+	statusReq := &bpb.ReportStatusRequest{
+		Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 		StatusMessage: "Bootstrap Success",
-		States: []*bootz.ControlCardState{
+		States: []*bpb.ControlCardState{
 			{
-				Status:       bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED,
+				Status:       bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED,
 				SerialNumber: chassis.GetControlCards()[0].GetSerialNumber(),
 			},
 			{
-				Status:       bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED,
+				Status:       bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED,
 				SerialNumber: chassis.GetControlCards()[1].GetSerialNumber(),
 			},
 		},

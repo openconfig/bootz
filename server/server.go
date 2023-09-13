@@ -29,13 +29,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	log "github.com/golang/glog"
+	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
 var (
@@ -169,7 +169,7 @@ func main() {
 	}
 	log.Infof("Server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
-	bootz.RegisterBootstrapServer(s, c)
+	bpb.RegisterBootstrapServer(s, c)
 	err = s.Serve(lis)
 	if err != nil {
 		log.Exitf("Error serving grpc: %v", err)

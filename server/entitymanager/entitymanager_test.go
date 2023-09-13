@@ -27,10 +27,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/h-fam/errdiff"
-	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/bootz/server/entitymanager/proto/entity"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/protobuf/proto"
+
+	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
 func TestNew(t *testing.T) {
@@ -41,13 +42,13 @@ func TestNew(t *testing.T) {
 		SerialNumber:           "123",
 		Manufacturer:           "Cisco",
 		BootloaderPasswordHash: "ABCD123",
-		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
+		BootMode:               bpb.BootMode_BOOT_MODE_INSECURE,
 		Config: &entity.Config{
 			BootConfig: &entity.BootConfig{},
 			DhcpConfig: &entity.DHCPConfig{},
 			GnsiConfig: &entity.GNSIConfig{},
 		},
-		SoftwareImage: &bootz.SoftwareImage{
+		SoftwareImage: &bpb.SoftwareImage{
 			Name:          "Default Image",
 			Version:       "1.0",
 			Url:           "https://path/to/image",
@@ -113,7 +114,7 @@ func TestNew(t *testing.T) {
 			inv, err := New(test.chassisConf)
 			if err == nil {
 				opts := []cmp.Option{
-					cmpopts.IgnoreUnexported(entity.Chassis{}, entity.Options{}, bootz.SoftwareImage{}, entity.DHCPConfig{}, entity.GNSIConfig{}, entity.BootConfig{}, entity.Config{}, entity.BootConfig{}, entity.ControlCard{}, service.EntityLookup{}),
+					cmpopts.IgnoreUnexported(entity.Chassis{}, entity.Options{}, bpb.SoftwareImage{}, entity.DHCPConfig{}, entity.GNSIConfig{}, entity.BootConfig{}, entity.Config{}, entity.BootConfig{}, entity.ControlCard{}, service.EntityLookup{}),
 				}
 				if !cmp.Equal(inv.chassisInventory, test.inventory, opts...) {
 					t.Errorf("Inventory list is not as expected, Diff: %s", cmp.Diff(inv.chassisInventory, test.inventory, opts...))
@@ -138,13 +139,13 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 		SerialNumber:           "123",
 		Manufacturer:           "Cisco",
 		BootloaderPasswordHash: "ABCD123",
-		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
+		BootMode:               bpb.BootMode_BOOT_MODE_INSECURE,
 		Config: &entity.Config{
 			BootConfig: &entity.BootConfig{},
 			DhcpConfig: &entity.DHCPConfig{},
 			GnsiConfig: &entity.GNSIConfig{},
 		},
-		SoftwareImage: &bootz.SoftwareImage{
+		SoftwareImage: &bpb.SoftwareImage{
 			Name:          "Default Image",
 			Version:       "1.0",
 			Url:           "https://path/to/image",
@@ -210,7 +211,7 @@ func TestResolveChassis(t *testing.T) {
 			Manufacturer: "Cisco",
 		},
 		want: &service.ChassisEntity{
-			BootMode: bootz.BootMode_BOOT_MODE_SECURE,
+			BootMode: bpb.BootMode_BOOT_MODE_SECURE,
 		},
 	}, {
 		desc: "Chassis Not Found",
@@ -223,7 +224,7 @@ func TestResolveChassis(t *testing.T) {
 	},
 	}
 	em, _ := New("")
-	em.AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
+	em.AddChassis(bpb.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
@@ -244,7 +245,7 @@ func TestSign(t *testing.T) {
 		desc    string
 		chassis service.EntityLookup
 		serial  string
-		resp    *bootz.GetBootstrapDataResponse
+		resp    *bpb.GetBootstrapDataResponse
 		wantOV  string
 		wantOC  bool
 		wantErr bool
@@ -255,9 +256,9 @@ func TestSign(t *testing.T) {
 			SerialNumber: "123",
 		},
 		serial: "123A",
-		resp: &bootz.GetBootstrapDataResponse{
-			SignedResponse: &bootz.BootstrapDataSigned{
-				Responses: []*bootz.BootstrapDataResponse{
+		resp: &bpb.GetBootstrapDataResponse{
+			SignedResponse: &bpb.BootstrapDataSigned{
+				Responses: []*bpb.BootstrapDataResponse{
 					{SerialNum: "123A"},
 				},
 			},
@@ -267,7 +268,7 @@ func TestSign(t *testing.T) {
 		wantErr: false,
 	}, {
 		desc:    "Empty response",
-		resp:    &bootz.GetBootstrapDataResponse{},
+		resp:    &bpb.GetBootstrapDataResponse{},
 		wantErr: true,
 	},
 	}
@@ -326,37 +327,37 @@ func TestSign(t *testing.T) {
 func TestSetStatus(t *testing.T) {
 	tests := []struct {
 		desc    string
-		input   *bootz.ReportStatusRequest
+		input   *bpb.ReportStatusRequest
 		wantErr bool
 	}{{
 		desc: "No control card states",
-		input: &bootz.ReportStatusRequest{
-			Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+		input: &bpb.ReportStatusRequest{
+			Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 			StatusMessage: "Bootstrap status succeeded",
 		},
 		wantErr: true,
 	}, {
 		desc: "Control card initialized",
-		input: &bootz.ReportStatusRequest{
-			Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+		input: &bpb.ReportStatusRequest{
+			Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 			StatusMessage: "Bootstrap status succeeded",
-			States: []*bootz.ControlCardState{
+			States: []*bpb.ControlCardState{
 				{
 					SerialNumber: "123A",
-					Status:       *bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
+					Status:       *bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
 				},
 			},
 		},
 		wantErr: false,
 	}, {
 		desc: "Unknown control card",
-		input: &bootz.ReportStatusRequest{
-			Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+		input: &bpb.ReportStatusRequest{
+			Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 			StatusMessage: "Bootstrap status succeeded",
-			States: []*bootz.ControlCardState{
+			States: []*bpb.ControlCardState{
 				{
 					SerialNumber: "123C",
-					Status:       *bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
+					Status:       *bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
 				},
 			},
 		},
@@ -364,7 +365,7 @@ func TestSetStatus(t *testing.T) {
 	},
 	}
 	em, _ := New("")
-	em.AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
+	em.AddChassis(bpb.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
@@ -384,13 +385,13 @@ func TestGetBootstrapData(t *testing.T) {
 		SerialNumber:           "123",
 		Manufacturer:           "Cisco",
 		BootloaderPasswordHash: "ABCD123",
-		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
+		BootMode:               bpb.BootMode_BOOT_MODE_INSECURE,
 		Config: &entity.Config{
 			BootConfig: &entity.BootConfig{},
 			DhcpConfig: &entity.DHCPConfig{},
 			GnsiConfig: &entity.GNSIConfig{},
 		},
-		SoftwareImage: &bootz.SoftwareImage{
+		SoftwareImage: &bpb.SoftwareImage{
 			Name:          "Default Image",
 			Version:       "1.0",
 			Url:           "https://path/to/image",
@@ -412,28 +413,28 @@ func TestGetBootstrapData(t *testing.T) {
 	}
 	tests := []struct {
 		desc    string
-		input   *bootz.ControlCard
-		want    *bootz.BootstrapDataResponse
+		input   *bpb.ControlCard
+		want    *bpb.BootstrapDataResponse
 		wantErr bool
 	}{{
 		desc:    "No serial number",
-		input:   &bootz.ControlCard{},
+		input:   &bpb.ControlCard{},
 		wantErr: true,
 	}, {
 		desc: "Control card not found",
-		input: &bootz.ControlCard{
+		input: &bpb.ControlCard{
 			SerialNumber: "456A",
 		},
 		wantErr: true,
 	}, {
 		desc: "Successful bootstrap",
-		input: &bootz.ControlCard{
+		input: &bpb.ControlCard{
 			SerialNumber: "123A",
 			PartNumber:   "123A",
 		},
-		want: &bootz.BootstrapDataResponse{
+		want: &bpb.BootstrapDataResponse{
 			SerialNum: "123A",
-			IntendedImage: &bootz.SoftwareImage{
+			IntendedImage: &bpb.SoftwareImage{
 				Name:          "Default Image",
 				Version:       "1.0",
 				Url:           "https://path/to/image",
@@ -442,11 +443,11 @@ func TestGetBootstrapData(t *testing.T) {
 			},
 			BootPasswordHash: "ABCD123",
 			ServerTrustCert:  "FakeTLSCert",
-			BootConfig: &bootz.BootConfig{
+			BootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(""),
 				OcConfig:     []byte(""),
 			},
-			Credentials: &bootz.Credentials{},
+			Credentials: &bpb.Credentials{},
 		},
 		wantErr: false,
 	},
@@ -481,7 +482,7 @@ func TestLoadConfig(t *testing.T) {
 	tests := []struct {
 		desc             string
 		bootConfig       *entity.BootConfig
-		wantBootConfig   *bootz.BootConfig
+		wantBootConfig   *bpb.BootConfig
 		wantVendorConfig []byte
 		wantErr          string
 	}{
@@ -491,7 +492,7 @@ func TestLoadConfig(t *testing.T) {
 				VendorConfigFile: "../../testdata/cisco.cfg",
 				OcConfigFile:     "../../testdata/oc_config.prototext",
 			},
-			wantBootConfig: &bootz.BootConfig{
+			wantBootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(vendorCliConfig),
 			},
 			wantVendorConfig: []byte{},
@@ -503,7 +504,7 @@ func TestLoadConfig(t *testing.T) {
 				VendorConfigFile: "../../testdata/cisco.cfg",
 				OcConfigFile:     "../../testdata/wrong_oc_config.prototext",
 			},
-			wantBootConfig: &bootz.BootConfig{
+			wantBootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(vendorCliConfig),
 			},
 			wantVendorConfig: []byte{},
@@ -515,7 +516,7 @@ func TestLoadConfig(t *testing.T) {
 				VendorConfigFile: "../../testdata/cisco.cfg",
 				OcConfigFile:     "../../wrong_path.prototext",
 			},
-			wantBootConfig: &bootz.BootConfig{
+			wantBootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(vendorCliConfig),
 			},
 			wantVendorConfig: []byte{},
@@ -527,7 +528,7 @@ func TestLoadConfig(t *testing.T) {
 				VendorConfigFile: "../../wrong/path",
 				OcConfigFile:     "../../testdata/oc_config.prototext",
 			},
-			wantBootConfig: &bootz.BootConfig{
+			wantBootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(vendorCliConfig),
 			},
 			wantVendorConfig: []byte{},
