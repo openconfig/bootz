@@ -63,21 +63,21 @@ type InMemoryEntityManager struct {
 
 // ResolveChassis returns an entity based on the provided lookup.
 // In cases when the serail for  moulder chassis is not set, it uses the controller card to find the chasiss.
-func (m *InMemoryEntityManager) ResolveChassis(lookup *service.EntityLookup, ccSerail string) (*service.ChassisEntity, error) {
+func (m *InMemoryEntityManager) ResolveChassis(lookup *service.EntityLookup, ccSerial string) (*service.ChassisEntity, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	chassis, found := m.chassisInventory[*lookup]
 	if !found {
-		if lookup.SerialNumber == "" && ccSerail != "" {
-			ch, err := m.resolveChassisViaControllerCard(lookup, ccSerail)
+		if lookup.SerialNumber == "" && ccSerial != "" {
+			ch, err := m.resolveChassisViaControllerCard(lookup, ccSerial)
 			if err != nil {
 				return nil, status.Errorf(codes.NotFound, "Could not find chassis with serial#: %s and manufacturer: %s and controller card %s",
-					lookup.SerialNumber, lookup.Manufacturer, ccSerail)
+					lookup.SerialNumber, lookup.Manufacturer, ccSerial)
 			}
 			chassis = ch
 		} else {
 			return nil, status.Errorf(codes.NotFound, "Could not find chassis with serial#: %s and manufacturer: %s and controller card %s",
-				lookup.SerialNumber, lookup.Manufacturer, ccSerail)
+				lookup.SerialNumber, lookup.Manufacturer, ccSerial)
 		}
 	}
 	return &service.ChassisEntity{BootMode: chassis.GetBootMode()}, nil
@@ -95,7 +95,7 @@ func (m *InMemoryEntityManager) resolveChassisViaControllerCard(lookup *service.
 			}
 		}
 	}
-	return nil, status.Errorf(codes.NotFound, "could not find chasis for controller card with serial# %s:", ccSerial)
+	return nil, status.Errorf(codes.NotFound, "could not find chassis for controller card with serial# %s:", ccSerial)
 }
 
 func readOCConfig(path string) ([]byte, error) {
@@ -133,16 +133,16 @@ func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
 }
 
 // GetBootstrapData fetches and returns the bootstrap data response from the server.
-func (m *InMemoryEntityManager) GetBootstrapData(lo *service.EntityLookup, controllerCard *bpb.ControlCard) (*bpb.BootstrapDataResponse, error) {
+func (m *InMemoryEntityManager) GetBootstrapData(el *service.EntityLookup, controllerCard *bpb.ControlCard) (*bpb.BootstrapDataResponse, error) {
 	// First check if we are expecting this control card.
 	serial := ""
 	fixedChasis := false
 	if controllerCard == nil {
-		if lo.SerialNumber == "" {
-			return nil, status.Errorf(codes.NotFound, "chassis type (fixed/modular) can not be determined, either controller card or chassis serial must be set ")
+		if el.SerialNumber == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "chassis type (fixed/modular) can not be determined, either controller card or chassis serial must be set ")
 		}
 		fixedChasis = true
-		serial = lo.SerialNumber
+		serial = el.SerialNumber
 	}
 	if !fixedChasis {
 		serial = controllerCard.SerialNumber
@@ -154,7 +154,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(lo *service.EntityLookup, contr
 	defer m.mu.Unlock()
 	log.Infof("Fetching data for controller card/chassis %v", serial)
 	if fixedChasis {
-		chassis, found = m.chassisInventory[*lo]
+		chassis, found = m.chassisInventory[*el]
 		if !found { // fixed chassis must have serial
 			return nil, status.Errorf(codes.NotFound, "could not find fixed chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
 		}
@@ -164,7 +164,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(lo *service.EntityLookup, contr
 		for _, ch := range m.chassisInventory {
 			for _, c := range ch.GetControllerCards() {
 				if c.GetSerialNumber() == controllerCard.GetSerialNumber() && c.GetPartNumber() == controllerCard.PartNumber {
-					if ch.Manufacturer != lo.Manufacturer {
+					if ch.Manufacturer != el.Manufacturer {
 						continue
 					}
 					chassis = ch
