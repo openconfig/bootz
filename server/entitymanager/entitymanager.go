@@ -62,7 +62,7 @@ type InMemoryEntityManager struct {
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
-// In cases when the serail for  moulder chassis is not set, it uses the controller card to find the chasiss.
+// In cases when the serial for moduldar chassis is not set, it uses the controller card to find the chassis.
 func (m *InMemoryEntityManager) ResolveChassis(lookup *service.EntityLookup, ccSerial string) (*service.ChassisEntity, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -83,7 +83,7 @@ func (m *InMemoryEntityManager) ResolveChassis(lookup *service.EntityLookup, ccS
 	return &service.ChassisEntity{BootMode: chassis.GetBootMode()}, nil
 }
 
-// find controller card
+// resolveChassisViaControllerCard resolves a chassis based on controller card serial
 func (m *InMemoryEntityManager) resolveChassisViaControllerCard(lookup *service.EntityLookup, ccSerial string) (*epb.Chassis, error) {
 	for _, ch := range m.chassisInventory {
 		for _, c := range ch.GetControllerCards() {
@@ -353,7 +353,7 @@ func (m *InMemoryEntityManager) fetchOwnershipVoucher(lookup *service.EntityLook
 			return c.GetOwnershipVoucher(), nil
 		}
 	}
-	// hanlde fixed chassis
+	//Handle fixed chassis.
 	if len(chassis.GetControllerCards()) == 0 {
 		return chassis.GetOwnershipVoucher(), nil
 	}

@@ -427,7 +427,7 @@ func TestGetBootstrapData(t *testing.T) {
 		want                *bpb.BootstrapDataResponse
 		wantErr             bool
 	}{{
-		desc:                "No controller card, but valid chasis (success)",
+		desc:                "No controller card, but valid chassis (success)",
 		input:               nil,
 		chassisSerial:       "123",
 		chassisManufacturer: "Cisco",
@@ -450,7 +450,7 @@ func TestGetBootstrapData(t *testing.T) {
 		},
 		wantErr: false,
 	}, {
-		desc:    "No controller card and no chaisis serail (fail)",
+		desc:    "No controller card and no chassis serial (fail)",
 		input:   nil,
 		wantErr: true,
 	}, {
@@ -460,7 +460,7 @@ func TestGetBootstrapData(t *testing.T) {
 		},
 		wantErr: true,
 	}, {
-		desc: "Successful bootstrap, valid chasis serial and controller card",
+		desc: "Successful bootstrap, valid chassis serial and controller card",
 		input: &bpb.ControlCard{
 			SerialNumber: "123A",
 			PartNumber:   "123A",
@@ -486,7 +486,7 @@ func TestGetBootstrapData(t *testing.T) {
 		},
 		wantErr: false,
 	}, {
-		desc: "Successful bootstrap, no chasis serial but valid controller card",
+		desc: "Successful bootstrap, no chassis serial but valid controller card",
 		input: &bpb.ControlCard{
 			SerialNumber: "123A",
 			PartNumber:   "123A",
@@ -512,7 +512,7 @@ func TestGetBootstrapData(t *testing.T) {
 		},
 		wantErr: false,
 	}, {
-		desc: "Unsuccessful bootstrap, no chasis serial, valid controller card, not matching manufacturer",
+		desc: "Unsuccessful bootstrap, no chassis serial, valid controller card, not matching manufacturer",
 		input: &bpb.ControlCard{
 			SerialNumber: "123A",
 			PartNumber:   "123A",
