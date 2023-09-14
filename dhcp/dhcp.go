@@ -1,3 +1,18 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package dhcp implements a DHCP server for IP address assignment and bootz server advertisment.
 package dhcp
 
 import (
@@ -56,7 +71,7 @@ var desiredPlugins = []*cdplugins.Plugin{
 	&plslease.Plugin,
 }
 
-// DHCPConfig contains the dhcp server configuration
+// DHCPConfig contains the dhcp server configuration.
 type DHCPConfig struct {
 	Interface  string
 	Dns        []string
@@ -64,6 +79,7 @@ type DHCPConfig struct {
 	BootzUrl   string
 }
 
+// DHCPEntry represents a dhcp record.
 type DHCPEntry struct {
 	Ip string
 	Gw string
@@ -76,7 +92,7 @@ type dhcpServer struct {
 var instance *dhcpServer = nil
 var lock = &sync.Mutex{}
 
-// Start starts the dhcp server with the given configuration
+// Start starts the dhcp server with the given configuration.
 func Start(conf *DHCPConfig) error {
 	lock.Lock()
 	defer lock.Unlock()
@@ -113,7 +129,7 @@ func Start(conf *DHCPConfig) error {
 	return nil
 }
 
-// Stop stops the DHCP server
+// Stop stops the DHCP server.
 func Stop() {
 	lock.Lock()
 	defer lock.Unlock()
