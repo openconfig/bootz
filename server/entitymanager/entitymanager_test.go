@@ -702,7 +702,7 @@ func TestReplaceDevice(t *testing.T) {
 
 			received := em.chassisInventory
 
-			// todo: will require error checking after ValidateConfig is implemented
+			// todo: This test will require error checking after ValidateConfig is implemented.
 
 			if s := errdiff.Check(err, tt.wantErr); s != "" {
 				t.Errorf("Expected error %s, but got error %v", tt.wantErr, err)
