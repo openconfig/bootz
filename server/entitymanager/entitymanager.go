@@ -62,7 +62,7 @@ type InMemoryEntityManager struct {
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
-// In cases when the serial for moduldar chassis is not set, it uses the controller card to find the chassis.
+// In cases when the serial for modular chassis is not set, it uses the controller card to find the chassis.
 func (m *InMemoryEntityManager) ResolveChassis(lookup *service.EntityLookup, ccSerial string) (*service.ChassisEntity, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -83,7 +83,7 @@ func (m *InMemoryEntityManager) ResolveChassis(lookup *service.EntityLookup, ccS
 	return &service.ChassisEntity{BootMode: chassis.GetBootMode()}, nil
 }
 
-// resolveChassisViaControllerCard resolves a chassis based on controller card serial
+// resolveChassisViaControllerCard resolves a chassis based on controller card serial.
 func (m *InMemoryEntityManager) resolveChassisViaControllerCard(lookup *service.EntityLookup, ccSerial string) (*epb.Chassis, error) {
 	for _, ch := range m.chassisInventory {
 		for _, c := range ch.GetControllerCards() {
@@ -136,15 +136,15 @@ func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
 func (m *InMemoryEntityManager) GetBootstrapData(el *service.EntityLookup, controllerCard *bpb.ControlCard) (*bpb.BootstrapDataResponse, error) {
 	// First check if we are expecting this control card.
 	serial := ""
-	fixedChasis := false
+	fixedChassis := false
 	if controllerCard == nil {
 		if el.SerialNumber == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "chassis type (fixed/modular) can not be determined, either controller card or chassis serial must be set ")
 		}
-		fixedChasis = true
+		fixedChassis = true
 		serial = el.SerialNumber
 	}
-	if !fixedChasis {
+	if !fixedChassis {
 		serial = controllerCard.SerialNumber
 	}
 	// Check if the controller card and related chassis can be solved.
@@ -153,7 +153,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(el *service.EntityLookup, contr
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	log.Infof("Fetching data for controller card/chassis %v", serial)
-	if fixedChasis {
+	if fixedChassis {
 		chassis, found = m.chassisInventory[*el]
 		if !found { // fixed chassis must have serial
 			return nil, status.Errorf(codes.NotFound, "could not find fixed chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
@@ -353,7 +353,7 @@ func (m *InMemoryEntityManager) fetchOwnershipVoucher(lookup *service.EntityLook
 			return c.GetOwnershipVoucher(), nil
 		}
 	}
-	//Handle fixed chassis.
+	// Handle fixed chassis.
 	if len(chassis.GetControllerCards()) == 0 {
 		return chassis.GetOwnershipVoucher(), nil
 	}
