@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package dhcp implements a DHCP server for IP address assignment and bootz server advertisment.
+// Package dhcp implements a DHCP server for IP address assignment and bootz server advertisement.
 package dhcp
 
 import (
