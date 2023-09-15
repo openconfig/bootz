@@ -28,7 +28,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -37,6 +36,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	log "github.com/golang/glog"
+	bpb "github.com/openconfig/bootz/proto/bootz"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 	gpb "github.com/openconfig/gnmi/proto/gnmi"
 )
@@ -48,7 +48,7 @@ type InMemoryEntityManager struct {
 	// inventory represents an organization's inventory of owned chassis.
 	chassisInventory map[service.EntityLookup]*epb.Chassis
 	// represents the current status of known control cards
-	controlCardStatuses map[string]bootz.ControlCardState_ControlCardStatus
+	controlCardStatuses map[string]bpb.ControlCardState_ControlCardStatus
 	// stores the defaut config such as security artifacts dir.
 	defaults *epb.Options
 	// security artifacts  (OVs, OC and PDC).
@@ -79,8 +79,8 @@ func readOCConfig(path string) ([]byte, error) {
 	return data, nil
 }
 
-func populateBootConfig(conf *epb.BootConfig) (*bootz.BootConfig, error) {
-	bootConfig := &bootz.BootConfig{}
+func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
+	bootConfig := &bpb.BootConfig{}
 	if conf.GetOcConfigFile() != "" {
 		ocConf, err := readOCConfig(conf.GetOcConfigFile())
 		if err != nil {
@@ -102,7 +102,7 @@ func populateBootConfig(conf *epb.BootConfig) (*bootz.BootConfig, error) {
 }
 
 // GetBootstrapData fetches and returns the bootstrap data response from the server.
-func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, controllerCard *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
+func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, controllerCard *bpb.ControlCard) (*bpb.BootstrapDataResponse, error) {
 	// First check if we are expecting this control card.
 	if controllerCard.SerialNumber == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "no serial number provided")
@@ -126,7 +126,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, 
 		return nil, status.Errorf(codes.NotFound, "could not find Controller with serial#: %s and partnumber: %s belonging to chassis %s", controllerCard.GetSerialNumber(), controllerCard.GetPartNumber(), chassis.SerialNumber)
 	}
 	// TODO: for now add status for the controller card. We may need to move all runtime info to bootz service.
-	m.controlCardStatuses[controllerCard.GetSerialNumber()] = bootz.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
+	m.controlCardStatuses[controllerCard.GetSerialNumber()] = bpb.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
 
 	bootCfg, err := populateBootConfig(ch.GetConfig().GetBootConfig())
 	if err != nil {
@@ -135,19 +135,19 @@ func (m *InMemoryEntityManager) GetBootstrapData(chassis *service.EntityLookup, 
 	log.Infof("Control card located in inventory")
 
 	// TODO: Populate ServerTrustCert and gnsi config
-	return &bootz.BootstrapDataResponse{
+	return &bpb.BootstrapDataResponse{
 		SerialNum:        controllerCard.SerialNumber,
 		IntendedImage:    ch.GetSoftwareImage(),
 		BootPasswordHash: ch.BootloaderPasswordHash,
 		ServerTrustCert:  "FakeTLSCert",
 		BootConfig:       bootCfg,
-		Credentials:      &bootz.Credentials{},
+		Credentials:      &bpb.Credentials{},
 		// TODO: Populate pathz, authz and certificates.
 	}, nil
 }
 
 // SetStatus updates the status for each control card on the chassis.
-func (m *InMemoryEntityManager) SetStatus(req *bootz.ReportStatusRequest) error {
+func (m *InMemoryEntityManager) SetStatus(req *bpb.ReportStatusRequest) error {
 	if len(req.GetStates()) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no control card states provided")
 	}
@@ -220,7 +220,7 @@ func parseSecurityArtifacts(artifactDir string) (*service.SecurityArtifacts, err
 }
 
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
-func (m *InMemoryEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
+func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// check if sec artifacts areprovided for signing
@@ -280,7 +280,7 @@ func (m *InMemoryEntityManager) fetchOwnershipVoucher(chassis *service.EntityLoo
 	if !ok {
 		return "", status.Errorf(codes.NotFound, "could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
 	}
-	//cc:=&bootz.ControlCard{}
+	//cc:=&bpb.ControlCard{}
 	for _, c := range ch.GetControllerCards() {
 		if c.GetSerialNumber() == ccSerial {
 			return c.GetOwnershipVoucher(), nil
@@ -293,13 +293,13 @@ func (m *InMemoryEntityManager) fetchOwnershipVoucher(chassis *service.EntityLoo
 func (m *InMemoryEntityManager) AddControlCard(serial string) *InMemoryEntityManager {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.controlCardStatuses[serial] = bootz.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
+	m.controlCardStatuses[serial] = bpb.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
 	log.Infof("Added control card %v to server entity manager", serial)
 	return m
 }
 
 // AddChassis adds a new chassis to the entity manager.
-func (m *InMemoryEntityManager) AddChassis(bootMode bootz.BootMode, manufacturer string, serial string) *InMemoryEntityManager {
+func (m *InMemoryEntityManager) AddChassis(bootMode bpb.BootMode, manufacturer string, serial string) *InMemoryEntityManager {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	l := service.EntityLookup{
@@ -324,7 +324,7 @@ func (m *InMemoryEntityManager) GetChassisInventory() map[service.EntityLookup]*
 func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
 	newManager := &InMemoryEntityManager{
 		chassisInventory:    map[service.EntityLookup]*epb.Chassis{},
-		controlCardStatuses: map[string]bootz.ControlCardState_ControlCardStatus{},
+		controlCardStatuses: map[string]bpb.ControlCardState_ControlCardStatus{},
 	}
 	if chassisConfigFile == "" {
 		return newManager, nil

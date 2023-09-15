@@ -30,19 +30,20 @@ import (
 	"strings"
 
 	"github.com/openconfig/bootz/dhcp"
-	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	log "github.com/golang/glog"
+	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
 var (
 	port              = flag.String("port", "", "The port to start the Bootz server on localhost")
 	dhcpIntf          = flag.String("dhcp_intf", "", "Network interface to use for dhcp server.")
 	artifactDirectory = flag.String("artifact_dir", "../testdata/", "The relative directory to look into for certificates, private keys and OVs.")
+	inventoryConfig   = flag.String("inv_config", "", "Devices' config files to be loaded by inventory manager")
 )
 
 // readKeyPair reads the cert/key pair from the specified artifacts directory.
@@ -147,7 +148,7 @@ func main() {
 	}
 
 	log.Infof("Setting up entities")
-	em, err := entitymanager.New("../testdata/inventory.prototxt")
+	em, err := entitymanager.New(*inventoryConfig)
 	if err != nil {
 		log.Exitf("unable to initiate inventory manager %v", err)
 	}
@@ -177,7 +178,7 @@ func main() {
 	}
 	log.Infof("Server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
-	bootz.RegisterBootstrapServer(s, c)
+	bpb.RegisterBootstrapServer(s, c)
 	err = s.Serve(lis)
 	if err != nil {
 		log.Exitf("Error serving grpc: %v", err)
