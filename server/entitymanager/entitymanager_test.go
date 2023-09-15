@@ -52,7 +52,7 @@ func TestNew(t *testing.T) {
 			Name:          "Default Image",
 			Version:       "1.0",
 			Url:           "https://path/to/image",
-			OsImageHash:   "ABCDEF",
+			OsImageHash:   "e9c0f8b575cbfcb42ab3b78ecc87efa3b011d9a5d10b09fa4e96f240bf6a82f5",
 			HashAlgorithm: "SHA256",
 		},
 		ControllerCards: []*entity.ControlCard{
