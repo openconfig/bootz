@@ -106,26 +106,18 @@ message GNSIConfig {
 message  DHCPConfig {
   // mac address of the management interface 
   // that will be used to get dhcp address
+  // if not set then the chassis serial is used
   string hardware_address = 1;
 
-  // ipv4 to be assigned to the chassis
-  string ipv4 = 2;
+  // ip address in CIDR notation
+  string ip_address = 2;
 
-  // netmask to be assigned to the chassis
-  string netmask = 3; 
-
-  // gateway address to be assigned to the chassis
-  string gateway = 4; 
-
-  // ipv6 to be assigned to the chassis
-  string ipv6 = 5;
-
-  // gateway address to be assigned to the chassis
-  string prefix = 6; 
+  // gateway address (IPv4 only)
+  string gateway = 3; 
 
   // bootz server address
-  string bootzserver = 7; 
-} 
+  string bootzserver = 4;
+}
 
 message ControlCard {
   string part_number = 1;
