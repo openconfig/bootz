@@ -1,6 +1,6 @@
 options {
     bootzserver: "bootzip:...."
-    artifact_dir: "../../testdata/"
+    artifact_dir: "../testdata/"
 }
 chassis {
     name: "test"
@@ -21,7 +21,7 @@ chassis {
         name: "Default Image" 
 		version: "1.0"
 		url: "https://path/to/image"
-		os_image_hash: "ABCDEF"
+		os_image_hash: "e9c0f8b575cbfcb42ab3b78ecc87efa3b011d9a5d10b09fa4e96f240bf6a82f5"
 		hash_algorithm: "SHA256"
     }
     boot_mode: BOOT_MODE_INSECURE

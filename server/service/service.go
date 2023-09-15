@@ -96,7 +96,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	chassis, err := s.em.ResolveChassis(lookup)
 
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v", req.ChassisDescriptor)
+		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", req.ChassisDescriptor, err)
 	}
 	log.Infof("Verified server can resolve chassis")
 
