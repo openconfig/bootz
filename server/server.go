@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/openconfig/bootz/dhcp"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
@@ -40,6 +41,7 @@ import (
 
 var (
 	port              = flag.String("port", "", "The port to start the Bootz server on localhost")
+	dhcpIntf          = flag.String("dhcp_intf", "", "Network interface to use for dhcp server.")
 	artifactDirectory = flag.String("artifact_dir", "../testdata/", "The relative directory to look into for certificates, private keys and OVs.")
 	inventoryConfig   = flag.String("inv_config", "", "Devices' config files to be loaded by inventory manager")
 )
@@ -151,6 +153,12 @@ func main() {
 		log.Exitf("unable to initiate inventory manager %v", err)
 	}
 
+	if *dhcpIntf != "" {
+		if err := startDhcpServer(em); err != nil {
+			log.Exitf("unable to start dhcp server %v", err)
+		}
+	}
+
 	c := service.New(em)
 
 	trustBundle := x509.NewCertPool()
@@ -175,4 +183,26 @@ func main() {
 	if err != nil {
 		log.Exitf("Error serving grpc: %v", err)
 	}
+}
+
+func startDhcpServer(em *entitymanager.InMemoryEntityManager) error {
+	conf := &dhcp.DHCPConfig{
+		Interface:  *dhcpIntf,
+		AddressMap: make(map[string]*dhcp.DHCPEntry),
+	}
+
+	for _, c := range em.GetChassisInventory() {
+		if dhcpConf := c.Config.GetDhcpConfig(); dhcpConf != nil {
+			key := dhcpConf.GetHardwareAddress()
+			if key == "" {
+				key = c.GetSerialNumber()
+			}
+			conf.AddressMap[key] = &dhcp.DHCPEntry{
+				Ip: dhcpConf.GetIpAddress(),
+				Gw: dhcpConf.GetGateway(),
+			}
+		}
+	}
+
+	return dhcp.Start(conf)
 }

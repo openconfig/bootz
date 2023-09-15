@@ -315,6 +315,11 @@ func (m *InMemoryEntityManager) AddChassis(bootMode bpb.BootMode, manufacturer s
 	return m
 }
 
+// GetChassisInventory returns the chassis inventory
+func (m *InMemoryEntityManager) GetChassisInventory() map[service.EntityLookup]*epb.Chassis {
+	return m.chassisInventory
+}
+
 // New returns a new in-memory entity manager.
 func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
 	newManager := &InMemoryEntityManager{
