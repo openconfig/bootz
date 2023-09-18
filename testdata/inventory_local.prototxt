@@ -1,6 +1,6 @@
 options {
     bootzserver: "bootzip:...."
-    artifact_dir: "../../testdata/"
+    artifact_dir: "../testdata/"
 }
 chassis {
     name: "test"

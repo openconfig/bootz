@@ -43,7 +43,7 @@ var (
 	port              = flag.String("port", "", "The port to start the Bootz server on localhost")
 	dhcpIntf          = flag.String("dhcp_intf", "", "Network interface to use for dhcp server.")
 	artifactDirectory = flag.String("artifact_dir", "../testdata/", "The relative directory to look into for certificates, private keys and OVs.")
-	inventoryConfig   = flag.String("inv_config", "", "Devices' config files to be loaded by inventory manager")
+	inventoryConfig   = flag.String("inv_config", "../testdata/inventory_local.prototxt", "Devices' config files to be loaded by inventory manager")
 )
 
 // readKeyPair reads the cert/key pair from the specified artifacts directory.
