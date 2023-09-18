@@ -16,6 +16,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -24,6 +25,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"flag"
@@ -50,6 +52,9 @@ var (
 	insecureBoot  = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
 	port          = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
 	rootCA        = flag.String("root_ca_cert_path", "../testdata/vendorca_pub.pem", "The relative path to a file containing a PEM encoded certificate for the manufacturer CA.")
+	urlImageMap   = map[string]string{
+		"https://path/to/image": "../testdata/image.txt",
+	}
 )
 
 // OwnershipVoucher wraps OwnershipVoucherInner.
@@ -188,6 +193,41 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, 
 	}
 	log.Infof("Verified SignedResponse signature")
 	return nil
+}
+
+// validateImage validates if the hash of the downloaded OS image matches the received image hash.
+func validateImage(image []byte, softwareImage *bpb.SoftwareImage) error {
+	log.Info("Start to validate the downloaded image")
+	var hashed [32]byte
+	if softwareImage.GetHashAlgorithm() == "SHA256" {
+		hashed = sha256.Sum256(image)
+	} else {
+		return fmt.Errorf("unknown hash algorithm: %q", softwareImage.GetHashAlgorithm())
+	}
+
+	receivedHashed, err := hex.DecodeString(softwareImage.GetOsImageHash())
+	if err != nil {
+		return fmt.Errorf("can not decode received hashed image to bytes, received hash: %q", softwareImage.GetOsImageHash())
+	}
+	if !bytes.Equal(hashed[:], receivedHashed) {
+		return fmt.Errorf("unmatched hash, recevived: %v, downloaded: %v, received hex string: %v, downloaded hex string: %v", receivedHashed, hashed[:], softwareImage.OsImageHash, hex.EncodeToString(hashed[:]))
+	}
+	log.Info("Verified image hash")
+	return nil
+}
+
+// downloadImage downloads image from the given URL.
+// This is a mock implementation.
+func downloadImage(url string) ([]byte, error) {
+	log.Infof("Start to download image from %q", url)
+	path := urlImageMap[url]
+
+	f, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("can not download image: %v", err)
+	}
+	log.Infof("Image is successfully downloaded, content length: %v", len(f))
+	return f, nil
 }
 
 func certFromPemBlock(data []byte) (*x509.Certificate, error) {
@@ -348,7 +388,15 @@ func main() {
 	log.Infof("=============================================================================")
 	for _, data := range signedResp.GetResponses() {
 		log.Infof("Received config for control card %v", data.GetSerialNum())
-		log.Infof("Downloading image %+v...", data.GetIntendedImage())
+		log.Infof("Start to download and validate image, received: %+v...", data.GetIntendedImage())
+		image, err := downloadImage(data.GetIntendedImage().GetUrl())
+		if err != nil {
+			log.Exitf("unable to download image (url: %q): %v", data.GetIntendedImage().GetUrl(), err)
+		}
+		err = validateImage(image, data.GetIntendedImage())
+		if err != nil {
+			log.Exitf("Error validating intended image: %v", err)
+		}
 		time.Sleep(time.Second * 5)
 		log.Infof("Done")
 		log.Infof("Installing boot config %+v...", data.GetBootConfig())
