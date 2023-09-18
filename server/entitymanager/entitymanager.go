@@ -270,7 +270,7 @@ func parseSecurityArtifacts(artifactDir string) (*service.SecurityArtifacts, err
 	}, nil
 }
 
-// ssBase64 check if a string is base64 encoded.
+// isBase64 check if a string is base64 encoded.
 func isBase64(str string) bool {
 	return rxBase64.MatchString(str)
 }
@@ -337,7 +337,7 @@ func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis
 	return nil
 }
 
-// FetchOwnershipVoucher retrieves the ownership voucher for a control card
+// fetchOwnershipVoucher retrieves the ownership voucher for a control card
 func (m *InMemoryEntityManager) fetchOwnershipVoucher(lookup *service.EntityLookup, ccSerial string) (string, error) {
 	chassis, ok := m.chassisInventory[*lookup]
 	if !ok {
