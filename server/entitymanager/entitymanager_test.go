@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -547,6 +548,231 @@ func TestLoadConfig(t *testing.T) {
 				t.Errorf("Unexocted error, %s", errdiff.Text(err, test.wantErr))
 			}
 
+		})
+	}
+}
+
+func TestGetDevice(t *testing.T) {
+	tests := []struct {
+		name             string
+		chassisInventory *entity.Entities
+		wantErr          string
+	}{
+		{
+			name: "Successfully GetDevice",
+			chassisInventory: &entity.Entities{
+				Chassis: []*entity.Chassis{
+					{
+						SerialNumber: "1234",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+			wantErr: "",
+		},
+		{
+			name: "Unsuccessfully GetDevice",
+			chassisInventory: &entity.Entities{
+				Chassis: []*entity.Chassis{
+					{
+						PartNumber:   "5678",
+						Manufacturer: "sysco",
+					},
+				},
+			},
+			wantErr: "Could not find chassis with serial#: 1234 and manufacturer: cisco",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configsMap := make(map[service.EntityLookup]*entity.Chassis)
+			for _, chassis := range tt.chassisInventory.Chassis {
+				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			em := InMemoryEntityManager{
+				chassisInventory: configsMap,
+			}
+
+			lookup := service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"}
+
+			want, exists := em.chassisInventory[lookup]
+
+			received, err := em.GetDevice(&lookup)
+
+			if s := errdiff.Check(err, tt.wantErr); s != "" {
+				t.Errorf("Expected error %s, but got error %v", tt.wantErr, err)
+			} else if exists && !(proto.Equal(want, received)) {
+				t.Errorf("Result of GetDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", want, received)
+			}
+		})
+	}
+}
+
+func TestGetAll(t *testing.T) {
+	tests := []struct {
+		chassisInventory *entity.Entities
+		name             string
+	}{
+		{
+			name: "Successful GetAll",
+			chassisInventory: &entity.Entities{
+				Chassis: []*entity.Chassis{
+					{
+						SerialNumber: "1234",
+						Manufacturer: "cisco",
+					},
+					{
+						SerialNumber: "5678",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configsMap := make(map[service.EntityLookup]*entity.Chassis)
+			for _, chassis := range tt.chassisInventory.Chassis {
+				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			em := InMemoryEntityManager{
+				chassisInventory: configsMap,
+			}
+			received := em.GetAll()
+
+			if !(reflect.DeepEqual(configsMap, received)) {
+				t.Errorf("Result of GetDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", configsMap, received)
+			}
+		})
+	}
+}
+
+func TestReplaceDevice(t *testing.T) {
+	tests := []struct {
+		chassisInventory     *entity.Entities
+		wantChassisInventory *entity.Entities
+		name                 string
+		wantErr              string
+	}{
+		{
+			name: "Successfully ReplaceDevice",
+			chassisInventory: &entity.Entities{
+				Chassis: []*entity.Chassis{
+					{
+						SerialNumber: "1234",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+			wantChassisInventory: &entity.Entities{
+				Chassis: []*entity.Chassis{
+					{
+						SerialNumber: "5678",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configsMap := make(map[service.EntityLookup]*entity.Chassis)
+			for _, chassis := range tt.chassisInventory.Chassis {
+				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			want := make(map[service.EntityLookup]*entity.Chassis)
+			for _, chassis := range tt.wantChassisInventory.Chassis {
+				want[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			em := InMemoryEntityManager{
+				chassisInventory: configsMap,
+			}
+
+			newObj := &entity.Chassis{
+				SerialNumber: "5678",
+				Manufacturer: "cisco",
+			}
+
+			err := em.ReplaceDevice(&service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"}, newObj)
+
+			received := em.chassisInventory
+
+			// todo: This test will require error checking after ValidateConfig is implemented.
+
+			if s := errdiff.Check(err, tt.wantErr); s != "" {
+				t.Errorf("Expected error %s, but got error %v", tt.wantErr, err)
+			} else if !(reflect.DeepEqual(want, received)) {
+				t.Errorf("Result of ReplaceDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", want, received)
+			}
+		})
+	}
+}
+
+func TestDeleteDevice(t *testing.T) {
+	tests := []struct {
+		chassisInventory     *entity.Entities
+		wantChassisInventory *entity.Entities
+		name                 string
+	}{
+		{
+			name: "Successfully DeleteDevice",
+			chassisInventory: &entity.Entities{
+				Chassis: []*entity.Chassis{
+					{
+						SerialNumber: "1234",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+			wantChassisInventory: &entity.Entities{},
+		},
+		{
+			name: "DeleteDevice nonexistent",
+			chassisInventory: &entity.Entities{
+				Chassis: []*entity.Chassis{
+					{
+						SerialNumber: "5678",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+			wantChassisInventory: &entity.Entities{
+				Chassis: []*entity.Chassis{
+					{
+						SerialNumber: "5678",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configsMap := make(map[service.EntityLookup]*entity.Chassis)
+			for _, chassis := range tt.chassisInventory.Chassis {
+				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			want := make(map[service.EntityLookup]*entity.Chassis)
+			for _, chassis := range tt.wantChassisInventory.Chassis {
+				want[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			em := InMemoryEntityManager{
+				chassisInventory: configsMap,
+			}
+
+			em.DeleteDevice(&service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"})
+
+			if !(reflect.DeepEqual(want, em.chassisInventory)) {
+				t.Errorf("Result of DeleteDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", want, em.chassisInventory)
+			}
 		})
 	}
 }
