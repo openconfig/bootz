@@ -192,7 +192,7 @@ func startDhcpServer(em *entitymanager.InMemoryEntityManager) error {
 	}
 
 	for _, c := range em.GetChassisInventory() {
-		if dhcpConf := c.Config.GetDhcpConfig(); dhcpConf != nil {
+		if dhcpConf := c.GetDhcpConfig(); dhcpConf != nil {
 			key := dhcpConf.GetHardwareAddress()
 			if key == "" {
 				key = c.GetSerialNumber()

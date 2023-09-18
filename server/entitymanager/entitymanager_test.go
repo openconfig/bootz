@@ -46,7 +46,6 @@ func TestNew(t *testing.T) {
 		BootMode:               bpb.BootMode_BOOT_MODE_INSECURE,
 		Config: &entity.Config{
 			BootConfig: &entity.BootConfig{},
-			DhcpConfig: &entity.DHCPConfig{},
 			GnsiConfig: &entity.GNSIConfig{},
 		},
 		SoftwareImage: &bpb.SoftwareImage{
@@ -61,13 +60,16 @@ func TestNew(t *testing.T) {
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
 				OwnershipVoucher: ov1,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
 				OwnershipVoucher: ov2,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 		},
+		DhcpConfig: &entity.DHCPConfig{},
 	}
 	tests := []struct {
 		desc        string
@@ -143,7 +145,6 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 		BootMode:               bpb.BootMode_BOOT_MODE_INSECURE,
 		Config: &entity.Config{
 			BootConfig: &entity.BootConfig{},
-			DhcpConfig: &entity.DHCPConfig{},
 			GnsiConfig: &entity.GNSIConfig{},
 		},
 		SoftwareImage: &bpb.SoftwareImage{
@@ -158,11 +159,13 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
 				OwnershipVoucher: ov1,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
 				OwnershipVoucher: ov2,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 		},
 	}
@@ -229,7 +232,7 @@ func TestResolveChassis(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.ResolveChassis(test.input)
+			got, err := em.ResolveChassis(test.input, "")
 			if (err != nil) != test.wantErr {
 				t.Fatalf("ResolveChassis(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
@@ -313,8 +316,12 @@ func TestSign(t *testing.T) {
 			if err != nil {
 				t.Errorf("Sign() err == %v, want %v", err, test.wantErr)
 			}
-			if gotOV, wantOV := string(test.resp.GetOwnershipVoucher()), test.wantOV; gotOV != wantOV {
-				t.Errorf("Sign() ov = %v, want %v", gotOV, wantOV)
+			wantOVByte, err := base64.StdEncoding.DecodeString(test.wantOV)
+			if err != nil {
+				t.Fatalf("Error duing Decoding base64 is not expected, %v", err)
+			}
+			if string(test.resp.GetOwnershipVoucher()) != string(wantOVByte) {
+				t.Errorf("Sign() ov = %v, want %v", test.resp.GetOwnershipVoucher(), test.wantOV)
 			}
 			if test.wantOC {
 				if gotOC, wantOC := string(test.resp.GetOwnershipCertificate()), artifacts.OC.Cert; gotOC != wantOC {
@@ -389,7 +396,6 @@ func TestGetBootstrapData(t *testing.T) {
 		BootMode:               bpb.BootMode_BOOT_MODE_INSECURE,
 		Config: &entity.Config{
 			BootConfig: &entity.BootConfig{},
-			DhcpConfig: &entity.DHCPConfig{},
 			GnsiConfig: &entity.GNSIConfig{},
 		},
 		SoftwareImage: &bpb.SoftwareImage{
@@ -404,22 +410,49 @@ func TestGetBootstrapData(t *testing.T) {
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
 				OwnershipVoucher: ov1,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
 				OwnershipVoucher: ov2,
+				DhcpConfig:       &entity.DHCPConfig{},
 			},
 		},
 	}
 	tests := []struct {
-		desc    string
-		input   *bpb.ControlCard
-		want    *bpb.BootstrapDataResponse
-		wantErr bool
+		desc                string
+		input               *bpb.ControlCard
+		chassisSerial       string
+		chassisManufacturer string
+		want                *bpb.BootstrapDataResponse
+		wantErr             bool
 	}{{
-		desc:    "No serial number",
-		input:   &bpb.ControlCard{},
+		desc:                "No controller card, but valid chassis (success)",
+		input:               nil,
+		chassisSerial:       "123",
+		chassisManufacturer: "Cisco",
+		want: &bpb.BootstrapDataResponse{
+			SerialNum: "123",
+			IntendedImage: &bpb.SoftwareImage{
+				Name:          "Default Image",
+				Version:       "1.0",
+				Url:           "https://path/to/image",
+				OsImageHash:   "ABCDEF",
+				HashAlgorithm: "SHA256",
+			},
+			BootPasswordHash: "ABCD123",
+			ServerTrustCert:  "FakeTLSCert",
+			BootConfig: &bpb.BootConfig{
+				VendorConfig: []byte(""),
+				OcConfig:     []byte(""),
+			},
+			Credentials: &bpb.Credentials{},
+		},
+		wantErr: false,
+	}, {
+		desc:    "No controller card and no chassis serial (fail)",
+		input:   nil,
 		wantErr: true,
 	}, {
 		desc: "Control card not found",
@@ -428,11 +461,13 @@ func TestGetBootstrapData(t *testing.T) {
 		},
 		wantErr: true,
 	}, {
-		desc: "Successful bootstrap",
+		desc: "Successful bootstrap, valid chassis serial and controller card",
 		input: &bpb.ControlCard{
 			SerialNumber: "123A",
 			PartNumber:   "123A",
 		},
+		chassisSerial:       "123",
+		chassisManufacturer: "Cisco",
 		want: &bpb.BootstrapDataResponse{
 			SerialNum: "123A",
 			IntendedImage: &bpb.SoftwareImage{
@@ -451,6 +486,41 @@ func TestGetBootstrapData(t *testing.T) {
 			Credentials: &bpb.Credentials{},
 		},
 		wantErr: false,
+	}, {
+		desc: "Successful bootstrap, no chassis serial but valid controller card",
+		input: &bpb.ControlCard{
+			SerialNumber: "123A",
+			PartNumber:   "123A",
+		},
+		chassisSerial:       "",
+		chassisManufacturer: "Cisco",
+		want: &bpb.BootstrapDataResponse{
+			SerialNum: "123A",
+			IntendedImage: &bpb.SoftwareImage{
+				Name:          "Default Image",
+				Version:       "1.0",
+				Url:           "https://path/to/image",
+				OsImageHash:   "ABCDEF",
+				HashAlgorithm: "SHA256",
+			},
+			BootPasswordHash: "ABCD123",
+			ServerTrustCert:  "FakeTLSCert",
+			BootConfig: &bpb.BootConfig{
+				VendorConfig: []byte(""),
+				OcConfig:     []byte(""),
+			},
+			Credentials: &bpb.Credentials{},
+		},
+		wantErr: false,
+	}, {
+		desc: "Unsuccessful bootstrap, no chassis serial, valid controller card, not matching manufacturer",
+		input: &bpb.ControlCard{
+			SerialNumber: "123A",
+			PartNumber:   "123A",
+		},
+		chassisSerial:       "",
+		chassisManufacturer: "",
+		wantErr:             true,
 	},
 	}
 
@@ -459,7 +529,7 @@ func TestGetBootstrapData(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.GetBootstrapData(&service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}, test.input)
+			got, err := em.GetBootstrapData(&service.EntityLookup{SerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
 			if (err != nil) != test.wantErr {
 				t.Errorf("GetBootstrapData(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}

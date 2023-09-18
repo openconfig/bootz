@@ -37,7 +37,7 @@ message Options {
   string bootzserver = 2; 
 
   // The directory to look into for certificates, private keys and OVs.
-  string artifact_dir = 11;
+  string artifact_dir = 3;
 
 }
 
@@ -55,11 +55,8 @@ message Config {
   // boot config
   BootConfig boot_config =1 ;
 
-  // dhcp config
-  DHCPConfig dhcp_config =2 ;
-
   // gnsi config
-  GNSIConfig gnsi_config =3 ;
+  GNSIConfig gnsi_config =2 ;
 
 }
 
@@ -128,6 +125,8 @@ message ControlCard {
 
   //  OwnerShip Voucher
   string ownership_voucher = 3;
+
+  DHCPConfig dhcp_config =4 ;
 }
 
 // A Chassis entity.
@@ -163,6 +162,12 @@ message Chassis {
    
   // The directory to look into for certificates, private keys and OVs.
   string artifact_dir = 10; 
+
+  //  Ownership Voucher for the fix chassis
+  string ownership_voucher = 11;
+
+  // dhcp config for fixed chassis
+  DHCPConfig dhcp_config =12 ;
 }
 
 

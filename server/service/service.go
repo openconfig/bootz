@@ -68,7 +68,7 @@ type ChassisEntity struct {
 
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
-	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
+	ResolveChassis(*EntityLookup, string) (*ChassisEntity, error)
 	GetBootstrapData(*EntityLookup, *bpb.ControlCard) (*bpb.BootstrapDataResponse, error)
 	SetStatus(*bpb.ReportStatusRequest) error
 	Sign(*bpb.GetBootstrapDataResponse, *EntityLookup, string) error
@@ -84,8 +84,11 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("=============================================================================")
 	log.Infof("==================== Received request for bootstrap data ====================")
 	log.Infof("=============================================================================")
-	if len(req.ChassisDescriptor.ControlCards) == 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
+	fixedChasis := true
+	ccSerial := ""
+	if len(req.ChassisDescriptor.ControlCards) >= 1 {
+		fixedChasis = false
+		ccSerial = req.ChassisDescriptor.GetControlCards()[0].GetSerialNumber()
 	}
 	log.Infof("Requesting for %v chassis %v", req.ChassisDescriptor.Manufacturer, req.ChassisDescriptor.SerialNumber)
 	lookup := &EntityLookup{
@@ -93,8 +96,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		SerialNumber: req.ChassisDescriptor.SerialNumber,
 	}
 	// Validate the chassis can be serviced
-	chassis, err := s.em.ResolveChassis(lookup)
-
+	chassis, err := s.em.ResolveChassis(lookup, ccSerial)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", req.ChassisDescriptor, err)
 	}
@@ -120,6 +122,15 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		}
 		responses = append(responses, bootdata)
 	}
+	if fixedChasis {
+		bootdata, err := s.em.GetBootstrapData(lookup, nil)
+		if err != nil {
+			errs.Add(err)
+			log.Infof("Error occurred while retrieving data for fixed chassis with serail number %v", lookup.SerialNumber)
+		}
+		responses = append(responses, bootdata)
+	}
+
 	if errs.Err() != nil {
 		return nil, errs.Err()
 	}

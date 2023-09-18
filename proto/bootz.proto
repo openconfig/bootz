@@ -61,8 +61,8 @@ message GetBootstrapDataRequest {
 message ChassisDescriptor {
   string manufacturer = 1;
   string part_number = 2;
-  // This field is populated for fixed form-factor chassis, and empty for
-  // modular chassis.
+  // This field must be populated for fixed form-factor chassis.
+  // The serial can be empty for modular chassis.
   string serial_number = 3;
   // For modular chassis this field will be used to list the control cards
   // to be bootstrapped.
