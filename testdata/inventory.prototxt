@@ -1,6 +1,9 @@
 options {
     bootzserver: "bootzip:...."
     artifact_dir: "../../testdata/"
+    gnsi_global_config:{
+        authz_upload_file:"../../testdata/authz.prototext"
+    }
 }
 chassis {
     name: "test"
