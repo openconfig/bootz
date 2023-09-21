@@ -136,6 +136,11 @@ func (m *InMemoryEntityManager) populateAuthzConfig(ch *epb.Chassis) (*authzpb.U
 	if err := prototext.Unmarshal(data, gnsiAuthzReq); err != nil {
 		return nil, status.Errorf(codes.Internal, "File %s config is not a valid authz Upload Request: %v", gnsiAuthzReqFile, err)
 	}
+	var t any
+	err = json.Unmarshal([]byte(gnsiAuthzReq.Policy), &t)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Provided authz policy is not a vaild json: %v", err)
+	}
 	return gnsiAuthzReq, nil
 }
 
