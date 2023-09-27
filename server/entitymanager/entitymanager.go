@@ -95,7 +95,7 @@ func (m *InMemoryEntityManager) resolveChassisViaControllerCard(lookup *service.
 			}
 		}
 	}
-	return nil, status.Errorf(codes.NotFound, "could not find chassis for controller card with serial# %s:", ccSerial)
+	return nil, status.Errorf(codes.NotFound, "could not find chassis for controller card with serial# %s", ccSerial)
 }
 
 func readOCConfig(path string) ([]byte, error) {
@@ -174,7 +174,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(el *service.EntityLookup, contr
 			}
 		}
 		if !found {
-			return nil, status.Errorf(codes.NotFound, "could not find controller card with serial# %s:", serial)
+			return nil, status.Errorf(codes.NotFound, "could not find controller card with serial# %s", serial)
 		}
 	}
 	// TODO: for now add status for the controller card. We may need to move all runtime info to bootz service.
