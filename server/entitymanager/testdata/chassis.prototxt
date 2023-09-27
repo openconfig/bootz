@@ -26,9 +26,5 @@ chassis {
         gnsi_config {
 
         }
-        dhcp_config {
-            
-        }
-
     }
 }
