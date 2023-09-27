@@ -33,14 +33,14 @@ import (
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
 	log "github.com/golang/glog"
+
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
-	authzpb "github.com/openconfig/gnsi/authz"
+	apb "github.com/openconfig/gnsi/authz"
 )
 
 var (
@@ -105,9 +105,9 @@ func readOCConfig(path string) ([]byte, error) {
 		return nil, status.Errorf(codes.Internal, "Error opening file %s: %v", path, err)
 	}
 	var v any
-	err1 := json.Unmarshal(data, &v)
-	if err1 != nil {
-		fmt.Printf("unmarshal error %v", err1)
+	err = json.Unmarshal(data, &v)
+	if err != nil {
+		fmt.Printf("unmarshal error %v", err)
 	}
 	if !json.Valid(data) {
 		return nil, status.Errorf(codes.Internal, "File %s config is not a valid json", path)
@@ -115,7 +115,7 @@ func readOCConfig(path string) ([]byte, error) {
 	return data, nil
 }
 
-func (m *InMemoryEntityManager) populateAuthzConfig(ch *epb.Chassis) (*authzpb.UploadRequest, error) {
+func (m *InMemoryEntityManager) populateAuthzConfig(ch *epb.Chassis) (*apb.UploadRequest, error) {
 	gnsiConf := ch.GetConfig().GetGnsiConfig()
 	gnsiAuthzReq := gnsiConf.GetAuthzUpload()
 	gnsiAuthzReqFile := gnsiConf.GetAuthzUploadFile()
@@ -132,7 +132,7 @@ func (m *InMemoryEntityManager) populateAuthzConfig(ch *epb.Chassis) (*authzpb.U
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Error opening file %s: %v", gnsiAuthzReqFile, err)
 	}
-	gnsiAuthzReq = &authzpb.UploadRequest{}
+	gnsiAuthzReq = &apb.UploadRequest{}
 	if err := prototext.Unmarshal(data, gnsiAuthzReq); err != nil {
 		return nil, status.Errorf(codes.Internal, "File %s config is not a valid authz Upload Request: %v", gnsiAuthzReqFile, err)
 	}

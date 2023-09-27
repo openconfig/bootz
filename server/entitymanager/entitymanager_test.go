@@ -87,7 +87,7 @@ func TestNew(t *testing.T) {
 			defaults: &epb.Options{
 				Bootzserver: "bootzip:....",
 				ArtifactDir: "../../testdata/",
-				GnsiGlobalConfig: &entity.GNSIConfig{
+				GnsiGlobalConfig: &epb.GNSIConfig{
 					AuthzUploadFile: "../../testdata/authz.prototext",
 				},
 			},
@@ -399,7 +399,7 @@ func TestGetBootstrapData(t *testing.T) {
 		Manufacturer:           "Cisco",
 		BootloaderPasswordHash: "ABCD123",
 		BootMode:               bpb.BootMode_BOOT_MODE_INSECURE,
-		Config: &entity.Config{
+		Config: &epb.Config{
 			BootConfig: &epb.BootConfig{},
 			GnsiConfig: &epb.GNSIConfig{
 				AuthzUploadFile: "../../testdata/authz.prototext",
