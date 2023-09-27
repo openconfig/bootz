@@ -38,14 +38,14 @@ func main() {
 		log.Exitf("no interface specified (-i)")
 	}
 
-	addressMap := map[string]*dhcp.DHCPEntry{}
+	addressMap := map[string]*dhcp.Entry{}
 	for _, r := range strings.Split(*records, ";") {
 		parts := strings.Split(r, ",")
 		if len(parts) < 2 {
 			log.Exitf("incorrect record format: %v", r)
 		}
-		e := &dhcp.DHCPEntry{
-			Ip: parts[1],
+		e := &dhcp.Entry{
+			IP: parts[1],
 		}
 		if len(parts) > 2 {
 			e.Gw = parts[2]
@@ -53,11 +53,11 @@ func main() {
 		addressMap[parts[0]] = e
 	}
 
-	conf := &dhcp.DHCPConfig{
+	conf := &dhcp.Config{
 		Interface:  *intf,
-		Dns:        strings.Split(*dns, ";"),
+		DNS:        strings.Split(*dns, ";"),
 		AddressMap: addressMap,
-		BootzUrl:   *bootz,
+		BootzURL:   *bootz,
 	}
 
 	go func() {
