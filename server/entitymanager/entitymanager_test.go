@@ -22,64 +22,68 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/h-fam/errdiff"
-	"github.com/openconfig/bootz/proto/bootz"
-	"github.com/openconfig/bootz/server/entitymanager/proto/entity"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/protobuf/proto"
+
+	bpb "github.com/openconfig/bootz/proto/bootz"
+	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 )
 
 func TestNew(t *testing.T) {
 	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
 	ov2 := readTextFromFile(t, "../../testdata/ov_123B.txt")
-	chassis := entity.Chassis{
+	chassis := epb.Chassis{
 		Name:                   "test",
 		SerialNumber:           "123",
 		Manufacturer:           "Cisco",
 		BootloaderPasswordHash: "ABCD123",
-		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
-		Config: &entity.Config{
-			BootConfig: &entity.BootConfig{},
-			DhcpConfig: &entity.DHCPConfig{},
-			GnsiConfig: &entity.GNSIConfig{},
+		BootMode:               bpb.BootMode_BOOT_MODE_INSECURE,
+		Config: &epb.Config{
+			BootConfig: &epb.BootConfig{},
+			GnsiConfig: &epb.GNSIConfig{},
 		},
-		SoftwareImage: &bootz.SoftwareImage{
+		SoftwareImage: &bpb.SoftwareImage{
 			Name:          "Default Image",
 			Version:       "1.0",
 			Url:           "https://path/to/image",
-			OsImageHash:   "ABCDEF",
+			OsImageHash:   "e9c0f8b575cbfcb42ab3b78ecc87efa3b011d9a5d10b09fa4e96f240bf6a82f5",
 			HashAlgorithm: "SHA256",
 		},
-		ControllerCards: []*entity.ControlCard{
+		ControllerCards: []*epb.ControlCard{
 			{
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
 				OwnershipVoucher: ov1,
+				DhcpConfig:       &epb.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
 				OwnershipVoucher: ov2,
+				DhcpConfig:       &epb.DHCPConfig{},
 			},
 		},
+		DhcpConfig: &epb.DHCPConfig{},
 	}
 	tests := []struct {
 		desc        string
 		chassisConf string
-		inventory   map[service.EntityLookup]*entity.Chassis
-		defaults    *entity.Options
+		inventory   map[service.EntityLookup]*epb.Chassis
+		defaults    *epb.Options
 		wantErr     string
 	}{
 		{
 			desc:        "Successful new with file",
 			chassisConf: "../../testdata/inventory.prototxt",
-			inventory: map[service.EntityLookup]*entity.Chassis{{SerialNumber: chassis.SerialNumber,
+			inventory: map[service.EntityLookup]*epb.Chassis{{SerialNumber: chassis.SerialNumber,
 				Manufacturer: chassis.Manufacturer}: &chassis},
-			defaults: &entity.Options{
+			defaults: &epb.Options{
 				Bootzserver: "bootzip:....",
 				ArtifactDir: "../../testdata/",
 			},
@@ -92,19 +96,19 @@ func TestNew(t *testing.T) {
 		{
 			desc:        "Unsuccessful new with wrong file",
 			chassisConf: "../../testdata/wrong_inventory.prototxt",
-			inventory:   map[service.EntityLookup]*entity.Chassis{},
+			inventory:   map[service.EntityLookup]*epb.Chassis{},
 			wantErr:     "proto:",
 		},
 		{
 			desc:        "Unsuccessful new with wrong file path",
 			chassisConf: "not/valid/path",
-			inventory:   map[service.EntityLookup]*entity.Chassis{},
+			inventory:   map[service.EntityLookup]*epb.Chassis{},
 			wantErr:     "no such file or directory",
 		},
 		{
 			desc:        "Successful new with empty file path",
 			chassisConf: "",
-			inventory:   map[service.EntityLookup]*entity.Chassis{},
+			inventory:   map[service.EntityLookup]*epb.Chassis{},
 		},
 	}
 
@@ -113,7 +117,7 @@ func TestNew(t *testing.T) {
 			inv, err := New(test.chassisConf)
 			if err == nil {
 				opts := []cmp.Option{
-					cmpopts.IgnoreUnexported(entity.Chassis{}, entity.Options{}, bootz.SoftwareImage{}, entity.DHCPConfig{}, entity.GNSIConfig{}, entity.BootConfig{}, entity.Config{}, entity.BootConfig{}, entity.ControlCard{}, service.EntityLookup{}),
+					cmpopts.IgnoreUnexported(epb.Chassis{}, epb.Options{}, bpb.SoftwareImage{}, epb.DHCPConfig{}, epb.GNSIConfig{}, epb.BootConfig{}, epb.Config{}, epb.BootConfig{}, epb.ControlCard{}, service.EntityLookup{}),
 				}
 				if !cmp.Equal(inv.chassisInventory, test.inventory, opts...) {
 					t.Errorf("Inventory list is not as expected, Diff: %s", cmp.Diff(inv.chassisInventory, test.inventory, opts...))
@@ -138,29 +142,30 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 		SerialNumber:           "123",
 		Manufacturer:           "Cisco",
 		BootloaderPasswordHash: "ABCD123",
-		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
-		Config: &entity.Config{
-			BootConfig: &entity.BootConfig{},
-			DhcpConfig: &entity.DHCPConfig{},
-			GnsiConfig: &entity.GNSIConfig{},
+		BootMode:               bpb.BootMode_BOOT_MODE_INSECURE,
+		Config: &epb.Config{
+			BootConfig: &epb.BootConfig{},
+			GnsiConfig: &epb.GNSIConfig{},
 		},
-		SoftwareImage: &bootz.SoftwareImage{
+		SoftwareImage: &bpb.SoftwareImage{
 			Name:          "Default Image",
 			Version:       "1.0",
 			Url:           "https://path/to/image",
 			OsImageHash:   "ABCDEF",
 			HashAlgorithm: "SHA256",
 		},
-		ControllerCards: []*entity.ControlCard{
+		ControllerCards: []*epb.ControlCard{
 			{
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
 				OwnershipVoucher: ov1,
+				DhcpConfig:       &epb.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
 				OwnershipVoucher: ov2,
+				DhcpConfig:       &epb.DHCPConfig{},
 			},
 		},
 	}
@@ -210,7 +215,7 @@ func TestResolveChassis(t *testing.T) {
 			Manufacturer: "Cisco",
 		},
 		want: &service.ChassisEntity{
-			BootMode: bootz.BootMode_BOOT_MODE_SECURE,
+			BootMode: bpb.BootMode_BOOT_MODE_SECURE,
 		},
 	}, {
 		desc: "Chassis Not Found",
@@ -223,11 +228,11 @@ func TestResolveChassis(t *testing.T) {
 	},
 	}
 	em, _ := New("")
-	em.AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
+	em.AddChassis(bpb.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.ResolveChassis(test.input)
+			got, err := em.ResolveChassis(test.input, "")
 			if (err != nil) != test.wantErr {
 				t.Fatalf("ResolveChassis(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
@@ -244,7 +249,7 @@ func TestSign(t *testing.T) {
 		desc    string
 		chassis service.EntityLookup
 		serial  string
-		resp    *bootz.GetBootstrapDataResponse
+		resp    *bpb.GetBootstrapDataResponse
 		wantOV  string
 		wantOC  bool
 		wantErr bool
@@ -255,9 +260,9 @@ func TestSign(t *testing.T) {
 			SerialNumber: "123",
 		},
 		serial: "123A",
-		resp: &bootz.GetBootstrapDataResponse{
-			SignedResponse: &bootz.BootstrapDataSigned{
-				Responses: []*bootz.BootstrapDataResponse{
+		resp: &bpb.GetBootstrapDataResponse{
+			SignedResponse: &bpb.BootstrapDataSigned{
+				Responses: []*bpb.BootstrapDataResponse{
 					{SerialNum: "123A"},
 				},
 			},
@@ -267,7 +272,7 @@ func TestSign(t *testing.T) {
 		wantErr: false,
 	}, {
 		desc:    "Empty response",
-		resp:    &bootz.GetBootstrapDataResponse{},
+		resp:    &bpb.GetBootstrapDataResponse{},
 		wantErr: true,
 	},
 	}
@@ -311,8 +316,12 @@ func TestSign(t *testing.T) {
 			if err != nil {
 				t.Errorf("Sign() err == %v, want %v", err, test.wantErr)
 			}
-			if gotOV, wantOV := string(test.resp.GetOwnershipVoucher()), test.wantOV; gotOV != wantOV {
-				t.Errorf("Sign() ov = %v, want %v", gotOV, wantOV)
+			wantOVByte, err := base64.StdEncoding.DecodeString(test.wantOV)
+			if err != nil {
+				t.Fatalf("Error during Decoding base64 is not expected, %v", err)
+			}
+			if string(test.resp.GetOwnershipVoucher()) != string(wantOVByte) {
+				t.Errorf("Sign() ov = %v, want %v", test.resp.GetOwnershipVoucher(), test.wantOV)
 			}
 			if test.wantOC {
 				if gotOC, wantOC := string(test.resp.GetOwnershipCertificate()), artifacts.OC.Cert; gotOC != wantOC {
@@ -326,37 +335,37 @@ func TestSign(t *testing.T) {
 func TestSetStatus(t *testing.T) {
 	tests := []struct {
 		desc    string
-		input   *bootz.ReportStatusRequest
+		input   *bpb.ReportStatusRequest
 		wantErr bool
 	}{{
 		desc: "No control card states",
-		input: &bootz.ReportStatusRequest{
-			Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+		input: &bpb.ReportStatusRequest{
+			Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 			StatusMessage: "Bootstrap status succeeded",
 		},
 		wantErr: true,
 	}, {
 		desc: "Control card initialized",
-		input: &bootz.ReportStatusRequest{
-			Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+		input: &bpb.ReportStatusRequest{
+			Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 			StatusMessage: "Bootstrap status succeeded",
-			States: []*bootz.ControlCardState{
+			States: []*bpb.ControlCardState{
 				{
 					SerialNumber: "123A",
-					Status:       *bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
+					Status:       *bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
 				},
 			},
 		},
 		wantErr: false,
 	}, {
 		desc: "Unknown control card",
-		input: &bootz.ReportStatusRequest{
-			Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+		input: &bpb.ReportStatusRequest{
+			Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 			StatusMessage: "Bootstrap status succeeded",
-			States: []*bootz.ControlCardState{
+			States: []*bpb.ControlCardState{
 				{
 					SerialNumber: "123C",
-					Status:       *bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
+					Status:       *bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
 				},
 			},
 		},
@@ -364,7 +373,7 @@ func TestSetStatus(t *testing.T) {
 	},
 	}
 	em, _ := New("")
-	em.AddChassis(bootz.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
+	em.AddChassis(bpb.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
@@ -379,61 +388,53 @@ func TestSetStatus(t *testing.T) {
 func TestGetBootstrapData(t *testing.T) {
 	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
 	ov2 := readTextFromFile(t, "../../testdata/ov_123B.txt")
-	chassis := entity.Chassis{
+	chassis := epb.Chassis{
 		Name:                   "test",
 		SerialNumber:           "123",
 		Manufacturer:           "Cisco",
 		BootloaderPasswordHash: "ABCD123",
-		BootMode:               bootz.BootMode_BOOT_MODE_INSECURE,
-		Config: &entity.Config{
-			BootConfig: &entity.BootConfig{},
-			DhcpConfig: &entity.DHCPConfig{},
-			GnsiConfig: &entity.GNSIConfig{},
+		BootMode:               bpb.BootMode_BOOT_MODE_INSECURE,
+		Config: &epb.Config{
+			BootConfig: &epb.BootConfig{},
+			GnsiConfig: &epb.GNSIConfig{},
 		},
-		SoftwareImage: &bootz.SoftwareImage{
+		SoftwareImage: &bpb.SoftwareImage{
 			Name:          "Default Image",
 			Version:       "1.0",
 			Url:           "https://path/to/image",
 			OsImageHash:   "ABCDEF",
 			HashAlgorithm: "SHA256",
 		},
-		ControllerCards: []*entity.ControlCard{
+		ControllerCards: []*epb.ControlCard{
 			{
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
 				OwnershipVoucher: ov1,
+				DhcpConfig:       &epb.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
 				OwnershipVoucher: ov2,
+				DhcpConfig:       &epb.DHCPConfig{},
 			},
 		},
 	}
 	tests := []struct {
-		desc    string
-		input   *bootz.ControlCard
-		want    *bootz.BootstrapDataResponse
-		wantErr bool
+		desc                string
+		input               *bpb.ControlCard
+		chassisSerial       string
+		chassisManufacturer string
+		want                *bpb.BootstrapDataResponse
+		wantErr             bool
 	}{{
-		desc:    "No serial number",
-		input:   &bootz.ControlCard{},
-		wantErr: true,
-	}, {
-		desc: "Control card not found",
-		input: &bootz.ControlCard{
-			SerialNumber: "456A",
-		},
-		wantErr: true,
-	}, {
-		desc: "Successful bootstrap",
-		input: &bootz.ControlCard{
-			SerialNumber: "123A",
-			PartNumber:   "123A",
-		},
-		want: &bootz.BootstrapDataResponse{
-			SerialNum: "123A",
-			IntendedImage: &bootz.SoftwareImage{
+		desc:                "No controller card, but valid chassis (success)",
+		input:               nil,
+		chassisSerial:       "123",
+		chassisManufacturer: "Cisco",
+		want: &bpb.BootstrapDataResponse{
+			SerialNum: "123",
+			IntendedImage: &bpb.SoftwareImage{
 				Name:          "Default Image",
 				Version:       "1.0",
 				Url:           "https://path/to/image",
@@ -442,13 +443,84 @@ func TestGetBootstrapData(t *testing.T) {
 			},
 			BootPasswordHash: "ABCD123",
 			ServerTrustCert:  "FakeTLSCert",
-			BootConfig: &bootz.BootConfig{
+			BootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(""),
 				OcConfig:     []byte(""),
 			},
-			Credentials: &bootz.Credentials{},
+			Credentials: &bpb.Credentials{},
 		},
 		wantErr: false,
+	}, {
+		desc:    "No controller card and no chassis serial (fail)",
+		input:   nil,
+		wantErr: true,
+	}, {
+		desc: "Control card not found",
+		input: &bpb.ControlCard{
+			SerialNumber: "456A",
+		},
+		wantErr: true,
+	}, {
+		desc: "Successful bootstrap, valid chassis serial and controller card",
+		input: &bpb.ControlCard{
+			SerialNumber: "123A",
+			PartNumber:   "123A",
+		},
+		chassisSerial:       "123",
+		chassisManufacturer: "Cisco",
+		want: &bpb.BootstrapDataResponse{
+			SerialNum: "123A",
+			IntendedImage: &bpb.SoftwareImage{
+				Name:          "Default Image",
+				Version:       "1.0",
+				Url:           "https://path/to/image",
+				OsImageHash:   "ABCDEF",
+				HashAlgorithm: "SHA256",
+			},
+			BootPasswordHash: "ABCD123",
+			ServerTrustCert:  "FakeTLSCert",
+			BootConfig: &bpb.BootConfig{
+				VendorConfig: []byte(""),
+				OcConfig:     []byte(""),
+			},
+			Credentials: &bpb.Credentials{},
+		},
+		wantErr: false,
+	}, {
+		desc: "Successful bootstrap, no chassis serial but valid controller card",
+		input: &bpb.ControlCard{
+			SerialNumber: "123A",
+			PartNumber:   "123A",
+		},
+		chassisSerial:       "",
+		chassisManufacturer: "Cisco",
+		want: &bpb.BootstrapDataResponse{
+			SerialNum: "123A",
+			IntendedImage: &bpb.SoftwareImage{
+				Name:          "Default Image",
+				Version:       "1.0",
+				Url:           "https://path/to/image",
+				OsImageHash:   "ABCDEF",
+				HashAlgorithm: "SHA256",
+			},
+			BootPasswordHash: "ABCD123",
+			ServerTrustCert:  "FakeTLSCert",
+			BootConfig: &bpb.BootConfig{
+				VendorConfig: []byte(""),
+				OcConfig:     []byte(""),
+			},
+			Credentials: &bpb.Credentials{},
+		},
+		wantErr: false,
+	}, {
+		desc: "Unsuccessful bootstrap, no chassis serial, valid controller card, not matching manufacturer",
+		input: &bpb.ControlCard{
+			SerialNumber: "123A",
+			PartNumber:   "123A",
+		},
+		chassisSerial:       "",
+		chassisManufacturer: "",
+		wantErr:             true,
 	},
 	}
 
@@ -457,7 +529,7 @@ func TestGetBootstrapData(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.GetBootstrapData(&service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}, test.input)
+			got, err := em.GetBootstrapData(&service.EntityLookup{SerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
 			if (err != nil) != test.wantErr {
 				t.Errorf("GetBootstrapData(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
@@ -480,18 +552,18 @@ func TestLoadConfig(t *testing.T) {
 	vendorCliConfig := readTextFromFile(t, "../../testdata/cisco.cfg")
 	tests := []struct {
 		desc             string
-		bootConfig       *entity.BootConfig
-		wantBootConfig   *bootz.BootConfig
+		bootConfig       *epb.BootConfig
+		wantBootConfig   *bpb.BootConfig
 		wantVendorConfig []byte
 		wantErr          string
 	}{
 		{
 			desc: "Successful OC/vendor config",
-			bootConfig: &entity.BootConfig{
+			bootConfig: &epb.BootConfig{
 				VendorConfigFile: "../../testdata/cisco.cfg",
 				OcConfigFile:     "../../testdata/oc_config.prototext",
 			},
-			wantBootConfig: &bootz.BootConfig{
+			wantBootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(vendorCliConfig),
 			},
 			wantVendorConfig: []byte{},
@@ -499,11 +571,11 @@ func TestLoadConfig(t *testing.T) {
 		},
 		{
 			desc: "Unsuccessful OC config",
-			bootConfig: &entity.BootConfig{
+			bootConfig: &epb.BootConfig{
 				VendorConfigFile: "../../testdata/cisco.cfg",
 				OcConfigFile:     "../../testdata/wrong_oc_config.prototext",
 			},
-			wantBootConfig: &bootz.BootConfig{
+			wantBootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(vendorCliConfig),
 			},
 			wantVendorConfig: []byte{},
@@ -511,11 +583,11 @@ func TestLoadConfig(t *testing.T) {
 		},
 		{
 			desc: "Unsuccessful OC config due to file path",
-			bootConfig: &entity.BootConfig{
+			bootConfig: &epb.BootConfig{
 				VendorConfigFile: "../../testdata/cisco.cfg",
 				OcConfigFile:     "../../wrong_path.prototext",
 			},
-			wantBootConfig: &bootz.BootConfig{
+			wantBootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(vendorCliConfig),
 			},
 			wantVendorConfig: []byte{},
@@ -523,11 +595,11 @@ func TestLoadConfig(t *testing.T) {
 		},
 		{
 			desc: "Unsuccessful vendor config due to path",
-			bootConfig: &entity.BootConfig{
+			bootConfig: &epb.BootConfig{
 				VendorConfigFile: "../../wrong/path",
 				OcConfigFile:     "../../testdata/oc_config.prototext",
 			},
-			wantBootConfig: &bootz.BootConfig{
+			wantBootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(vendorCliConfig),
 			},
 			wantVendorConfig: []byte{},
@@ -546,6 +618,231 @@ func TestLoadConfig(t *testing.T) {
 				t.Errorf("Unexocted error, %s", errdiff.Text(err, test.wantErr))
 			}
 
+		})
+	}
+}
+
+func TestGetDevice(t *testing.T) {
+	tests := []struct {
+		name             string
+		chassisInventory *epb.Entities
+		wantErr          string
+	}{
+		{
+			name: "Successfully GetDevice",
+			chassisInventory: &epb.Entities{
+				Chassis: []*epb.Chassis{
+					{
+						SerialNumber: "1234",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+			wantErr: "",
+		},
+		{
+			name: "Unsuccessfully GetDevice",
+			chassisInventory: &epb.Entities{
+				Chassis: []*epb.Chassis{
+					{
+						PartNumber:   "5678",
+						Manufacturer: "sysco",
+					},
+				},
+			},
+			wantErr: "Could not find chassis with serial#: 1234 and manufacturer: cisco",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configsMap := make(map[service.EntityLookup]*epb.Chassis)
+			for _, chassis := range tt.chassisInventory.Chassis {
+				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			em := InMemoryEntityManager{
+				chassisInventory: configsMap,
+			}
+
+			lookup := service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"}
+
+			want, exists := em.chassisInventory[lookup]
+
+			received, err := em.GetDevice(&lookup)
+
+			if s := errdiff.Check(err, tt.wantErr); s != "" {
+				t.Errorf("Expected error %s, but got error %v", tt.wantErr, err)
+			} else if exists && !(proto.Equal(want, received)) {
+				t.Errorf("Result of GetDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", want, received)
+			}
+		})
+	}
+}
+
+func TestGetAll(t *testing.T) {
+	tests := []struct {
+		chassisInventory *epb.Entities
+		name             string
+	}{
+		{
+			name: "Successful GetAll",
+			chassisInventory: &epb.Entities{
+				Chassis: []*epb.Chassis{
+					{
+						SerialNumber: "1234",
+						Manufacturer: "cisco",
+					},
+					{
+						SerialNumber: "5678",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configsMap := make(map[service.EntityLookup]*epb.Chassis)
+			for _, chassis := range tt.chassisInventory.Chassis {
+				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			em := InMemoryEntityManager{
+				chassisInventory: configsMap,
+			}
+			received := em.GetAll()
+
+			if !(reflect.DeepEqual(configsMap, received)) {
+				t.Errorf("Result of GetDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", configsMap, received)
+			}
+		})
+	}
+}
+
+func TestReplaceDevice(t *testing.T) {
+	tests := []struct {
+		chassisInventory     *epb.Entities
+		wantChassisInventory *epb.Entities
+		name                 string
+		wantErr              string
+	}{
+		{
+			name: "Successfully ReplaceDevice",
+			chassisInventory: &epb.Entities{
+				Chassis: []*epb.Chassis{
+					{
+						SerialNumber: "1234",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+			wantChassisInventory: &epb.Entities{
+				Chassis: []*epb.Chassis{
+					{
+						SerialNumber: "5678",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configsMap := make(map[service.EntityLookup]*epb.Chassis)
+			for _, chassis := range tt.chassisInventory.Chassis {
+				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			want := make(map[service.EntityLookup]*epb.Chassis)
+			for _, chassis := range tt.wantChassisInventory.Chassis {
+				want[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			em := InMemoryEntityManager{
+				chassisInventory: configsMap,
+			}
+
+			newObj := &epb.Chassis{
+				SerialNumber: "5678",
+				Manufacturer: "cisco",
+			}
+
+			err := em.ReplaceDevice(&service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"}, newObj)
+
+			received := em.chassisInventory
+
+			// todo: This test will require error checking after ValidateConfig is implemented.
+
+			if s := errdiff.Check(err, tt.wantErr); s != "" {
+				t.Errorf("Expected error %s, but got error %v", tt.wantErr, err)
+			} else if !(reflect.DeepEqual(want, received)) {
+				t.Errorf("Result of ReplaceDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", want, received)
+			}
+		})
+	}
+}
+
+func TestDeleteDevice(t *testing.T) {
+	tests := []struct {
+		chassisInventory     *epb.Entities
+		wantChassisInventory *epb.Entities
+		name                 string
+	}{
+		{
+			name: "Successfully DeleteDevice",
+			chassisInventory: &epb.Entities{
+				Chassis: []*epb.Chassis{
+					{
+						SerialNumber: "1234",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+			wantChassisInventory: &epb.Entities{},
+		},
+		{
+			name: "DeleteDevice nonexistent",
+			chassisInventory: &epb.Entities{
+				Chassis: []*epb.Chassis{
+					{
+						SerialNumber: "5678",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+			wantChassisInventory: &epb.Entities{
+				Chassis: []*epb.Chassis{
+					{
+						SerialNumber: "5678",
+						Manufacturer: "cisco",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configsMap := make(map[service.EntityLookup]*epb.Chassis)
+			for _, chassis := range tt.chassisInventory.Chassis {
+				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			want := make(map[service.EntityLookup]*epb.Chassis)
+			for _, chassis := range tt.wantChassisInventory.Chassis {
+				want[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+			}
+
+			em := InMemoryEntityManager{
+				chassisInventory: configsMap,
+			}
+
+			em.DeleteDevice(&service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"})
+
+			if !(reflect.DeepEqual(want, em.chassisInventory)) {
+				t.Errorf("Result of DeleteDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", want, em.chassisInventory)
+			}
 		})
 	}
 }

@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Service that receives bootstrap requests and responds with the relevant data.
+// Package service receives bootstrap requests and responds with the relevant data.
 package service
 
 import (
 	"context"
 	"crypto/tls"
 
-	"github.com/openconfig/bootz/proto/bootz"
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	log "github.com/golang/glog"
+	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
 // OVList is a mapping of control card serial number to ownership voucher.
@@ -63,29 +63,32 @@ type EntityLookup struct {
 // ChassisEntity provides the mode that the system is currently
 // configured.
 type ChassisEntity struct {
-	BootMode bootz.BootMode
+	BootMode bpb.BootMode
 }
 
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
-	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
-	GetBootstrapData(*EntityLookup, *bootz.ControlCard) (*bootz.BootstrapDataResponse, error)
-	SetStatus(*bootz.ReportStatusRequest) error
-	Sign(*bootz.GetBootstrapDataResponse, *EntityLookup, string) error
+	ResolveChassis(*EntityLookup, string) (*ChassisEntity, error)
+	GetBootstrapData(*EntityLookup, *bpb.ControlCard) (*bpb.BootstrapDataResponse, error)
+	SetStatus(*bpb.ReportStatusRequest) error
+	Sign(*bpb.GetBootstrapDataResponse, *EntityLookup, string) error
 }
 
 // Service represents the server and entity manager.
 type Service struct {
-	bootz.UnimplementedBootstrapServer
+	bpb.UnimplementedBootstrapServer
 	em EntityManager
 }
 
-func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapDataRequest) (*bootz.GetBootstrapDataResponse, error) {
+func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*bpb.GetBootstrapDataResponse, error) {
 	log.Infof("=============================================================================")
 	log.Infof("==================== Received request for bootstrap data ====================")
 	log.Infof("=============================================================================")
-	if len(req.ChassisDescriptor.ControlCards) == 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "request must include at least one control card")
+	fixedChasis := true
+	ccSerial := ""
+	if len(req.ChassisDescriptor.ControlCards) >= 1 {
+		fixedChasis = false
+		ccSerial = req.ChassisDescriptor.GetControlCards()[0].GetSerialNumber()
 	}
 	log.Infof("Requesting for %v chassis %v", req.ChassisDescriptor.Manufacturer, req.ChassisDescriptor.SerialNumber)
 	lookup := &EntityLookup{
@@ -93,15 +96,14 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 		SerialNumber: req.ChassisDescriptor.SerialNumber,
 	}
 	// Validate the chassis can be serviced
-	chassis, err := s.em.ResolveChassis(lookup)
-
+	chassis, err := s.em.ResolveChassis(lookup, ccSerial)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v", req.ChassisDescriptor)
+		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", req.ChassisDescriptor, err)
 	}
 	log.Infof("Verified server can resolve chassis")
 
 	// If chassis can only be booted into secure mode then return error
-	if chassis.BootMode == bootz.BootMode_BOOT_MODE_SECURE && req.Nonce == "" {
+	if chassis.BootMode == bpb.BootMode_BOOT_MODE_SECURE && req.Nonce == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
 	}
 
@@ -111,7 +113,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 	log.Infof("=============================================================================")
 	log.Infof("==================== Fetching data for each control card ====================")
 	log.Infof("=============================================================================")
-	var responses []*bootz.BootstrapDataResponse
+	var responses []*bpb.BootstrapDataResponse
 	for _, v := range req.ChassisDescriptor.ControlCards {
 		bootdata, err := s.em.GetBootstrapData(lookup, v)
 		if err != nil {
@@ -120,14 +122,23 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 		}
 		responses = append(responses, bootdata)
 	}
+	if fixedChasis {
+		bootdata, err := s.em.GetBootstrapData(lookup, nil)
+		if err != nil {
+			errs.Add(err)
+			log.Infof("Error occurred while retrieving data for fixed chassis with serail number %v", lookup.SerialNumber)
+		}
+		responses = append(responses, bootdata)
+	}
+
 	if errs.Err() != nil {
 		return nil, errs.Err()
 	}
 	log.Infof("Successfully fetched data for each control card")
 	log.Infof("=============================================================================")
 
-	resp := &bootz.GetBootstrapDataResponse{
-		SignedResponse: &bootz.BootstrapDataSigned{
+	resp := &bpb.GetBootstrapDataResponse{
+		SignedResponse: &bpb.BootstrapDataSigned{
 			Responses: responses,
 		},
 	}
@@ -148,15 +159,15 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bootz.GetBootstrapD
 	return resp, nil
 }
 
-func (s *Service) ReportStatus(ctx context.Context, req *bootz.ReportStatusRequest) (*bootz.EmptyResponse, error) {
+func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest) (*bpb.EmptyResponse, error) {
 	log.Infof("=============================================================================")
 	log.Infof("========================== Status report received ===========================")
 	log.Infof("=============================================================================")
-	return &bootz.EmptyResponse{}, s.em.SetStatus(req)
+	return &bpb.EmptyResponse{}, s.em.SetStatus(req)
 }
 
 // SetDeviceConfiguration is a public API for allowing the device configuration to be set for each device the
-// will be responsible for configuring.  This will be only availble for testing.
+// will be responsible for configuring.  This will be only available for testing.
 func (s *Service) SetDeviceConfiguration(ctx context.Context) error {
 	return status.Errorf(codes.Unimplemented, "Unimplemented")
 }

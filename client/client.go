@@ -16,6 +16,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -24,6 +25,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"flag"
@@ -34,21 +36,25 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/openconfig/bootz/proto/bootz"
 	"go.mozilla.org/pkcs7"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
+
+	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
 // Represents a 128 bit nonce.
 const nonceLength = 16
 
 var (
-	verifyTLSCert = flag.Bool("verify_tls_cert", false, "Whether to verify the TLS certificate presented by the Bootz server. If false, all TLS connections are implicity trusted.")
+	verifyTLSCert = flag.Bool("verify_tls_cert", false, "Whether to verify the TLS certificate presented by the Bootz server. If false, all TLS connections are implicitly trusted.")
 	insecureBoot  = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
 	port          = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
 	rootCA        = flag.String("root_ca_cert_path", "../testdata/vendorca_pub.pem", "The relative path to a file containing a PEM encoded certificate for the manufacturer CA.")
+	urlImageMap   = map[string]string{
+		"https://path/to/image": "../testdata/image.txt",
+	}
 )
 
 // OwnershipVoucher wraps OwnershipVoucherInner.
@@ -75,7 +81,7 @@ func pemEncodeCert(contents string) string {
 // - Checks that the OV in the response is signed by the manufacturer.
 // - Checks that the serial number in the OV matches the one in the original request.
 // - Verifies that the Ownership Certificate is in the chain of signers of the Pinned Domain Cert.
-func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse, rootCA []byte) error {
+func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, rootCA []byte) error {
 	ov64 := resp.GetOwnershipVoucher()
 	if len(ov64) == 0 {
 		return fmt.Errorf("received empty ownership voucher from server")
@@ -86,16 +92,9 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 		return fmt.Errorf("received empty ownership certificate from server")
 	}
 
-	// Decode the ownership voucher
-	log.Infof("Decoding ownership voucher...")
-	ov, err := base64.StdEncoding.DecodeString(string(ov64))
-	if err != nil {
-		return err
-	}
-
 	// Parse the PKCS7 message
 	log.Infof("Parsing PKCS7 message in OV...")
-	p7, err := pkcs7.Parse(ov)
+	p7, err := pkcs7.Parse(ov64)
 	if err != nil {
 		return err
 	}
@@ -170,7 +169,7 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 	if err != nil {
 		return err
 	}
-	log.Infof("Sucessfully serialized the response")
+	log.Infof("Successfully serialized the response")
 
 	log.Infof("Calculating the sha256 sum to validate the response signature...")
 	hashed := sha256.Sum256(signedResponseBytes)
@@ -194,6 +193,41 @@ func validateArtifacts(serialNumber string, resp *bootz.GetBootstrapDataResponse
 	}
 	log.Infof("Verified SignedResponse signature")
 	return nil
+}
+
+// validateImage validates if the hash of the downloaded OS image matches the received image hash.
+func validateImage(image []byte, softwareImage *bpb.SoftwareImage) error {
+	log.Info("Start to validate the downloaded image")
+	var hashed [32]byte
+	if softwareImage.GetHashAlgorithm() == "SHA256" {
+		hashed = sha256.Sum256(image)
+	} else {
+		return fmt.Errorf("unknown hash algorithm: %q", softwareImage.GetHashAlgorithm())
+	}
+
+	receivedHashed, err := hex.DecodeString(softwareImage.GetOsImageHash())
+	if err != nil {
+		return fmt.Errorf("can not decode received hashed image to bytes, received hash: %q", softwareImage.GetOsImageHash())
+	}
+	if !bytes.Equal(hashed[:], receivedHashed) {
+		return fmt.Errorf("unmatched hash, recevived: %v, downloaded: %v, received hex string: %v, downloaded hex string: %v", receivedHashed, hashed[:], softwareImage.OsImageHash, hex.EncodeToString(hashed[:]))
+	}
+	log.Info("Verified image hash")
+	return nil
+}
+
+// downloadImage downloads image from the given URL.
+// This is a mock implementation.
+func downloadImage(url string) ([]byte, error) {
+	log.Infof("Start to download image from %q", url)
+	path := urlImageMap[url]
+
+	f, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("can not download image: %v", err)
+	}
+	log.Infof("Image is successfully downloaded, content length: %v", len(f))
+	return f, nil
 }
 
 func certFromPemBlock(data []byte) (*x509.Certificate, error) {
@@ -247,10 +281,10 @@ func main() {
 	log.Infof("=============================================================================")
 	// Construct the fake device.
 	// TODO: Allow these values to be set e.g. via a flag.
-	chassis := bootz.ChassisDescriptor{
+	chassis := bpb.ChassisDescriptor{
 		Manufacturer: "Cisco",
 		SerialNumber: "123",
-		ControlCards: []*bootz.ControlCard{
+		ControlCards: []*bpb.ControlCard{
 			{
 				SerialNumber: "123A",
 				Slot:         1,
@@ -287,7 +321,7 @@ func main() {
 	}
 	defer conn.Close()
 	log.Infof("Creating a new bootstrap client")
-	c := bootz.NewBootstrapClient(conn)
+	c := bpb.NewBootstrapClient(conn)
 	log.Infof("Client connected to bootz server")
 
 	// This is the active control card making the bootz request.
@@ -311,12 +345,12 @@ func main() {
 	log.Infof("======================== Retrieving bootstrap data ==========================")
 	log.Infof("=============================================================================")
 	log.Infof("Building bootstrap data request")
-	req := &bootz.GetBootstrapDataRequest{
+	req := &bpb.GetBootstrapDataRequest{
 		ChassisDescriptor: &chassis,
 		// This is the active control card, e.g. the one making the bootz request.
-		ControlCardState: &bootz.ControlCardState{
+		ControlCardState: &bpb.ControlCardState{
 			SerialNumber: activeControlCard.GetSerialNumber(),
-			Status:       bootz.ControlCardState_CONTROL_CARD_STATUS_NOT_INITIALIZED,
+			Status:       bpb.ControlCardState_CONTROL_CARD_STATUS_NOT_INITIALIZED,
 		},
 		Nonce: nonce,
 	}
@@ -354,7 +388,15 @@ func main() {
 	log.Infof("=============================================================================")
 	for _, data := range signedResp.GetResponses() {
 		log.Infof("Received config for control card %v", data.GetSerialNum())
-		log.Infof("Downloading image %+v...", data.GetIntendedImage())
+		log.Infof("Start to download and validate image, received: %+v...", data.GetIntendedImage())
+		image, err := downloadImage(data.GetIntendedImage().GetUrl())
+		if err != nil {
+			log.Exitf("unable to download image (url: %q): %v", data.GetIntendedImage().GetUrl(), err)
+		}
+		err = validateImage(image, data.GetIntendedImage())
+		if err != nil {
+			log.Exitf("Error validating intended image: %v", err)
+		}
 		time.Sleep(time.Second * 5)
 		log.Infof("Done")
 		log.Infof("Installing boot config %+v...", data.GetBootConfig())
@@ -366,16 +408,16 @@ func main() {
 	// 6. ReportProgress
 	log.Infof("=========================== Sending Status Report ===========================")
 	log.Infof("=============================================================================")
-	statusReq := &bootz.ReportStatusRequest{
-		Status:        bootz.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+	statusReq := &bpb.ReportStatusRequest{
+		Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 		StatusMessage: "Bootstrap Success",
-		States: []*bootz.ControlCardState{
+		States: []*bpb.ControlCardState{
 			{
-				Status:       bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED,
+				Status:       bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED,
 				SerialNumber: chassis.GetControlCards()[0].GetSerialNumber(),
 			},
 			{
-				Status:       bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED,
+				Status:       bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED,
 				SerialNumber: chassis.GetControlCards()[1].GetSerialNumber(),
 			},
 		},
