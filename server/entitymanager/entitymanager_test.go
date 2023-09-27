@@ -137,7 +137,7 @@ func TestNew(t *testing.T) {
 func TestFetchOwnershipVoucher(t *testing.T) {
 	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
 	ov2 := readTextFromFile(t, "../../testdata/ov_123B.txt")
-	chassis := entity.Chassis{
+	chassis := epb.Chassis{
 		Name:                   "test",
 		SerialNumber:           "123",
 		Manufacturer:           "Cisco",
