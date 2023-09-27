@@ -29,13 +29,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	log "github.com/golang/glog"
 	"github.com/openconfig/bootz/dhcp"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	log "github.com/golang/glog"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
@@ -186,9 +186,9 @@ func main() {
 }
 
 func startDhcpServer(em *entitymanager.InMemoryEntityManager) error {
-	conf := &dhcp.DHCPConfig{
+	conf := &dhcp.Config{
 		Interface:  *dhcpIntf,
-		AddressMap: make(map[string]*dhcp.DHCPEntry),
+		AddressMap: make(map[string]*dhcp.Entry),
 	}
 
 	for _, c := range em.GetChassisInventory() {
@@ -197,8 +197,8 @@ func startDhcpServer(em *entitymanager.InMemoryEntityManager) error {
 			if key == "" {
 				key = c.GetSerialNumber()
 			}
-			conf.AddressMap[key] = &dhcp.DHCPEntry{
-				Ip: dhcpConf.GetIpAddress(),
+			conf.AddressMap[key] = &dhcp.Entry{
+				IP: dhcpConf.GetIpAddress(),
 				Gw: dhcpConf.GetGateway(),
 			}
 		}

@@ -19,7 +19,6 @@ import "google/protobuf/struct.proto";
 
 import "github.com/openconfig/gnsi/authz/authz.proto";
 import "github.com/openconfig/gnsi/certz/certz.proto";
-import "github.com/openconfig/gnsi/credentialz/credentialz.proto";
 import "github.com/openconfig/gnsi/pathz/pathz.proto";
 import "proto/bootz.proto";
 
