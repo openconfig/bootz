@@ -167,7 +167,7 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 }
 
 // SetDeviceConfiguration is a public API for allowing the device configuration to be set for each device the
-// will be responsible for configuring.  This will be only availble for testing.
+// will be responsible for configuring.  This will be only available for testing.
 func (s *Service) SetDeviceConfiguration(ctx context.Context) error {
 	return status.Errorf(codes.Unimplemented, "Unimplemented")
 }

@@ -14,7 +14,6 @@ proto_library(
         "@local_repo_root//proto:bootz_proto",
         "@com_github_openconfig_gnsi//authz:authz_proto",
         "@com_github_openconfig_gnsi//certz:certz_proto",
-        "@com_github_openconfig_gnsi//credentialz:credentialz_proto",
         "@com_github_openconfig_gnsi//pathz:pathz_proto",
         "@com_google_protobuf//:struct_proto",
     ],
@@ -33,7 +32,6 @@ go_proto_library(
         "@local_repo_root//proto:bootz_go_proto",
         "@com_github_openconfig_gnsi//authz:authz_go_proto",
         "@com_github_openconfig_gnsi//certz:certz_go_proto",
-        "@com_github_openconfig_gnsi//credentialz:credentialz_go_proto",
         "@com_github_openconfig_gnsi//pathz:pathz_go_proto",
     ],
 )

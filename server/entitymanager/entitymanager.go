@@ -55,7 +55,7 @@ type InMemoryEntityManager struct {
 	chassisInventory map[service.EntityLookup]*epb.Chassis
 	// represents the current status of known control cards
 	controlCardStatuses map[string]bpb.ControlCardState_ControlCardStatus
-	// stores the defaut config such as security artifacts dir.
+	// stores the default config such as security artifacts dir.
 	defaults *epb.Options
 	// security artifacts  (OVs, OC and PDC).
 	// TODO: handle mutlti-vendor case
@@ -96,7 +96,7 @@ func (m *InMemoryEntityManager) resolveChassisViaControllerCard(lookup *service.
 			}
 		}
 	}
-	return nil, status.Errorf(codes.NotFound, "could not find chassis for controller card with serial# %s:", ccSerial)
+	return nil, status.Errorf(codes.NotFound, "could not find chassis for controller card with serial# %s", ccSerial)
 }
 
 func readOCConfig(path string) ([]byte, error) {
@@ -208,7 +208,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(el *service.EntityLookup, contr
 			}
 		}
 		if !found {
-			return nil, status.Errorf(codes.NotFound, "could not find controller card with serial# %s:", serial)
+			return nil, status.Errorf(codes.NotFound, "could not find controller card with serial# %s", serial)
 		}
 	}
 	log.Infof("Control card located in inventory")
@@ -342,7 +342,7 @@ func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis
 	if err != nil {
 		return err
 	}
-	log.Infof("Sucessfully serialized the response")
+	log.Infof("Successfully serialized the response")
 
 	log.Infof("Calculating the sha256 sum to encrypt the response...")
 	hashed := sha256.Sum256(signedResponseBytes)

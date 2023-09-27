@@ -18,6 +18,7 @@ copy_generated() {
 }
 
 bazel build //proto:all
+bazel build //server/entitymanager/proto:all
 # first arg is the package name, second arg is namespace for the package, and thrid is the location where the generated code will be saved. 
 copy_generated "bootz"  ${BOOTZ_NS}   "proto/"
 copy_generated "entity"  ${ENTITY_NS} "server/entitymanager/proto/"  

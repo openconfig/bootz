@@ -27,7 +27,7 @@ import (
 	cdplugins "github.com/coredhcp/coredhcp/plugins"
 	cdserver "github.com/coredhcp/coredhcp/server"
 
-	pldns "github.com/coredhcp/coredhcp/plugins/dns"
+	plDNS "github.com/coredhcp/coredhcp/plugins/dns"
 	plleasetime "github.com/coredhcp/coredhcp/plugins/leasetime"
 	plserverid "github.com/coredhcp/coredhcp/plugins/serverid"
 	plbootz "github.com/openconfig/bootz/dhcp/plugins/bootz"
@@ -39,61 +39,61 @@ const confTemplate = `
 server6:
    plugins:
      - server_id: LL {{ .IntfMacAddr }}
-     {{ if .BootzUrl }}
-     - bootz: {{ .BootzUrl }}
+     {{ if .BootzURL }}
+     - bootz: {{ .BootzURL }}
      {{ end }}
-     {{ if .Dnsv6 }}
-     - dns: {{ .Dnsv6 }}
+     {{ if .DNSv6 }}
+     - DNS: {{ .DNSv6 }}
      {{ end }}
-     {{ if .Ipv6Leases }}
-     - slease: {{ .Ipv6Leases }}
+     {{ if .IPv6Leases }}
+     - slease: {{ .IPv6Leases }}
      {{ end }}
 server4:
   plugins:
     - lease_time: 3600s
-    - server_id: {{ .IntfIpAddr }}
-    {{ if .BootzUrl }}
-    - bootz: {{ .BootzUrl }}
+    - server_id: {{ .IntfIPAddr }}
+    {{ if .BootzURL }}
+    - bootz: {{ .BootzURL }}
     {{ end }}
-    {{ if .Dnsv4 }}
-    - dns: {{ .Dnsv4 }}
+    {{ if .DNSv4 }}
+    - DNS: {{ .DNSv4 }}
     {{ end }}
-    {{ if .Ipv4Leases }}
-    - slease: {{ .Ipv4Leases }}
+    {{ if .IPv4Leases }}
+    - slease: {{ .IPv4Leases }}
     {{ end }}
 `
 
 var desiredPlugins = []*cdplugins.Plugin{
 	&plserverid.Plugin,
 	&plleasetime.Plugin,
-	&pldns.Plugin,
+	&plDNS.Plugin,
 	&plbootz.Plugin,
 	&plslease.Plugin,
 }
 
-// DHCPConfig contains the dhcp server configuration.
-type DHCPConfig struct {
+// Config contains the dhcp server configuration.
+type Config struct {
 	Interface  string
-	Dns        []string
-	AddressMap map[string]*DHCPEntry
-	BootzUrl   string
+	DNS        []string
+	AddressMap map[string]*Entry
+	BootzURL   string
 }
 
-// DHCPEntry represents a dhcp record.
-type DHCPEntry struct {
-	Ip string
+// Entry represents a dhcp record.
+type Entry struct {
+	IP string
 	Gw string
 }
 
-type dhcpServer struct {
+type Server struct {
 	server *cdserver.Servers
 }
 
-var instance *dhcpServer = nil
+var instance *Server = nil
 var lock = &sync.Mutex{}
 
 // Start starts the dhcp server with the given configuration.
-func Start(conf *DHCPConfig) error {
+func Start(conf *Config) error {
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -123,7 +123,7 @@ func Start(conf *DHCPConfig) error {
 	}
 	os.Remove(configFile)
 
-	instance = &dhcpServer{
+	instance = &Server{
 		server: srv,
 	}
 	return nil
@@ -140,7 +140,7 @@ func Stop() {
 	instance = nil
 }
 
-func generateConfigFile(conf *DHCPConfig) (string, error) {
+func generateConfigFile(conf *Config) (string, error) {
 	configFile, err := os.CreateTemp("", "coredhcp_conf_*.yml")
 	if err != nil {
 		return "", fmt.Errorf("error creating configuration file: %v", err)
@@ -156,56 +156,56 @@ func generateConfigFile(conf *DHCPConfig) (string, error) {
 		return "", fmt.Errorf("unknown interface %v", *intf)
 	}
 
-	ipv4Addr := getIpv4Address(intf)
-	if ipv4Addr == nil {
-		return "", fmt.Errorf("unable to find ipv4 address for interface %v", conf.Interface)
+	IPv4Addr := getIPv4Address(intf)
+	if IPv4Addr == nil {
+		return "", fmt.Errorf("unable to find IPv4 address for interface %v", conf.Interface)
 	}
 
-	dnsv4, dnsv6 := []string{}, []string{}
-	for _, v := range conf.Dns {
-		if isIpv6(v) {
-			dnsv6 = append(dnsv6, v)
+	DNSv4, DNSv6 := []string{}, []string{}
+	for _, v := range conf.DNS {
+		if isIPv6(v) {
+			DNSv6 = append(DNSv6, v)
 		} else {
-			dnsv4 = append(dnsv4, v)
+			DNSv4 = append(DNSv4, v)
 		}
 	}
 
 	v6Records, v4Records := []string{}, []string{}
 	for k, a := range conf.AddressMap {
-		if isIpv6(a.Ip) {
-			v6Records = append(v6Records, fmt.Sprintf("%s,%s", k, a.Ip))
+		if isIPv6(a.IP) {
+			v6Records = append(v6Records, fmt.Sprintf("%s,%s", k, a.IP))
 		} else {
-			v4Records = append(v4Records, fmt.Sprintf("%s,%s,%s", k, a.Ip, a.Gw))
+			v4Records = append(v4Records, fmt.Sprintf("%s,%s,%s", k, a.IP, a.Gw))
 		}
 	}
 
 	if err := confTmpl.Execute(configFile, struct {
-		IntfIpAddr  string
+		IntfIPAddr  string
 		IntfMacAddr string
-		Dnsv4       string
-		Dnsv6       string
-		Ipv4Leases  string
-		Ipv6Leases  string
-		BootzUrl    string
+		DNSv4       string
+		DNSv6       string
+		IPv4Leases  string
+		IPv6Leases  string
+		BootzURL    string
 	}{
-		IntfIpAddr:  ipv4Addr.String(),
+		IntfIPAddr:  IPv4Addr.String(),
 		IntfMacAddr: intf.HardwareAddr.String(),
-		Dnsv4:       strings.Join(dnsv4, " "),
-		Dnsv6:       strings.Join(dnsv6, " "),
-		Ipv4Leases:  strings.Join(v4Records, " "),
-		Ipv6Leases:  strings.Join(v6Records, " "),
-		BootzUrl:    conf.BootzUrl,
+		DNSv4:       strings.Join(DNSv4, " "),
+		DNSv6:       strings.Join(DNSv6, " "),
+		IPv4Leases:  strings.Join(v4Records, " "),
+		IPv6Leases:  strings.Join(v6Records, " "),
+		BootzURL:    conf.BootzURL,
 	}); err != nil {
 		return "", fmt.Errorf("error generating configuration template: %v", err)
 	}
 	return configFile.Name(), nil
 }
 
-func isIpv6(address string) bool {
+func isIPv6(address string) bool {
 	return strings.Count(address, ":") >= 2
 }
 
-func getIpv4Address(i *net.Interface) net.IP {
+func getIPv4Address(i *net.Interface) net.IP {
 	if addrs, err := i.Addrs(); err == nil {
 		for _, a := range addrs {
 			v4 := a.(*net.IPNet).IP.To4()
