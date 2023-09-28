@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -32,14 +33,14 @@ import (
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
 	log "github.com/golang/glog"
+
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
-	gpb "github.com/openconfig/gnmi/proto/gnmi"
+	apb "github.com/openconfig/gnsi/authz"
 )
 
 var (
@@ -103,11 +104,44 @@ func readOCConfig(path string) ([]byte, error) {
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Error opening file %s: %v", path, err)
 	}
-	req := &gpb.SetRequest{}
-	if err := prototext.Unmarshal(data, req); err != nil {
-		return nil, status.Errorf(codes.Internal, "File %s config is not a valid gnmi Setrequest: %v", path, err)
+	var v any
+	err = json.Unmarshal(data, &v)
+	if err != nil {
+		fmt.Printf("unmarshal error %v", err)
+	}
+	if !json.Valid(data) {
+		return nil, status.Errorf(codes.Internal, "File %s config is not a valid json", path)
 	}
 	return data, nil
+}
+
+func (m *InMemoryEntityManager) populateAuthzConfig(ch *epb.Chassis) (*apb.UploadRequest, error) {
+	gnsiConf := ch.GetConfig().GetGnsiConfig()
+	gnsiAuthzReq := gnsiConf.GetAuthzUpload()
+	gnsiAuthzReqFile := gnsiConf.GetAuthzUploadFile()
+	if gnsiAuthzReqFile == "" {
+		gnsiAuthzReqFile = m.defaults.GnsiGlobalConfig.GetAuthzUploadFile()
+	}
+	if gnsiAuthzReq.GetPolicy() != "" && gnsiAuthzReq.GetVersion() != "" {
+		return gnsiAuthzReq, nil
+	}
+	if gnsiAuthzReqFile == "" {
+		return nil, status.Errorf(codes.NotFound, "Could not populate authz config, please add config in inventory file")
+	}
+	data, err := os.ReadFile(gnsiAuthzReqFile)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Error opening file %s: %v", gnsiAuthzReqFile, err)
+	}
+	gnsiAuthzReq = &apb.UploadRequest{}
+	if err := prototext.Unmarshal(data, gnsiAuthzReq); err != nil {
+		return nil, status.Errorf(codes.Internal, "File %s config is not a valid authz Upload Request: %v", gnsiAuthzReqFile, err)
+	}
+	var t any
+	err = json.Unmarshal([]byte(gnsiAuthzReq.Policy), &t)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Provided authz policy is not a vaild json: %v", err)
+	}
+	return gnsiAuthzReq, nil
 }
 
 func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
@@ -177,13 +211,17 @@ func (m *InMemoryEntityManager) GetBootstrapData(el *service.EntityLookup, contr
 			return nil, status.Errorf(codes.NotFound, "could not find controller card with serial# %s", serial)
 		}
 	}
+	log.Infof("Control card located in inventory")
 	// TODO: for now add status for the controller card. We may need to move all runtime info to bootz service.
 	m.controlCardStatuses[serial] = bpb.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
 	bootCfg, err := populateBootConfig(chassis.GetConfig().GetBootConfig())
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Control card located in inventory")
+	authzConf, err := m.populateAuthzConfig(chassis)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO: Populate ServerTrustCert and gnsi config
 	return &bpb.BootstrapDataResponse{
@@ -194,6 +232,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(el *service.EntityLookup, contr
 		BootConfig:       bootCfg,
 		Credentials:      &bpb.Credentials{},
 		// TODO: Populate pathz, authz and certificates.
+		Authz: authzConf,
 	}, nil
 }
 
@@ -396,6 +435,7 @@ func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
 	newManager := &InMemoryEntityManager{
 		chassisInventory:    map[service.EntityLookup]*epb.Chassis{},
 		controlCardStatuses: map[string]bpb.ControlCardState_ControlCardStatus{},
+		defaults:            &epb.Options{GnsiGlobalConfig: &epb.GNSIConfig{}},
 	}
 	if chassisConfigFile == "" {
 		return newManager, nil

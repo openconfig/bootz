@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/h-fam/errdiff"
 	"github.com/openconfig/bootz/server/service"
+	"github.com/openconfig/gnsi/authz"
 	"google.golang.org/protobuf/proto"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
@@ -86,6 +87,9 @@ func TestNew(t *testing.T) {
 			defaults: &epb.Options{
 				Bootzserver: "bootzip:....",
 				ArtifactDir: "../../testdata/",
+				GnsiGlobalConfig: &epb.GNSIConfig{
+					AuthzUploadFile: "../../testdata/authz.prototext",
+				},
 			},
 		},
 		{
@@ -109,6 +113,7 @@ func TestNew(t *testing.T) {
 			desc:        "Successful new with empty file path",
 			chassisConf: "",
 			inventory:   map[service.EntityLookup]*epb.Chassis{},
+			defaults:    &epb.Options{GnsiGlobalConfig: &epb.GNSIConfig{}},
 		},
 	}
 
@@ -396,7 +401,9 @@ func TestGetBootstrapData(t *testing.T) {
 		BootMode:               bpb.BootMode_BOOT_MODE_INSECURE,
 		Config: &epb.Config{
 			BootConfig: &epb.BootConfig{},
-			GnsiConfig: &epb.GNSIConfig{},
+			GnsiConfig: &epb.GNSIConfig{
+				AuthzUploadFile: "../../testdata/authz.prototext",
+			},
 		},
 		SoftwareImage: &bpb.SoftwareImage{
 			Name:          "Default Image",
@@ -448,6 +455,11 @@ func TestGetBootstrapData(t *testing.T) {
 				OcConfig:     []byte(""),
 			},
 			Credentials: &bpb.Credentials{},
+			Authz: &authz.UploadRequest{
+				Version:   "v0.1694813669807611349",
+				CreatedOn: 1694813669807,
+				Policy:    "{\"name\":\"default\",\"request\":{\"paths\":[\"*\"]},\"source\":{\"principals\":[\"cafyauto\"]}}",
+			},
 		},
 		wantErr: false,
 	}, {
@@ -484,6 +496,11 @@ func TestGetBootstrapData(t *testing.T) {
 				OcConfig:     []byte(""),
 			},
 			Credentials: &bpb.Credentials{},
+			Authz: &authz.UploadRequest{
+				Version:   "v0.1694813669807611349",
+				CreatedOn: 1694813669807,
+				Policy:    "{\"name\":\"default\",\"request\":{\"paths\":[\"*\"]},\"source\":{\"principals\":[\"cafyauto\"]}}",
+			},
 		},
 		wantErr: false,
 	}, {
@@ -510,6 +527,11 @@ func TestGetBootstrapData(t *testing.T) {
 				OcConfig:     []byte(""),
 			},
 			Credentials: &bpb.Credentials{},
+			Authz: &authz.UploadRequest{
+				Version:   "v0.1694813669807611349",
+				CreatedOn: 1694813669807,
+				Policy:    "{\"name\":\"default\",\"request\":{\"paths\":[\"*\"]},\"source\":{\"principals\":[\"cafyauto\"]}}",
+			},
 		},
 		wantErr: false,
 	}, {
@@ -561,7 +583,7 @@ func TestLoadConfig(t *testing.T) {
 			desc: "Successful OC/vendor config",
 			bootConfig: &epb.BootConfig{
 				VendorConfigFile: "../../testdata/cisco.cfg",
-				OcConfigFile:     "../../testdata/oc_config.prototext",
+				OcConfigFile:     "../../testdata/oc_config.json",
 			},
 			wantBootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(vendorCliConfig),
