@@ -137,7 +137,7 @@ func (s *server) Start() error {
 }
 
 func (s *server) Stop() {
-	s.serv.Stop()
+	s.serv.GracefulStop()
 }
 
 // newServer creates a new Bootz gRPC server from flags.
