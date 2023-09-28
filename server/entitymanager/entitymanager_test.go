@@ -22,7 +22,6 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"os"
-	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -30,6 +29,7 @@ import (
 	"github.com/h-fam/errdiff"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
@@ -736,7 +736,7 @@ func TestGetAll(t *testing.T) {
 			}
 			received := em.GetAll()
 
-			if !(reflect.DeepEqual(configsMap, received)) {
+			if !(cmp.Equal(configsMap, received, protocmp.Transform())) {
 				t.Errorf("Result of GetDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", configsMap, received)
 			}
 		})
@@ -799,7 +799,7 @@ func TestReplaceDevice(t *testing.T) {
 
 			if s := errdiff.Check(err, tt.wantErr); s != "" {
 				t.Errorf("Expected error %s, but got error %v", tt.wantErr, err)
-			} else if !(reflect.DeepEqual(want, received)) {
+			} else if !(cmp.Equal(want, received, protocmp.Transform())) {
 				t.Errorf("Result of ReplaceDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", want, received)
 			}
 		})
@@ -862,7 +862,7 @@ func TestDeleteDevice(t *testing.T) {
 
 			em.DeleteDevice(&service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"})
 
-			if !(reflect.DeepEqual(want, em.chassisInventory)) {
+			if !(cmp.Equal(want, em.chassisInventory, protocmp.Transform())) {
 				t.Errorf("Result of DeleteDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", want, em.chassisInventory)
 			}
 		})
