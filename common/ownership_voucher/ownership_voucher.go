@@ -1,3 +1,17 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 // Package ownershipvoucher provides helper functions for generating, parsing and verifying ownership vouchers.
 package ownershipvoucher
 
@@ -31,7 +45,7 @@ type OwnershipVoucherInner struct {
 	DomainCertRevocationChecks bool   `json:"domain-cert-revocation-checks"`
 }
 
-// removePemHeaders strips the PEM headers from a certificate so it can be used in an Ownership Voucher.
+// RemovePemHeaders strips the PEM headers from a certificate so it can be used in an Ownership Voucher.
 func RemovePemHeaders(pemBlock string) string {
 	pemBlock = strings.TrimPrefix(pemBlock, "-----BEGIN CERTIFICATE-----\n")
 	pemBlock = strings.TrimSuffix(pemBlock, "\n-----END CERTIFICATE-----\n")
@@ -40,7 +54,7 @@ func RemovePemHeaders(pemBlock string) string {
 
 // VerifyAndUnmarshal unmarshals the contents of an Ownership Voucher
 // and verifies that it has been signed by a signer in the given cert pool.
-func VerifyAndUmarshal(in []byte, certPool *x509.CertPool) (*OwnershipVoucher, error) {
+func VerifyAndUnmarshal(in []byte, certPool *x509.CertPool) (*OwnershipVoucher, error) {
 	if len(in) == 0 {
 		return nil, fmt.Errorf("ownership voucher is empty")
 	}

@@ -1,3 +1,16 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package ownershipvoucher
 
 import (
@@ -11,13 +24,13 @@ import (
 
 var (
 	wantSerial = "123A"
-	//go:embed ov_123A.txt
+	//go:embed testdata/ov_123A.txt
 	testOV string
-	//go:embed pdc_pub.pem
+	//go:embed testdata/pdc_pub.pem
 	pdcPub []byte
-	//go:embed vendorca_pub.pem
+	//go:embed testdata/vendorca_pub.pem
 	vendorCAPub []byte
-	//go:embed vendorca_priv.pem
+	//go:embed testdata/vendorca_priv.pem
 	vendorCAPriv []byte
 )
 
@@ -50,14 +63,14 @@ func TestNew(t *testing.T) {
 		t.Fatalf("unable to add vendor root CA to pool")
 	}
 
-	_, err = VerifyAndUmarshal(got, vendorCAPool)
+	_, err = VerifyAndUnmarshal(got, vendorCAPool)
 	if err != nil {
 		t.Errorf("VerifyAndUnmarshal err = %v, want nil", err)
 	}
 }
 
 // Tests VerifyAndUnmarshal using a known good OV.
-func TestVerifyAndUmarshal(t *testing.T) {
+func TestVerifyAndUnmarshal(t *testing.T) {
 	vendorCAPool := x509.NewCertPool()
 	if !vendorCAPool.AppendCertsFromPEM(vendorCAPub) {
 		t.Fatalf("unable to add vendor root CA to pool")
@@ -67,7 +80,7 @@ func TestVerifyAndUmarshal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to decode ownership voucher to bytes: %v", err)
 	}
-	got, err := VerifyAndUmarshal(decodedOV, vendorCAPool)
+	got, err := VerifyAndUnmarshal(decodedOV, vendorCAPool)
 	if err != nil {
 		t.Errorf("VerifyAndUnmarshal err = %v, want nil", err)
 	}
