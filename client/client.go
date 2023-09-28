@@ -34,12 +34,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	ownershipvoucher "github.com/openconfig/bootz/common/ownership_voucher"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
 
-	ownershipvoucher "github.com/openconfig/bootz/common/ownership_voucher"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
