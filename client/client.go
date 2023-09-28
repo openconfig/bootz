@@ -26,7 +26,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -36,11 +35,11 @@ import (
 
 	log "github.com/golang/glog"
 
-	"go.mozilla.org/pkcs7"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
 
+	ownershipvoucher "github.com/openconfig/bootz/common/ownership_voucher"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
@@ -57,21 +56,6 @@ var (
 	}
 )
 
-// OwnershipVoucher wraps OwnershipVoucherInner.
-type OwnershipVoucher struct {
-	OV OwnershipVoucherInner `json:"ietf-voucher:voucher"`
-}
-
-// OwnershipVoucherInner defines the Ownership Voucher format. See https://www.rfc-editor.org/rfc/rfc8366.html.
-type OwnershipVoucherInner struct {
-	CreatedOn                  string `json:"created-on"`
-	ExpiresOn                  string `json:"expires-on"`
-	SerialNumber               string `json:"serial-number"`
-	Assertion                  string `json:"assertion"`
-	PinnedDomainCert           string `json:"pinned-domain-cert"`
-	DomainCertRevocationChecks bool   `json:"domain-cert-revocation-checks"`
-}
-
 // pemEncodeCert adds the correct PEM headers and footers to a raw certificate block.
 func pemEncodeCert(contents string) string {
 	return strings.Join([]string{"-----BEGIN CERTIFICATE-----", contents, "-----END CERTIFICATE-----"}, "\n")
@@ -82,48 +66,22 @@ func pemEncodeCert(contents string) string {
 // - Checks that the serial number in the OV matches the one in the original request.
 // - Verifies that the Ownership Certificate is in the chain of signers of the Pinned Domain Cert.
 func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, rootCA []byte) error {
-	ov64 := resp.GetOwnershipVoucher()
-	if len(ov64) == 0 {
-		return fmt.Errorf("received empty ownership voucher from server")
-	}
-
-	oc := resp.GetOwnershipCertificate()
-	if len(oc) == 0 {
-		return fmt.Errorf("received empty ownership certificate from server")
-	}
-
-	// Parse the PKCS7 message
-	log.Infof("Parsing PKCS7 message in OV...")
-	p7, err := pkcs7.Parse(ov64)
-	if err != nil {
-		return err
-	}
-
-	// Unmarshal the ownership voucher into a struct.
-	log.Infof("Unmarshalling OV into a struct...")
-	parsedOV := OwnershipVoucher{}
-	err = json.Unmarshal(p7.Content, &parsedOV)
-	if err != nil {
-		return err
-	}
-
 	// Create a CA pool for the device to validate that the vendor has signed this OV.
 	log.Infof("Creating a CA pool for the device to validate the vendor has signed this OV")
 	vendorCAPool := x509.NewCertPool()
 	if !vendorCAPool.AppendCertsFromPEM(rootCA) {
 		return fmt.Errorf("unable to add vendor root CA to pool")
 	}
-	log.Infof("=============================================================================")
 
-	// Verify the ownership voucher with this CA.
-	log.Infof("Verifying the OV with this CA")
-	err = p7.VerifyWithChain(vendorCAPool)
-	if err != nil {
-		return err
-	}
+	parsedOV, err := ownershipvoucher.VerifyAndUnmarshal(resp.GetOwnershipVoucher(), vendorCAPool)
+	log.Infof("=============================================================================")
 	log.Infof("Validated ownership voucher signed by vendor")
-
 	log.Infof("=============================================================================")
+
+	oc := resp.GetOwnershipCertificate()
+	if len(oc) == 0 {
+		return fmt.Errorf("received empty ownership certificate from server")
+	}
 
 	// Verify the serial number for this OV
 	log.Infof("Verifying the serial number for this OV")

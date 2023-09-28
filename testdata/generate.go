@@ -22,7 +22,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -32,7 +31,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"go.mozilla.org/pkcs7"
+	ownershipvoucher "github.com/openconfig/bootz/common/ownership_voucher"
 )
 
 var (
@@ -46,23 +45,7 @@ const (
 	caCountry  = "US"
 	caProvince = "CA"
 	caLocality = "Mountain View"
-	// Default one year expiry of certs.
-	caExpiry = time.Hour * 24 * 365
 )
-
-type OwnershipVoucher struct {
-	OV OwnershipVoucherInner `json:"ietf-voucher:voucher"`
-}
-
-// Defines the Ownership Voucher format. See https://www.rfc-editor.org/rfc/rfc8366.html.
-type OwnershipVoucherInner struct {
-	CreatedOn                  string `json:"created-on"`
-	ExpiresOn                  string `json:"expires-on"`
-	SerialNumber               string `json:"serial-number"`
-	Assertion                  string `json:"assertion"`
-	PinnedDomainCert           string `json:"pinned-domain-cert"`
-	DomainCertRevocationChecks bool   `json:"domain-cert-revocation-checks"`
-}
 
 // newCertificateAuthority creates a new CA for the chosen organization.
 // It returns a self-signed CA certificate as the first value, the associated private key as the second and any error as the third.
@@ -102,50 +85,6 @@ func newCertificateAuthority(commonName string, org string) (*x509.Certificate, 
 	}
 
 	return cert, caPrivateKey, nil
-}
-
-// removePemHeaders strips the PEM headers from a certificate so it can be used in an Ownership Voucher.
-func removePemHeaders(pemBlock string) string {
-	pemBlock = strings.TrimPrefix(pemBlock, "-----BEGIN CERTIFICATE-----\n")
-	pemBlock = strings.TrimSuffix(pemBlock, "\n-----END CERTIFICATE-----\n")
-	return pemBlock
-}
-
-// newOwnershipVoucher creates an OV for the device serial which is signed by the vendor's CA.
-func newOwnershipVoucher(serial string, pdcPem []byte, vendorCACert *x509.Certificate, vendorCAPriv *rsa.PrivateKey) (string, error) {
-	currentTime := time.Now()
-	ov := OwnershipVoucher{
-		OV: OwnershipVoucherInner{
-			CreatedOn:        currentTime.String(),
-			ExpiresOn:        currentTime.Add(caExpiry).String(),
-			SerialNumber:     serial,
-			PinnedDomainCert: removePemHeaders(string(pdcPem)),
-		},
-	}
-
-	ovBytes, err := json.Marshal(ov)
-	if err != nil {
-		return "", err
-	}
-
-	signedMessage, err := pkcs7.NewSignedData(ovBytes)
-	if err != nil {
-		return "", err
-	}
-	signedMessage.SetDigestAlgorithm(pkcs7.OIDDigestAlgorithmSHA256)
-	signedMessage.SetEncryptionAlgorithm(pkcs7.OIDEncryptionAlgorithmRSA)
-
-	err = signedMessage.AddSigner(vendorCACert, vendorCAPriv, pkcs7.SignerInfoConfig{})
-	if err != nil {
-		return "", err
-	}
-
-	signedBytes, err := signedMessage.Finish()
-	if err != nil {
-		return "", err
-	}
-
-	return base64.StdEncoding.EncodeToString(signedBytes), nil
 }
 
 // pemEncode returns a PEM encoding of DER bytes
@@ -252,11 +191,12 @@ func main() {
 	// Generate OVs for each control card.
 	for _, s := range serials {
 		fmt.Printf("Generating OV for control card serial %v\n", s)
-		ov, err := newOwnershipVoucher(s, pdcPem, vendorCAPub, vendorCAPriv)
+		ov, err := ownershipvoucher.New(s, pdcPem, vendorCAPub, vendorCAPriv)
 		if err != nil {
 			log.Exitf("unable to create OV: %v", err)
 		}
-		if err := writeFile([]byte(ov), fmt.Sprintf("ov_%v.txt", s)); err != nil {
+		ov64 := base64.StdEncoding.EncodeToString(ov)
+		if err := writeFile([]byte(ov64), fmt.Sprintf("ov_%v.txt", s)); err != nil {
 			log.Exit(err)
 		}
 	}
