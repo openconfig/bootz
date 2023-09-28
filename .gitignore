@@ -4,6 +4,7 @@
 .vscode/
 bazel-*
 
-# Adding binary files here so they are not included during commits.
-client
-server
+# Ignore Go binary files but keep the .go files.
+**/*
+!**/*.go
+!**/

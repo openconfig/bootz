@@ -40,11 +40,16 @@ import (
 )
 
 var (
-	port              = flag.String("port", "", "The port to start the Bootz server on localhost")
+	port              = flag.String("port", "15006", "The port to start the Bootz server on localhost")
 	dhcpIntf          = flag.String("dhcp_intf", "", "Network interface to use for dhcp server.")
 	artifactDirectory = flag.String("artifact_dir", "../testdata/", "The relative directory to look into for certificates, private keys and OVs.")
 	inventoryConfig   = flag.String("inv_config", "../testdata/inventory_local.prototxt", "Devices' config files to be loaded by inventory manager")
 )
+
+type server struct {
+	serv *grpc.Server
+	lis  net.Listener
+}
 
 // readKeyPair reads the cert/key pair from the specified artifacts directory.
 // Certs must have the format {name}_pub.pem and keys must have the format {name}_priv.pem
@@ -127,35 +132,38 @@ func parseSecurityArtifacts() (*service.SecurityArtifacts, error) {
 	}, nil
 }
 
-func main() {
-	flag.Parse()
+func (s *server) Start() error {
+	return s.serv.Serve(s.lis)
+}
 
-	log.Infof("=============================================================================")
-	log.Infof("=========================== BootZ Server Emulator ===========================")
-	log.Infof("=============================================================================")
+func (s *server) Stop() {
+	s.serv.GracefulStop()
+}
 
+// newServer creates a new Bootz gRPC server from flags.
+func newServer() (*server, error) {
 	if *port == "" {
-		log.Exitf("no port selected. specify with the -port flag")
+		return nil, fmt.Errorf("no port selected. specify with the --port flag")
 	}
 	if *artifactDirectory == "" {
-		log.Exitf("no artifact directory specified")
+		return nil, fmt.Errorf("no artifact directory selected. specify with the --artifact_dir flag")
 	}
 
 	log.Infof("Setting up server security artifacts: OC, OVs, PDC, VendorCA")
 	sa, err := parseSecurityArtifacts()
 	if err != nil {
-		log.Exit(err)
+		return nil, err
 	}
 
 	log.Infof("Setting up entities")
 	em, err := entitymanager.New(*inventoryConfig)
 	if err != nil {
-		log.Exitf("unable to initiate inventory manager %v", err)
+		return nil, fmt.Errorf("unable to initiate inventory manager %v", err)
 	}
 
 	if *dhcpIntf != "" {
 		if err := startDhcpServer(em); err != nil {
-			log.Exitf("unable to start dhcp server %v", err)
+			return nil, fmt.Errorf("unable to start dhcp server %v", err)
 		}
 	}
 
@@ -163,7 +171,7 @@ func main() {
 
 	trustBundle := x509.NewCertPool()
 	if !trustBundle.AppendCertsFromPEM([]byte(sa.PDC.Cert)) {
-		log.Exitf("unable to add PDC cert to trust pool")
+		return nil, fmt.Errorf("unable to add PDC cert to trust pool")
 	}
 	tls := &tls.Config{
 		Certificates: []tls.Certificate{*sa.TLSKeypair},
@@ -171,17 +179,31 @@ func main() {
 	}
 	log.Infof("Creating server...")
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)))
+	bpb.RegisterBootstrapServer(s, c)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", *port))
 	if err != nil {
-		log.Exitf("Error listening on port: %v", err)
+		return nil, fmt.Errorf("error listening on port: %v", err)
 	}
 	log.Infof("Server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
-	bpb.RegisterBootstrapServer(s, c)
-	err = s.Serve(lis)
+	return &server{serv: s, lis: lis}, nil
+}
+
+func main() {
+	flag.Parse()
+
+	log.Infof("=============================================================================")
+	log.Infof("=========================== BootZ Server Emulator ===========================")
+	log.Infof("=============================================================================")
+
+	s, err := newServer()
 	if err != nil {
-		log.Exitf("Error serving grpc: %v", err)
+		log.Exit(err)
+	}
+
+	if err := s.Start(); err != nil {
+		log.Exit(err)
 	}
 }
 
