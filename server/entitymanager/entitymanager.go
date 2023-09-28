@@ -139,7 +139,7 @@ func (m *InMemoryEntityManager) populateAuthzConfig(ch *epb.Chassis) (*apb.Uploa
 	var t any
 	err = json.Unmarshal([]byte(gnsiAuthzReq.Policy), &t)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Provided authz policy is not a vaild json: %v", err)
+		return nil, status.Errorf(codes.Internal, "Provided authz policy is not a valid json: %v", err)
 	}
 	return gnsiAuthzReq, nil
 }

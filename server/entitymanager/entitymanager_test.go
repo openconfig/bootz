@@ -29,11 +29,11 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/h-fam/errdiff"
 	"github.com/openconfig/bootz/server/service"
-	"github.com/openconfig/gnsi/authz"
 	"google.golang.org/protobuf/proto"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
+	apb "github.com/openconfig/gnsi/authz"
 )
 
 func TestNew(t *testing.T) {
@@ -455,7 +455,7 @@ func TestGetBootstrapData(t *testing.T) {
 				OcConfig:     []byte(""),
 			},
 			Credentials: &bpb.Credentials{},
-			Authz: &authz.UploadRequest{
+			Authz: &apb.UploadRequest{
 				Version:   "v0.1694813669807611349",
 				CreatedOn: 1694813669807,
 				Policy:    "{\"name\":\"default\",\"request\":{\"paths\":[\"*\"]},\"source\":{\"principals\":[\"cafyauto\"]}}",
@@ -496,7 +496,7 @@ func TestGetBootstrapData(t *testing.T) {
 				OcConfig:     []byte(""),
 			},
 			Credentials: &bpb.Credentials{},
-			Authz: &authz.UploadRequest{
+			Authz: &apb.UploadRequest{
 				Version:   "v0.1694813669807611349",
 				CreatedOn: 1694813669807,
 				Policy:    "{\"name\":\"default\",\"request\":{\"paths\":[\"*\"]},\"source\":{\"principals\":[\"cafyauto\"]}}",
@@ -527,7 +527,7 @@ func TestGetBootstrapData(t *testing.T) {
 				OcConfig:     []byte(""),
 			},
 			Credentials: &bpb.Credentials{},
-			Authz: &authz.UploadRequest{
+			Authz: &apb.UploadRequest{
 				Version:   "v0.1694813669807611349",
 				CreatedOn: 1694813669807,
 				Policy:    "{\"name\":\"default\",\"request\":{\"paths\":[\"*\"]},\"source\":{\"principals\":[\"cafyauto\"]}}",
