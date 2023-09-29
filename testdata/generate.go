@@ -203,6 +203,6 @@ func main() {
 
 	// Generate a image file.
 	if err := writeFile([]byte("ABCDEF"), "image.txt"); err != nil {
-		log.Exit("Error when generating image file: %v", err)
+		log.Exitf("Error when generating image file: %v", err)
 	}
 }
