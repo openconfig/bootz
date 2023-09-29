@@ -30,13 +30,13 @@ const (
 	ovExpiry = time.Hour * 24 * 365
 )
 
-// OwnershipVoucher wraps OwnershipVoucherInner.
+// OwnershipVoucher wraps Inner.
 type OwnershipVoucher struct {
-	OV OwnershipVoucherInner `json:"ietf-voucher:voucher"`
+	OV Inner `json:"ietf-voucher:voucher"`
 }
 
-// OwnershipVoucherInner defines the Ownership Voucher format. See https://www.rfc-editor.org/rfc/rfc8366.html.
-type OwnershipVoucherInner struct {
+// Inner defines the Ownership Voucher format. See https://www.rfc-editor.org/rfc/rfc8366.html.
+type Inner struct {
 	CreatedOn                  string `json:"created-on"`
 	ExpiresOn                  string `json:"expires-on"`
 	SerialNumber               string `json:"serial-number"`
@@ -77,7 +77,7 @@ func VerifyAndUnmarshal(in []byte, certPool *x509.CertPool) (*OwnershipVoucher, 
 func New(serial string, pdcPem []byte, vendorCACert *x509.Certificate, vendorCAPriv *rsa.PrivateKey) ([]byte, error) {
 	currentTime := time.Now()
 	ov := OwnershipVoucher{
-		OV: OwnershipVoucherInner{
+		OV: Inner{
 			CreatedOn:        currentTime.String(),
 			ExpiresOn:        currentTime.Add(ovExpiry).String(),
 			SerialNumber:     serial,
