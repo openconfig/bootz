@@ -61,7 +61,7 @@ func pemEncodeCert(contents string) string {
 	return strings.Join([]string{"-----BEGIN CERTIFICATE-----", contents, "-----END CERTIFICATE-----"}, "\n")
 }
 
-// convert address to localhost when no ip is specefied
+// Convert address to localhost when no ip is specified.
 func convertAddress(addr string) string {
 	items := strings.Split(addr, ":")
 	listenAddr := addr

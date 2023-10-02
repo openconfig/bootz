@@ -51,7 +51,7 @@ type server struct {
 	lis  net.Listener
 }
 
-// convert address to localhost when no ip is specefied
+// Convert address to localhost when no ip is specified.
 func convertAddress(addr string) string {
 	items := strings.Split(addr, ":")
 	listenAddr := addr

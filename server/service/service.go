@@ -71,13 +71,13 @@ type ChassisEntity struct {
 
 // an struct to record the boot logs for connected chassis
 type bootLog struct {
-	BootMode       bootz.BootMode
+	BootMode       bpb.BootMode
 	StartTimeStamp uint64
 	EndTimeStamp   uint64
-	Status         []bootz.ControlCardState_ControlCardStatus
-	LastStatus     bootz.ControlCardState_ControlCardStatus
-	BootResponse   *bootz.BootstrapDataResponse
-	BootRequest    *bootz.GetBootstrapDataRequest
+	Status         []bpb.ControlCardState_ControlCardStatus
+	LastStatus     bpb.ControlCardState_ControlCardStatus
+	BootResponse   *bpb.BootstrapDataResponse
+	BootRequest    *bpb.GetBootstrapDataRequest
 	Err            error
 }
 
@@ -91,12 +91,12 @@ type EntityManager interface {
 
 // Service represents the server and entity manager.
 type Service struct {
-	bootz.UnimplementedBootstrapServer
+	bpb.UnimplementedBootstrapServer
 	em               EntityManager
 	mu               sync.Mutex
 	connectedChassis map[EntityLookup]bool
 	activeBoots      map[string]*bootLog
-	failedRequest    map[*bootz.GetBootstrapDataRequest]error
+	failedRequest    map[*bpb.GetBootstrapDataRequest]error
 }
 
 func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*bpb.GetBootstrapDataResponse, error) {
@@ -146,7 +146,7 @@ s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "failed to resolve c
 			BootMode:       chassis.BootMode,
 			StartTimeStamp: uint64(time.Now().UnixMilli()),
 			BootRequest:    req,
-			LastStatus:     bootz.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED,
+			LastStatus:     bpb.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED,
 		}
 		bootdata, err := s.em.GetBootstrapData(lookup, v)
 		if err != nil {
@@ -205,17 +205,17 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 		for _, stat := range req.GetStates() {
 			s.activeBoots[stat.GetSerialNumber()].LastStatus = stat.GetStatus()
 			s.activeBoots[stat.SerialNumber].Status = append(s.activeBoots[stat.SerialNumber].Status, stat.GetStatus())
-			if stat.GetStatus() == bootz.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED {
+			if stat.GetStatus() == bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED {
 				s.activeBoots[stat.SerialNumber].EndTimeStamp = uint64(time.Now().UnixMilli())
 			}
 		}
-		return &bootz.EmptyResponse{}, nil
+		return &bpb.EmptyResponse{}, nil
 	}
 	return nil, err
 
 }
 
-// IsChassisConnected checks if a device is connected to bootzServer
+// IsChassisConnected checks if a device is connected to bpbServer
 func (s *Service) IsChassisConnected(chassis EntityLookup) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -228,7 +228,7 @@ func (s *Service) ResetStatus(chassis EntityLookup) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.connectedChassis = map[EntityLookup]bool{}
-	s.failedRequest = map[*bootz.GetBootstrapDataRequest]error{}
+	s.failedRequest = map[*bpb.GetBootstrapDataRequest]error{}
 	s.activeBoots = map[string]*bootLog{}
 }
 
@@ -254,7 +254,7 @@ func New(em EntityManager) *Service {
 	return &Service{
 		em:               em,
 		connectedChassis: map[EntityLookup]bool{},
-		failedRequest:    map[*bootz.GetBootstrapDataRequest]error{},
+		failedRequest:    map[*bpb.GetBootstrapDataRequest]error{},
 		activeBoots:      map[string]*bootLog{},
 	}
 }
