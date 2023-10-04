@@ -21,14 +21,14 @@ func (f *fakeEntityManager) FetchOwnershipVoucher(string) (string, error) {
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
-func (f *fakeEntityManager) ResolveChassis(lookup *EntityLookup) (*ChassisEntity, error) {
+func (f *fakeEntityManager) ResolveChassis(*EntityLookup, string) (*ChassisEntity, error) {
 	if f.simFailure {
 		return nil, fmt.Errorf("resolve chassis is failed")
 	}
 	return &ChassisEntity{}, nil
 }
 
-func (f *fakeEntityManager) GetBootstrapData(c *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
+func (f *fakeEntityManager) GetBootstrapData(_ *EntityLookup, c *bootz.ControlCard) (*bootz.BootstrapDataResponse, error) {
 	if f.simFailure {
 		return nil, fmt.Errorf("get bootstrap data is failed")
 	}
@@ -60,7 +60,7 @@ func (f *fakeEntityManager) SetStatus(req *bootz.ReportStatusRequest) error {
 }
 
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
-func (f *fakeEntityManager) Sign(resp *bootz.GetBootstrapDataResponse, serial string) error {
+func (f *fakeEntityManager) Sign(*bootz.GetBootstrapDataResponse, *EntityLookup, string) error {
 	if f.simFailure {
 		return fmt.Errorf("sign is failed")
 	}
