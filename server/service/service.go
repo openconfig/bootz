@@ -215,7 +215,7 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 
 }
 
-// IsChassisConnected checks if a device is connected to bpbServer
+// IsChassisConnected checks if a device is connected to Bootz Server
 func (s *Service) IsChassisConnected(chassis EntityLookup) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

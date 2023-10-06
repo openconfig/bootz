@@ -15,15 +15,129 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"testing"
 )
 
+
 // TestStartup tests that a gRPC server can be created with the default flags.
 func TestStartup(t *testing.T) {
-	flag.Parse()
-	_, err := newServer()
+
+    serv := &server{}
+    
+    address := "127.0.0.1:5000"
+
+    config := ServerConfig{
+        DhcpIntf          : "",
+        ArtifactDirectory : "../testdata/",
+        InventoryConfig   : "../testdata/inventory_local.prototxt",
+    }
+
+    status, err := serv.Start(address, config)
+
 	if err != nil {
-		t.Fatalf("newServer() err = %v, want nil", err)
+		t.Fatalf("server.Start err = %v, want nil", err)
 	}
+
+    if status != "Running" {
+        t.Fatalf("Expected: Running, Received: %s", status)
+    }
+
+    fmt.Printf("status: %s\n", serv.status)
+
+    fmt.Printf("addr: %s\n", serv.lis.Addr())
+    
+    serv.serv.GracefulStop()
+
+}
+
+func TestStartupFailure(t *testing.T) {
+
+    serv := &server{}
+    
+    address := "127.0.0.1:5000"
+
+    config := ServerConfig{
+        DhcpIntf          : "",
+        ArtifactDirectory : "../testdata/",
+        InventoryConfig   : "../testdata/inventory_local.prototxt",
+    }
+
+    status, err := serv.Start(address, config)
+
+	if err != nil {
+		t.Fatalf("server.Start err = %v, want nil", err)
+	}
+
+    if status != "Running" {
+        t.Fatalf("Expected: Running, Received: %s", status)
+    }
+
+    fmt.Printf("status: %s\n", serv.status)
+
+    fmt.Printf("addr: %s\n", serv.lis.Addr())
+    
+    serv.serv.GracefulStop()
+
+}
+
+
+func TestStop(t *testing.T) {
+    
+    serv := &server{}
+    
+    address := "127.0.0.1:5001"
+
+    config := ServerConfig{
+        DhcpIntf          : "",
+        ArtifactDirectory : "../testdata/",
+        InventoryConfig   : "../testdata/inventory_local.prototxt",
+    }
+
+    status, err := serv.Start(address, config)
+
+	if err != nil {
+		t.Fatalf("server.Start err = %v, want nil", err)
+	}
+
+    if status != "Running" {
+        t.Fatalf("Expected: Running, Received: %s", status)
+    }
+
+    serv.Stop()
+    
+    if status != "Exited" {
+        t.Fatalf("Expected: Running, Received: %s", status)
+    }
+    
+}
+
+func TestRestart(t *testing.T) {
+    
+    serv := &server{}
+    
+    address := "127.0.0.1:5002"
+
+    config := ServerConfig{
+        DhcpIntf          : "",
+        ArtifactDirectory : "../testdata/",
+        InventoryConfig   : "../testdata/inventory_local.prototxt",
+    }
+
+    status, err := serv.Start(address, config)
+
+	if err != nil {
+		t.Fatalf("server.Start err = %v, want nil", err)
+	}
+
+    if status != "Running" {
+        t.Fatalf("Expected: Running, Received: %s", status)
+    }
+
+    serv.Reload()
+
+    if status != "Running" {
+        t.Fatalf("Expected: Running, Received: %s", status)
+    }
+    
 }
