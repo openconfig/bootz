@@ -51,10 +51,18 @@ var (
 type server struct {
 	serv *grpc.Server
 	lis  net.Listener
-    status string
+    status BootzServerStatus 
     lock sync.Mutex
     config ServerConfig
 }
+
+type BootzServerStatus string 
+
+const (
+	BootzServerStatus_RUNNING BootzServerStatus = "Running"
+	BootzServerStatus_FAILURE BootzServerStatus = "Failure"
+	BootzServerStatus_EXITED BootzServerStatus = "Exited"
+)
 
 type ServerConfig struct {
     // port              string
@@ -156,11 +164,11 @@ func parseSecurityArtifacts() (*service.SecurityArtifacts, error) {
 	}, nil
 }
 
-func (s *server) Start(bootzAddress string, config ServerConfig) (string, error) {
+func (s *server) Start(bootzAddress string, config ServerConfig) (BootzServerStatus, error) {
     s.lock.Lock()
     defer s.lock.Unlock()
     
-    s.status = "Failure"
+    s.status = BootzServerStatus_FAILURE
     
 	if config.ArtifactDirectory == "" {
 		return s.status, fmt.Errorf("no artifact directory selected. specify with the --artifact_dir flag")
@@ -203,7 +211,7 @@ func (s *server) Start(bootzAddress string, config ServerConfig) (string, error)
 	log.Infof("Server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
     
-    s.status = "Running"
+    s.status = BootzServerStatus_RUNNING
     s.serv = newServer 
     s.lis = lis
     
@@ -211,22 +219,22 @@ func (s *server) Start(bootzAddress string, config ServerConfig) (string, error)
     
 }
 
-func (s *server) Stop() (string, error){
+func (s *server) Stop() (BootzServerStatus, error){
     s.lock.Lock()
     defer s.lock.Unlock()
 	s.serv.GracefulStop()
-    s.status = "Exited"
+    s.status = BootzServerStatus_EXITED
     return s.status, nil
 }
 
-func (s *server) Reload() (string, error) {
+func (s *server) Reload() (BootzServerStatus, error) {
     addr := s.lis.Addr().String()
     s.Stop()
     _, err :=  s.Start(addr, s.config)
     return s.status, err 
 }
 
-func (s *server) Status() (string, error) {
+func (s *server) Status() (BootzServerStatus, error) {
     return s.status, nil
 }
 

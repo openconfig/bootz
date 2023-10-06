@@ -47,8 +47,8 @@ func TestStartup(t *testing.T) {
                 t.Errorf("server.Start err = %v, want nil", err)
             }
 
-            if status != "Running" {
-                t.Errorf("Expected: Running, Received: %s", status)
+            if status != BootzServerStatus_RUNNING {
+                t.Errorf("Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
             }
 
             serv.serv.GracefulStop()
@@ -89,8 +89,8 @@ func TestStartupFailure(t *testing.T) {
                 
             }
 
-            if status != "Failure" {
-                t.Errorf("Expected: Running, Received: %s", status)
+            if status != BootzServerStatus_FAILURE {
+                t.Errorf("Expected: %s, Received: %s", BootzServerStatus_FAILURE, status)
             }
             
         })
@@ -125,14 +125,14 @@ func TestStop(t *testing.T) {
                 t.Errorf("server.Start err = %v, want nil", err)
             }
 
-            if status != "Running" {
-                t.Errorf("Expected: Running, Received: %s", status)
+            if status != BootzServerStatus_RUNNING {
+                t.Errorf("Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
             }
 
             status, err = serv.Stop()
             
-            if status != "Exited" {
-                t.Errorf("Expected: Exited, Received: %s", status)
+            if status != BootzServerStatus_EXITED {
+                t.Errorf("Expected: %s, Received: %s", BootzServerStatus_EXITED, status)
             }
         })
     }
@@ -169,14 +169,14 @@ func TestReload(t *testing.T) {
                 t.Errorf("server.Start err = %v, want nil", err)
             }
 
-            if status != "Running" {
-                t.Errorf("Before reload- Expected: Running, Received: %s", status)
+            if status != BootzServerStatus_RUNNING {
+                t.Errorf("Before reload- Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
             }
 
             serv.Reload()
 
-            if status != "Running" {
-                t.Errorf("After reload- Expected: Running, Received: %s", status)
+            if status != BootzServerStatus_RUNNING {
+                t.Errorf("After reload- Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
             }
         })
     }
