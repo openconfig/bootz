@@ -15,129 +15,169 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 )
 
 
 // TestStartup tests that a gRPC server can be created with the default flags.
 func TestStartup(t *testing.T) {
-
-    serv := &server{}
     
-    address := "127.0.0.1:5000"
-
-    config := ServerConfig{
-        DhcpIntf          : "",
-        ArtifactDirectory : "../testdata/",
-        InventoryConfig   : "../testdata/inventory_local.prototxt",
+    tests := []struct {
+        name string
+        address string
+    }{
+        { "Start server success", "127.0.0.1:5000", },
     }
 
-    status, err := serv.Start(address, config)
 
-	if err != nil {
-		t.Fatalf("server.Start err = %v, want nil", err)
-	}
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
 
-    if status != "Running" {
-        t.Fatalf("Expected: Running, Received: %s", status)
+            serv := &server{}
+            
+            config := ServerConfig{
+                DhcpIntf          : "",
+                ArtifactDirectory : "../testdata/",
+                InventoryConfig   : "../testdata/inventory_local.prototxt",
+            }
+
+            status, err := serv.Start(tt.address, config)
+
+            if err != nil {
+                t.Errorf("server.Start err = %v, want nil", err)
+            }
+
+            if status != "Running" {
+                t.Errorf("Expected: Running, Received: %s", status)
+            }
+
+            serv.serv.GracefulStop()
+            
+        })
     }
-
-    fmt.Printf("status: %s\n", serv.status)
-
-    fmt.Printf("addr: %s\n", serv.lis.Addr())
     
-    serv.serv.GracefulStop()
 
 }
 
 func TestStartupFailure(t *testing.T) {
-
-    serv := &server{}
     
-    address := "127.0.0.1:5000"
-
-    config := ServerConfig{
-        DhcpIntf          : "",
-        ArtifactDirectory : "../testdata/",
-        InventoryConfig   : "../testdata/inventory_local.prototxt",
+    tests := []struct {
+        name string
+        address string
+        wantErr string
+    }{
+        { "Start server failure", "8.8.8.8:5000",
+            "error listening on port: listen tcp 8.8.8.8:5000: bind: can't assign requested address", },
     }
 
-    status, err := serv.Start(address, config)
 
-	if err != nil {
-		t.Fatalf("server.Start err = %v, want nil", err)
-	}
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
 
-    if status != "Running" {
-        t.Fatalf("Expected: Running, Received: %s", status)
+            serv := &server{}
+            
+            config := ServerConfig{
+                DhcpIntf          : "",
+                ArtifactDirectory : "../testdata/",
+                InventoryConfig   : "../testdata/inventory_local.prototxt",
+            }
+
+            status, err := serv.Start(tt.address, config)
+
+            if err.Error() != tt.wantErr {
+                t.Errorf("server.Start err = %v, want nil", err)
+                
+            }
+
+            if status != "Failure" {
+                t.Errorf("Expected: Running, Received: %s", status)
+            }
+            
+        })
     }
-
-    fmt.Printf("status: %s\n", serv.status)
-
-    fmt.Printf("addr: %s\n", serv.lis.Addr())
-    
-    serv.serv.GracefulStop()
 
 }
 
 
 func TestStop(t *testing.T) {
     
-    serv := &server{}
+    tests := []struct {
+        name string
+        address string
+    }{
+        { "Stop server", "127.0.0.1:5001", },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+
+            serv := &server{}
+            
+            config := ServerConfig{
+                DhcpIntf          : "",
+                ArtifactDirectory : "../testdata/",
+                InventoryConfig   : "../testdata/inventory_local.prototxt",
+            }
+
+            status, err := serv.Start(tt.address, config)
+
+            if err != nil {
+                t.Errorf("server.Start err = %v, want nil", err)
+            }
+
+            if status != "Running" {
+                t.Errorf("Expected: Running, Received: %s", status)
+            }
+
+            status, err = serv.Stop()
+            
+            if status != "Exited" {
+                t.Errorf("Expected: Exited, Received: %s", status)
+            }
+        })
+    }
     
-    address := "127.0.0.1:5001"
-
-    config := ServerConfig{
-        DhcpIntf          : "",
-        ArtifactDirectory : "../testdata/",
-        InventoryConfig   : "../testdata/inventory_local.prototxt",
-    }
-
-    status, err := serv.Start(address, config)
-
-	if err != nil {
-		t.Fatalf("server.Start err = %v, want nil", err)
-	}
-
-    if status != "Running" {
-        t.Fatalf("Expected: Running, Received: %s", status)
-    }
-
-    serv.Stop()
-    
-    if status != "Exited" {
-        t.Fatalf("Expected: Running, Received: %s", status)
-    }
     
 }
 
-func TestRestart(t *testing.T) {
-    
-    serv := &server{}
-    
-    address := "127.0.0.1:5002"
+func TestReload(t *testing.T) {
 
-    config := ServerConfig{
-        DhcpIntf          : "",
-        ArtifactDirectory : "../testdata/",
-        InventoryConfig   : "../testdata/inventory_local.prototxt",
+    tests := []struct {
+        name string
+        address string
+    }{
+        { "Reload server", "127.0.0.1:5002", },
     }
 
-    status, err := serv.Start(address, config)
+    // TODO: Add test for reload failure from address clash 
 
-	if err != nil {
-		t.Fatalf("server.Start err = %v, want nil", err)
-	}
+    for _, tt := range tests {
+        
+        t.Run(tt.name, func(t *testing.T) {
+            
+            serv := &server{}
+            
+            config := ServerConfig{
+                DhcpIntf          : "",
+                ArtifactDirectory : "../testdata/",
+                InventoryConfig   : "../testdata/inventory_local.prototxt",
+            }
 
-    if status != "Running" {
-        t.Fatalf("Expected: Running, Received: %s", status)
+            status, err := serv.Start(tt.address, config)
+
+            if err != nil {
+                t.Errorf("server.Start err = %v, want nil", err)
+            }
+
+            if status != "Running" {
+                t.Errorf("Before reload- Expected: Running, Received: %s", status)
+            }
+
+            serv.Reload()
+
+            if status != "Running" {
+                t.Errorf("After reload- Expected: Running, Received: %s", status)
+            }
+        })
     }
-
-    serv.Reload()
-
-    if status != "Running" {
-        t.Fatalf("Expected: Running, Received: %s", status)
-    }
-    
 }

@@ -52,7 +52,7 @@ type server struct {
 	serv *grpc.Server
 	lis  net.Listener
     status string
-    lock *sync.Mutex
+    lock sync.Mutex
     config ServerConfig
 }
 
@@ -211,19 +211,19 @@ func (s *server) Start(bootzAddress string, config ServerConfig) (string, error)
     
 }
 
-func (s *server) Stop() (error){
+func (s *server) Stop() (string, error){
     s.lock.Lock()
     defer s.lock.Unlock()
 	s.serv.GracefulStop()
     s.status = "Exited"
-    return nil
+    return s.status, nil
 }
 
-func (s *server) Reload() (error) {
+func (s *server) Reload() (string, error) {
     addr := s.lis.Addr().String()
     s.Stop()
-    s.Start(addr, s.config)
-    return nil
+    _, err :=  s.Start(addr, s.config)
+    return s.status, err 
 }
 
 func (s *server) Status() (string, error) {
