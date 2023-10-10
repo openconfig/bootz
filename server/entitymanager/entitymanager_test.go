@@ -122,8 +122,9 @@ func TestNew(t *testing.T) {
 			inv, err := New(test.chassisConf)
 			if err == nil {
 				opts := []cmp.Option{
-					cmpopts.IgnoreUnexported(epb.Chassis{}, epb.Options{}, bpb.SoftwareImage{}, epb.DHCPConfig{}, epb.GNSIConfig{}, epb.BootConfig{}, epb.Config{}, epb.BootConfig{}, epb.ControlCard{}, service.EntityLookup{}),
 					protocmp.Transform(),
+					protocmp.IgnoreMessages(&epb.Chassis{}, &epb.Options{}, &bpb.SoftwareImage{}, &epb.DHCPConfig{}, &epb.GNSIConfig{}, &epb.BootConfig{}, &epb.Config{}, &epb.BootConfig{}, &epb.ControlCard{}),
+					cmpopts.IgnoreUnexported(service.EntityLookup{}),
 				}
 				if !cmp.Equal(inv.chassisInventory, test.inventory, opts...) {
 					t.Errorf("Inventory list is not as expected, Diff: %s", cmp.Diff(inv.chassisInventory, test.inventory, opts...))
