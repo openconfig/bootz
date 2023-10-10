@@ -49,29 +49,27 @@ var (
 )
 
 type server struct {
-	serv *grpc.Server
-	lis  net.Listener
-    status BootzServerStatus 
-    lock sync.Mutex
-    config ServerConfig
+	serv   *grpc.Server
+	lis    net.Listener
+	status BootzServerStatus
+	lock   sync.Mutex
+	config ServerConfig
 }
 
-type BootzServerStatus string 
+type BootzServerStatus string
 
 const (
 	BootzServerStatus_RUNNING BootzServerStatus = "Running"
 	BootzServerStatus_FAILURE BootzServerStatus = "Failure"
-	BootzServerStatus_EXITED BootzServerStatus = "Exited"
+	BootzServerStatus_EXITED  BootzServerStatus = "Exited"
 )
 
 type ServerConfig struct {
-    // port              string
+	// port              string
 	DhcpIntf          string
 	ArtifactDirectory string
 	InventoryConfig   string
 }
-
-// var lock = &sync.Mutex{}
 
 // Convert address to localhost when no ip is specified.
 func convertAddress(addr string) string {
@@ -164,12 +162,13 @@ func parseSecurityArtifacts() (*service.SecurityArtifacts, error) {
 	}, nil
 }
 
+// Starts a bootz server at provided address with provided options.
 func (s *server) Start(bootzAddress string, config ServerConfig) (BootzServerStatus, error) {
-    s.lock.Lock()
-    defer s.lock.Unlock()
-    
-    s.status = BootzServerStatus_FAILURE
-    
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.status = BootzServerStatus_FAILURE
+
 	if config.ArtifactDirectory == "" {
 		return s.status, fmt.Errorf("no artifact directory selected. specify with the --artifact_dir flag")
 	}
@@ -177,13 +176,13 @@ func (s *server) Start(bootzAddress string, config ServerConfig) (BootzServerSta
 	if bootzAddress == "" {
 		log.Exitf("no port selected. specify with the -port flag")
 	}
-    
+
 	log.Infof("Setting up server security artifacts: OC, OVs, PDC, VendorCA")
 	sa, err := parseSecurityArtifacts()
 	if err != nil {
 		return s.status, err
 	}
-    
+
 	log.Infof("Setting up entities")
 	em, err := entitymanager.New(config.InventoryConfig)
 	if err != nil {
@@ -191,7 +190,7 @@ func (s *server) Start(bootzAddress string, config ServerConfig) (BootzServerSta
 	}
 
 	c := service.New(em)
-    
+
 	trustBundle := x509.NewCertPool()
 	if !trustBundle.AppendCertsFromPEM([]byte(sa.PDC.Cert)) {
 		return s.status, fmt.Errorf("unable to add PDC cert to trust pool")
@@ -210,36 +209,41 @@ func (s *server) Start(bootzAddress string, config ServerConfig) (BootzServerSta
 	}
 	log.Infof("Server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
-    
-    s.status = BootzServerStatus_RUNNING
-    s.serv = newServer 
-    s.lis = lis
-    
+
+	s.status = BootzServerStatus_RUNNING
+	s.serv = newServer
+	s.lis = lis
+
 	return s.status, nil
-    
+
 }
 
-func (s *server) Stop() (BootzServerStatus, error){
-    s.lock.Lock()
-    defer s.lock.Unlock()
+// Method for stopping server.
+func (s *server) Stop() (BootzServerStatus, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	s.serv.GracefulStop()
-    s.status = BootzServerStatus_EXITED
-    return s.status, nil
+	s.status = BootzServerStatus_EXITED
+	return s.status, nil
 }
 
+// Stop and start server again at same address.
 func (s *server) Reload() (BootzServerStatus, error) {
-    addr := s.lis.Addr().String()
-    s.Stop()
-    _, err :=  s.Start(addr, s.config)
-    return s.status, err 
+	addr := s.lis.Addr().String()
+	s.Stop()
+	_, err := s.Start(addr, s.config)
+	// TODO: maybe handle address clash
+	return s.status, err
 }
 
+// Returns server's status
 func (s *server) Status() (BootzServerStatus, error) {
-    return s.status, nil
+	return s.status, nil
 }
 
-func (s *server) BootLogs() (error) {
-    return nil
+// Returns server's of bootlogs
+func (s *server) BootLogs() error {
+	return nil
 }
 
 // newServer creates a new Bootz gRPC server from flags.
@@ -296,20 +300,15 @@ func main() {
 	log.Infof("=========================== BootZ Server Emulator ===========================")
 	log.Infof("=============================================================================")
 
-	// s, err := newServer()
-	// if err != nil {
-	// 	log.Exit(err)
-	// }
+	s := server{}
 
-    s := server{}
+	config := ServerConfig{
+		DhcpIntf:          "",
+		ArtifactDirectory: "../testdata/",
+		InventoryConfig:   "../testdata/inventory_local.prototxt",
+	}
 
-    config := ServerConfig{
-        DhcpIntf          : "",
-        ArtifactDirectory : "../testdata/",
-        InventoryConfig   : "../testdata/inventory_local.prototxt",
-    }
-
-	if _,err := s.Start("127.0.0.1", config); err != nil {
+	if _, err := s.Start("127.0.0.1", config); err != nil {
 		log.Exit(err)
 	}
 }

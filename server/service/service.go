@@ -63,13 +63,12 @@ type EntityLookup struct {
 	SerialNumber string
 }
 
-// ChassisEntity provides the mode that the system is currently
-// configured.
+// ChassisEntity provides the mode that the system is currently configured.
 type ChassisEntity struct {
 	BootMode bpb.BootMode
 }
 
-// an struct to record the boot logs for connected chassis
+// A struct to record the boot logs for connected chassis.
 type bootLog struct {
 	BootMode       bpb.BootMode
 	StartTimeStamp uint64
@@ -114,16 +113,16 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	if len(req.ChassisDescriptor.ControlCards) >= 1 {
 		fixedChasis = false
 		ccSerial = req.ChassisDescriptor.GetControlCards()[0].GetSerialNumber()
-    }
+	}
 	log.Infof("Requesting for %v chassis %v", req.ChassisDescriptor.Manufacturer, req.ChassisDescriptor.SerialNumber)
 	lookup := &EntityLookup{
 		Manufacturer: req.ChassisDescriptor.Manufacturer,
 		SerialNumber: req.ChassisDescriptor.SerialNumber,
 	}
-	// Validate the chassis can be serviced
+	// Validate the chassis can be serviced.
 	chassis, err := s.em.ResolveChassis(lookup, ccSerial)
 	if err != nil {
-s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", req.ChassisDescriptor, err)
+		s.failedRequest[req] = status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", req.ChassisDescriptor, err)
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", req.ChassisDescriptor, err)
 	}
 	log.Infof("Verified server can resolve chassis")
@@ -215,7 +214,7 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 
 }
 
-// IsChassisConnected checks if a device is connected to Bootz Server
+// IsChassisConnected checks if a device is connected to Bootz Server.
 func (s *Service) IsChassisConnected(chassis EntityLookup) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

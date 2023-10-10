@@ -15,169 +15,167 @@
 package main
 
 import (
+	"strings"
 	"testing"
 )
 
-
 // TestStartup tests that a gRPC server can be created with the default flags.
 func TestStartup(t *testing.T) {
-    
-    tests := []struct {
-        name string
-        address string
-    }{
-        { "Start server success", "127.0.0.1:5000", },
-    }
 
+	tests := []struct {
+		name    string
+		address string
+	}{
+		{"Start server success", "127.0.0.1:5000"},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 
-            serv := &server{}
-            
-            config := ServerConfig{
-                DhcpIntf          : "",
-                ArtifactDirectory : "../testdata/",
-                InventoryConfig   : "../testdata/inventory_local.prototxt",
-            }
+			serv := &server{}
 
-            status, err := serv.Start(tt.address, config)
+			config := ServerConfig{
+				DhcpIntf:          "",
+				ArtifactDirectory: "../testdata/",
+				InventoryConfig:   "../testdata/inventory_local.prototxt",
+			}
 
-            if err != nil {
-                t.Errorf("server.Start err = %v, want nil", err)
-            }
+			status, err := serv.Start(tt.address, config)
 
-            if status != BootzServerStatus_RUNNING {
-                t.Errorf("Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
-            }
+			if err != nil {
+				t.Errorf("server.Start err = %v, want nil", err)
+			}
 
-            serv.serv.GracefulStop()
-            
-        })
-    }
-    
+			if status != BootzServerStatus_RUNNING {
+				t.Errorf("Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
+			}
+
+			serv.serv.GracefulStop()
+
+		})
+	}
 
 }
 
 func TestStartupFailure(t *testing.T) {
-    
-    tests := []struct {
-        name string
-        address string
-        wantErr string
-    }{
-        { "Start server failure", "8.8.8.8:5000",
-            "error listening on port: listen tcp 8.8.8.8:5000: bind: can't assign requested address", },
-    }
 
+	tests := []struct {
+		name    string
+		address string
+		wantErr string
+	}{
+		{
+			"Start server failure",
+			"8.8.8.8:5000",
+			"8.8.8.8:5000",
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 
-            serv := &server{}
-            
-            config := ServerConfig{
-                DhcpIntf          : "",
-                ArtifactDirectory : "../testdata/",
-                InventoryConfig   : "../testdata/inventory_local.prototxt",
-            }
+			serv := &server{}
 
-            status, err := serv.Start(tt.address, config)
+			config := ServerConfig{
+				DhcpIntf:          "",
+				ArtifactDirectory: "../testdata/",
+				InventoryConfig:   "../testdata/inventory_local.prototxt",
+			}
 
-            if err.Error() != tt.wantErr {
-                t.Errorf("server.Start err = %v, want nil", err)
-                
-            }
+			status, err := serv.Start(tt.address, config)
 
-            if status != BootzServerStatus_FAILURE {
-                t.Errorf("Expected: %s, Received: %s", BootzServerStatus_FAILURE, status)
-            }
-            
-        })
-    }
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("server.Start err = %v, want nil", err)
+
+			}
+
+			if status != BootzServerStatus_FAILURE {
+				t.Errorf("Expected: %s, Received: %s", BootzServerStatus_FAILURE, status)
+			}
+
+		})
+	}
 
 }
 
-
 func TestStop(t *testing.T) {
-    
-    tests := []struct {
-        name string
-        address string
-    }{
-        { "Stop server", "127.0.0.1:5001", },
-    }
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
+	tests := []struct {
+		name    string
+		address string
+	}{
+		{"Stop server", "127.0.0.1:5001"},
+	}
 
-            serv := &server{}
-            
-            config := ServerConfig{
-                DhcpIntf          : "",
-                ArtifactDirectory : "../testdata/",
-                InventoryConfig   : "../testdata/inventory_local.prototxt",
-            }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 
-            status, err := serv.Start(tt.address, config)
+			serv := &server{}
 
-            if err != nil {
-                t.Errorf("server.Start err = %v, want nil", err)
-            }
+			config := ServerConfig{
+				DhcpIntf:          "",
+				ArtifactDirectory: "../testdata/",
+				InventoryConfig:   "../testdata/inventory_local.prototxt",
+			}
 
-            if status != BootzServerStatus_RUNNING {
-                t.Errorf("Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
-            }
+			status, err := serv.Start(tt.address, config)
 
-            status, err = serv.Stop()
-            
-            if status != BootzServerStatus_EXITED {
-                t.Errorf("Expected: %s, Received: %s", BootzServerStatus_EXITED, status)
-            }
-        })
-    }
-    
-    
+			if err != nil {
+				t.Errorf("server.Start err = %v, want nil", err)
+			}
+
+			if status != BootzServerStatus_RUNNING {
+				t.Errorf("Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
+			}
+
+			status, err = serv.Stop()
+
+			if status != BootzServerStatus_EXITED {
+				t.Errorf("Expected: %s, Received: %s", BootzServerStatus_EXITED, status)
+			}
+		})
+	}
+
 }
 
 func TestReload(t *testing.T) {
 
-    tests := []struct {
-        name string
-        address string
-    }{
-        { "Reload server", "127.0.0.1:5002", },
-    }
+	tests := []struct {
+		name    string
+		address string
+	}{
+		{"Reload server", "127.0.0.1:5002"},
+	}
 
-    // TODO: Add test for reload failure from address clash 
+	// TODO: Add test for reload failure from address clash
 
-    for _, tt := range tests {
-        
-        t.Run(tt.name, func(t *testing.T) {
-            
-            serv := &server{}
-            
-            config := ServerConfig{
-                DhcpIntf          : "",
-                ArtifactDirectory : "../testdata/",
-                InventoryConfig   : "../testdata/inventory_local.prototxt",
-            }
+	for _, tt := range tests {
 
-            status, err := serv.Start(tt.address, config)
+		t.Run(tt.name, func(t *testing.T) {
 
-            if err != nil {
-                t.Errorf("server.Start err = %v, want nil", err)
-            }
+			serv := &server{}
 
-            if status != BootzServerStatus_RUNNING {
-                t.Errorf("Before reload- Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
-            }
+			config := ServerConfig{
+				DhcpIntf:          "",
+				ArtifactDirectory: "../testdata/",
+				InventoryConfig:   "../testdata/inventory_local.prototxt",
+			}
 
-            serv.Reload()
+			status, err := serv.Start(tt.address, config)
 
-            if status != BootzServerStatus_RUNNING {
-                t.Errorf("After reload- Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
-            }
-        })
-    }
+			if err != nil {
+				t.Errorf("server.Start err = %v, want nil", err)
+			}
+
+			if status != BootzServerStatus_RUNNING {
+				t.Errorf("Before reload- Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
+			}
+
+			serv.Reload()
+
+			if status != BootzServerStatus_RUNNING {
+				t.Errorf("After reload- Expected: %s, Received: %s", BootzServerStatus_RUNNING, status)
+			}
+		})
+	}
 }

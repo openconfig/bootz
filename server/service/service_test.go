@@ -67,7 +67,7 @@ func (f *fakeEntityManager) Sign(*bootz.GetBootstrapDataResponse, *EntityLookup,
 	return nil
 }
 
-// The following test shows how a test can use status API
+// The following test shows how a test can use status API.
 // TODO: will complete with diffrence cases
 func TestBootLog(t *testing.T) {
 	bootReq := &bootz.GetBootstrapDataRequest{ChassisDescriptor: &bootz.ChassisDescriptor{
