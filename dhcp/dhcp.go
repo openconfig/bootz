@@ -85,59 +85,79 @@ type Entry struct {
 	Gw string
 }
 
+type DHCPServerStatus string
+
 type Server struct {
 	server *cdserver.Servers
+    status DHCPServerStatus
 }
 
-var instance *Server = nil
+const (
+    DHCPServerStatus_UNINITIALIZED DHCPServerStatus = "Uninitialized"
+    DHCPServerStatus_RUNNING DHCPServerStatus = "Running"
+    DHCPServerStatus_FAILURE DHCPServerStatus = "Failure"
+    DHCPServerStatus_EXITED DHCPServerStatus = "Exited"
+)
+
+var instance *Server = &Server{ status: DHCPServerStatus_UNINITIALIZED }
 var lock = &sync.Mutex{}
 
 // Start starts the dhcp server with the given configuration.
-func Start(conf *Config) error {
+func Start(conf *Config) (DHCPServerStatus, error) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	if instance != nil {
-		return fmt.Errorf("dhcp server already started")
+    instance = &Server{}
+
+	if instance.status == DHCPServerStatus_RUNNING {
+		return instance.status, fmt.Errorf("dhcp server already started")
 	}
 
 	configFile, err := generateConfigFile(conf)
 	if err != nil {
-		return err
+        instance.status = DHCPServerStatus_FAILURE
+		return instance.status, err
 	}
 
 	c, err := cdconfig.Load(configFile)
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %v", err)
+        instance.status = DHCPServerStatus_FAILURE
+		return instance.status, fmt.Errorf("failed to load configuration: %v", err)
 	}
 
 	for _, plugin := range desiredPlugins {
 		if err := cdplugins.RegisterPlugin(plugin); err != nil {
-			return fmt.Errorf("failed to register plugin '%s': %v", plugin.Name, err)
+            instance.status = DHCPServerStatus_FAILURE
+			return instance.status, fmt.Errorf("failed to register plugin '%s': %v", plugin.Name, err)
 		}
 	}
 
 	srv, err := cdserver.Start(c)
 	if err != nil {
-		return fmt.Errorf("error starting DHCP server: %v", err)
+        instance.status = DHCPServerStatus_FAILURE
+		return instance.status, fmt.Errorf("error starting DHCP server: %v", err)
 	}
 	os.Remove(configFile)
 
-	instance = &Server{
-		server: srv,
-	}
-	return nil
+    instance.server = srv
+    instance.status = DHCPServerStatus_RUNNING
+	return instance.status, nil
 }
 
 // Stop stops the DHCP server.
-func Stop() {
+func Stop() DHCPServerStatus {
 	lock.Lock()
 	defer lock.Unlock()
 	if instance != nil {
 		instance.server.Close()
 		instance.server.Wait()
 	}
-	instance = nil
+	instance.status = DHCPServerStatus_EXITED
+    return instance.status
+}
+
+func Status() DHCPServerStatus {
+    return instance.status
 }
 
 func generateConfigFile(conf *Config) (string, error) {

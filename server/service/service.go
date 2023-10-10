@@ -69,7 +69,7 @@ type ChassisEntity struct {
 }
 
 // A struct to record the boot logs for connected chassis.
-type bootLog struct {
+type BootLog struct {
 	BootMode       bpb.BootMode
 	StartTimeStamp uint64
 	EndTimeStamp   uint64
@@ -94,7 +94,7 @@ type Service struct {
 	em               EntityManager
 	mu               sync.Mutex
 	connectedChassis map[EntityLookup]bool
-	activeBoots      map[string]*bootLog
+	activeBoots      map[string]*BootLog
 	failedRequest    map[*bpb.GetBootstrapDataRequest]error
 }
 
@@ -141,7 +141,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("=============================================================================")
 	var responses []*bpb.BootstrapDataResponse
 	for _, v := range req.ChassisDescriptor.ControlCards {
-		s.activeBoots[v.GetSerialNumber()] = &bootLog{
+		s.activeBoots[v.GetSerialNumber()] = &BootLog{
 			BootMode:       chassis.BootMode,
 			StartTimeStamp: uint64(time.Now().UnixMilli()),
 			BootRequest:    req,
@@ -228,16 +228,16 @@ func (s *Service) ResetStatus(chassis EntityLookup) {
 	defer s.mu.Unlock()
 	s.connectedChassis = map[EntityLookup]bool{}
 	s.failedRequest = map[*bpb.GetBootstrapDataRequest]error{}
-	s.activeBoots = map[string]*bootLog{}
+	s.activeBoots = map[string]*BootLog{}
 }
 
 // GetBootStatus return boot log for a controller card. This is intended to use for testing.
-func (s *Service) GetBootStatus(serial string) (bootLog, error) {
+func (s *Service) GetBootStatus(serial string) (BootLog, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	b, ok := s.activeBoots[serial]
 	if !ok {
-		return bootLog{}, fmt.Errorf("no boot log found for controller card %s", serial)
+		return BootLog{}, fmt.Errorf("no boot log found for controller card %s", serial)
 	}
 	return *b, nil
 }
@@ -254,6 +254,6 @@ func New(em EntityManager) *Service {
 		em:               em,
 		connectedChassis: map[EntityLookup]bool{},
 		failedRequest:    map[*bpb.GetBootstrapDataRequest]error{},
-		activeBoots:      map[string]*bootLog{},
+		activeBoots:      map[string]*BootLog{},
 	}
 }
