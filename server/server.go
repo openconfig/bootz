@@ -58,13 +58,13 @@ func readKeypair(name string) (*service.KeyPair, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to read %v cert: %v", name, err)
 	}
-	key, err := os.ReadFile(filepath.Join(*artifactDirectory, fmt.Sprintf("%v_priv.pem", name)))
+	privateKey, err := os.ReadFile(filepath.Join(*artifactDirectory, fmt.Sprintf("%v_priv.pem", name)))
 	if err != nil {
 		return nil, fmt.Errorf("unable to read %v key: %v", name, err)
 	}
 	return &service.KeyPair{
-		Cert: string(cert),
-		Key:  string(key),
+		Cert:       string(cert),
+		PrivateKey: string(privateKey),
 	}, nil
 }
 
@@ -94,7 +94,7 @@ func readOVs() (service.OVList, error) {
 
 // generateServerTLSCert creates a new TLS keypair from the PDC.
 func generateServerTLSCert(pdc *service.KeyPair) (*tls.Certificate, error) {
-	tlsCert, err := tls.X509KeyPair([]byte(pdc.Cert), []byte(pdc.Key))
+	tlsCert, err := tls.X509KeyPair([]byte(pdc.Cert), []byte(pdc.PrivateKey))
 	if err != nil {
 		return nil, fmt.Errorf("unable to generate Server TLS Certificate from PDC %v", err)
 	}
