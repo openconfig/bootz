@@ -281,7 +281,9 @@ func (s *server) GetBootStatus(router_serial string) (service.BootLog, error) {
     status := s.ServiceStatus()
     
     if status.dhcpStatus != dhcp.DHCPServerStatus_RUNNING {
-        return service.BootLog{}, fmt.Errorf("DHCP server not running")
+        if status.dhcpStatus != dhcp.DHCPServerStatus_UNINITIALIZED {
+            return service.BootLog{}, fmt.Errorf("DHCP server not running")
+        }
     }
     
     // TODO: Check if bootz server running.
