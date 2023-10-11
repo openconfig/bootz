@@ -68,7 +68,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	if err := dhcp.Start(conf); err != nil {
+	if _, err := dhcp.Start(conf); err != nil {
 		log.Exitf("error starting dhcp server: %v", err)
 	}
 

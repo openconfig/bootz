@@ -17,7 +17,7 @@
 // The bootz server will provide a simple file based bootstrap
 // implementation for devices. The service can be extended by
 // provding your own implementation of the entity manager.
-package main
+package server 
 
 import (
 	"crypto/tls"
@@ -48,28 +48,27 @@ var (
 )
 
 type ServiceStatus struct {
-    bootzStatus BootzServerStatus
-    dhcpStatus dhcp.DHCPServerStatus
-    //TODO: Add image server status.
+	bootzStatus BootzServerStatus
+	dhcpStatus  dhcp.DHCPServerStatus
+	//TODO: Add image server status.
 }
 
 type server struct {
-	serv   *grpc.Server
-    serviceRef *service.Service
-	lis    net.Listener
-    serviceStatus ServiceStatus
-	lock   sync.Mutex
-	config ServerConfig
+	serv          *grpc.Server
+	serviceRef    *service.Service
+	lis           net.Listener
+	serviceStatus ServiceStatus
+	lock          sync.Mutex
+	config        ServerConfig
 }
-
 
 type BootzServerStatus string
 
 const (
-    BootzServerStatus_UNINITIALIZED BootzServerStatus = "Uninitialized"
-	BootzServerStatus_RUNNING BootzServerStatus = "Running"
-	BootzServerStatus_FAILURE BootzServerStatus = "Failure"
-	BootzServerStatus_EXITED  BootzServerStatus = "Exited"
+	BootzServerStatus_UNINITIALIZED BootzServerStatus = "Uninitialized"
+	BootzServerStatus_RUNNING       BootzServerStatus = "Running"
+	BootzServerStatus_FAILURE       BootzServerStatus = "Failure"
+	BootzServerStatus_EXITED        BootzServerStatus = "Exited"
 )
 
 type ServerConfig struct {
@@ -171,12 +170,12 @@ func parseSecurityArtifacts() (*service.SecurityArtifacts, error) {
 }
 
 func New() *server {
-    return &server{
-        serviceStatus: ServiceStatus {
-            bootzStatus: BootzServerStatus_UNINITIALIZED,
-            dhcpStatus: dhcp.DHCPServerStatus_UNINITIALIZED,
-        },
-    }
+	return &server{
+		serviceStatus: ServiceStatus{
+			bootzStatus: BootzServerStatus_UNINITIALIZED,
+			dhcpStatus:  dhcp.DHCPServerStatus_UNINITIALIZED,
+		},
+	}
 }
 
 // Starts a bootz server at provided address with provided options.
@@ -185,42 +184,42 @@ func (s *server) Start(bootzAddress string, config ServerConfig) (BootzServerSta
 	defer s.lock.Unlock()
 
 	if config.ArtifactDirectory == "" {
-        s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
+		s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
 		return s.serviceStatus.bootzStatus, fmt.Errorf("no artifact directory selected. specify with the --artifact_dir flag")
 	}
 
 	if bootzAddress == "" {
-        s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
-        return s.serviceStatus.bootzStatus, fmt.Errorf("Address cannot be empty")
+		s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
+		return s.serviceStatus.bootzStatus, fmt.Errorf("Address cannot be empty")
 	}
 
 	log.Infof("Setting up server security artifacts: OC, OVs, PDC, VendorCA")
 	sa, err := parseSecurityArtifacts()
 	if err != nil {
-        s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
+		s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
 		return s.serviceStatus.bootzStatus, err
 	}
 
 	log.Infof("Setting up entities")
 	em, err := entitymanager.New(config.InventoryConfig)
 	if err != nil {
-        s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
+		s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
 		return s.serviceStatus.bootzStatus, fmt.Errorf("unable to initiate inventory manager %v", err)
 	}
 
 	s.serviceRef = service.New(em)
-    
+
 	if config.DhcpIntf != "" {
-        s.serviceStatus.dhcpStatus, err = startDhcpServer(em)
-		if  err != nil {
-            s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
+		s.serviceStatus.dhcpStatus, err = startDhcpServer(em)
+		if err != nil {
+			s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
 			return s.serviceStatus.bootzStatus, fmt.Errorf("unable to start dhcp server %v", err)
 		}
 	}
 
 	trustBundle := x509.NewCertPool()
 	if !trustBundle.AppendCertsFromPEM([]byte(sa.PDC.Cert)) {
-        s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
+		s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
 		return s.serviceStatus.bootzStatus, fmt.Errorf("unable to add PDC cert to trust pool")
 	}
 	tls := &tls.Config{
@@ -233,17 +232,17 @@ func (s *server) Start(bootzAddress string, config ServerConfig) (BootzServerSta
 
 	lis, err := net.Listen("tcp", convertAddress(bootzAddress))
 	if err != nil {
-        s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
+		s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
 		return s.serviceStatus.bootzStatus, fmt.Errorf("error listening on port: %v", err)
 	}
 	log.Infof("Server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
-    
+
 	// TODO:  Launch image server
-    s.serviceStatus.bootzStatus = BootzServerStatus_RUNNING
-    s.serv = newServer 
-    s.lis = lis
-    
+	s.serviceStatus.bootzStatus = BootzServerStatus_RUNNING
+	s.serv = newServer
+	s.lis = lis
+
 	return s.serviceStatus.bootzStatus, nil
 
 }
@@ -253,7 +252,7 @@ func (s *server) Stop() (BootzServerStatus, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.serv.GracefulStop()
-    // TODO: Exit dhcp and image servers.
+	// TODO: Exit dhcp and image servers.
 	s.serviceStatus.bootzStatus = BootzServerStatus_EXITED
 	return s.serviceStatus.bootzStatus, nil
 }
@@ -264,40 +263,40 @@ func (s *server) Reload() (BootzServerStatus, error) {
 	s.Stop()
 	_, err := s.Start(addr, s.config)
 	// TODO: Maybe handle address clash.
-    // TODO: Stop DHCP and image servers?
+	// TODO: Stop DHCP and image servers?
 	return s.serviceStatus.bootzStatus, err
 }
 
 // Returns status of the services.
-func (s *server) ServiceStatus() (ServiceStatus) {
-    s.serviceStatus.dhcpStatus = dhcp.Status()
-    // TODO: Add image server
+func (s *server) ServiceStatus() ServiceStatus {
+	s.serviceStatus.dhcpStatus = dhcp.Status()
+	// TODO: Add image server
 	return s.serviceStatus
 }
 
 // Entity boot status.
 func (s *server) GetBootStatus(router_serial string) (service.BootLog, error) {
-   
-    status := s.ServiceStatus()
-    
-    if status.dhcpStatus != dhcp.DHCPServerStatus_RUNNING {
-        if status.dhcpStatus != dhcp.DHCPServerStatus_UNINITIALIZED {
-            return service.BootLog{}, fmt.Errorf("DHCP server not running")
-        }
-    }
-    
-    // TODO: Check if bootz server running.
-    // TODO: Check if image server running.
-    
-    return s.serviceRef.GetBootStatus(router_serial)
+
+	status := s.ServiceStatus()
+
+	if status.dhcpStatus != dhcp.DHCPServerStatus_RUNNING {
+		if status.dhcpStatus != dhcp.DHCPServerStatus_UNINITIALIZED {
+			return service.BootLog{}, fmt.Errorf("DHCP server not running")
+		}
+	}
+
+	// TODO: Check if bootz server running.
+	// TODO: Check if image server running.
+
+	return s.serviceRef.GetBootStatus(router_serial)
 }
 
 func (s *server) IsChassisConnected(chassis service.EntityLookup) bool {
-    return s.serviceRef.IsChassisConnected(chassis)
+	return s.serviceRef.IsChassisConnected(chassis)
 }
-    
+
 func (s *server) ResetStatus(chassis service.EntityLookup) {
-    s.serviceRef.ResetStatus(chassis)
+	s.serviceRef.ResetStatus(chassis)
 }
 
 func startDhcpServer(em *entitymanager.InMemoryEntityManager) (dhcp.DHCPServerStatus, error) {
