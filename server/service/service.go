@@ -32,8 +32,8 @@ type OVList map[string]string
 
 // KeyPair is a struct containing PEM-encoded certificates and private keys.
 type KeyPair struct {
-	Cert string
-	Key  string
+	Cert       string
+	PrivateKey string
 }
 
 // SecurityArtifacts contains all KeyPairs and OVs needed for the Bootz Server.

@@ -263,19 +263,19 @@ func readKeypair(dir, name string) (*service.KeyPair, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to read %v cert: %v", name, err)
 	}
-	key, err := os.ReadFile(filepath.Join(dir, fmt.Sprintf("%v_priv.pem", name)))
+	privateKey, err := os.ReadFile(filepath.Join(dir, fmt.Sprintf("%v_priv.pem", name)))
 	if err != nil {
 		return nil, fmt.Errorf("unable to read %v key: %v", name, err)
 	}
 	return &service.KeyPair{
-		Cert: string(cert),
-		Key:  string(key),
+		Cert:       string(cert),
+		PrivateKey: string(privateKey),
 	}, nil
 }
 
 // loadServerTLSCert uses the PDC key as the server certificate.
 func loadServerTLSCert(pdc *service.KeyPair) (*tls.Certificate, error) {
-	tlsCert, err := tls.X509KeyPair([]byte(pdc.Cert), []byte(pdc.Key))
+	tlsCert, err := tls.X509KeyPair([]byte(pdc.Cert), []byte(pdc.PrivateKey))
 	if err != nil {
 		return nil, fmt.Errorf("unable to load PDC keys %v", err)
 	}
@@ -323,7 +323,7 @@ func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis
 		return status.Errorf(codes.Internal, "security artifact is missing")
 	}
 	log.Infof("Decoding the OC private key...")
-	block, _ := pem.Decode([]byte(m.secArtifacts.OC.Key))
+	block, _ := pem.Decode([]byte(m.secArtifacts.OC.PrivateKey))
 	if block == nil {
 		return status.Errorf(codes.Internal, "unable to decode OC private key")
 	}
@@ -344,10 +344,10 @@ func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis
 	}
 	log.Infof("Successfully serialized the response")
 
-	log.Infof("Calculating the sha256 sum to encrypt the response...")
+	log.Infof("Calculating the sha256 sum to sign the response...")
 	hashed := sha256.Sum256(signedResponseBytes)
 	// TODO: Add support for EC keys too.
-	log.Infof("Encrypting the response...")
+	log.Infof("Signing the response...")
 	sig, err := rsa.SignPKCS1v15(nil, priv, crypto.SHA256, hashed[:])
 	if err != nil {
 		return err
