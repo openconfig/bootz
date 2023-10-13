@@ -173,7 +173,7 @@ func generateConfigFile(conf *Config) (string, error) {
 
 	intf, err := net.InterfaceByName(conf.Interface)
 	if err != nil {
-		return "", fmt.Errorf("unknown interface %v", *intf)
+		return "", fmt.Errorf("unknown interface %v", conf.Interface)
 	}
 
 	IPv4Addr := getIPv4Address(intf)

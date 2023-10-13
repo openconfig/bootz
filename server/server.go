@@ -210,7 +210,7 @@ func (s *server) Start(bootzAddress string, config ServerConfig) (BootzServerSta
 	s.serviceRef = service.New(em)
 
 	if config.DhcpIntf != "" {
-		s.serviceStatus.dhcpStatus, err = startDhcpServer(em)
+		s.serviceStatus.dhcpStatus, err = startDhcpServer(em, config.DhcpIntf)
 		if err != nil {
 			s.serviceStatus.bootzStatus = BootzServerStatus_FAILURE
 			return s.serviceStatus.bootzStatus, fmt.Errorf("unable to start dhcp server %v", err)
@@ -299,9 +299,9 @@ func (s *server) ResetStatus(chassis service.EntityLookup) {
 	s.serviceRef.ResetStatus(chassis)
 }
 
-func startDhcpServer(em *entitymanager.InMemoryEntityManager) (dhcp.DHCPServerStatus, error) {
+func startDhcpServer(em *entitymanager.InMemoryEntityManager, intf string) (dhcp.DHCPServerStatus, error) {
 	conf := &dhcp.Config{
-		Interface:  *dhcpIntf,
+		Interface:  intf,
 		AddressMap: make(map[string]*dhcp.Entry),
 	}
 
