@@ -316,7 +316,7 @@ func isBase64(str string) bool {
 func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// check if sec artifacts are provided for signing
+	// Check if security artifacts are provided for signing.
 	if m.secArtifacts == nil {
 		return status.Errorf(codes.Internal, "security artifact is missing")
 	}
