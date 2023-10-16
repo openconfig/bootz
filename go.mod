@@ -9,7 +9,7 @@ require (
 	github.com/h-fam/errdiff v1.0.2
 	github.com/insomniacslk/dhcp v0.0.0-20230908212754-65c27093e38a
 	github.com/openconfig/gnmi v0.0.0-20220617175856-41246b1b3507
-	github.com/openconfig/gnsi v1.2.1
+	github.com/openconfig/gnsi v1.2.3
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352
 	google.golang.org/grpc v1.56.2
 	google.golang.org/protobuf v1.31.0

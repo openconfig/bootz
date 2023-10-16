@@ -18,9 +18,7 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -35,6 +33,7 @@ import (
 
 	log "github.com/golang/glog"
 	ownershipvoucher "github.com/openconfig/bootz/common/ownership_voucher"
+	"github.com/openconfig/bootz/common/signature"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -128,28 +127,9 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, 
 		return err
 	}
 	log.Infof("Successfully serialized the response")
-
-	log.Infof("Calculating the sha256 sum to validate the response signature...")
-	hashed := sha256.Sum256(signedResponseBytes)
-	log.Infof("Decoding the response...")
-	decodedSig, err := base64.StdEncoding.DecodeString(resp.GetResponseSignature())
-	if err != nil {
+	if err := signature.Verify(ocCert, signedResponseBytes, resp.GetResponseSignature()); err != nil {
 		return err
 	}
-	log.Infof("Decoded the response string")
-
-	log.Infof("Using the ownership certificate's public key to verify the signature... Note only RSA keys are supported")
-	// Verify the signature with the ownership certificate's public key. Currently only RSA keys are supported.
-	switch pub := ocCert.PublicKey.(type) {
-	case *rsa.PublicKey:
-		err = rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], decodedSig)
-		if err != nil {
-			return fmt.Errorf("signature not verified: %v", err)
-		}
-	default:
-		return fmt.Errorf("unsupported public key type: %T", pub)
-	}
-	log.Infof("Verified SignedResponse signature")
 	return nil
 }
 
