@@ -16,9 +16,6 @@
 package entitymanager
 
 import (
-	"crypto"
-	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -30,6 +27,7 @@ import (
 	"regexp"
 	"sync"
 
+	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -318,20 +316,9 @@ func isBase64(str string) bool {
 func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// check if sec artifacts areprovided for signing
+	// check if sec artifacts are provided for signing
 	if m.secArtifacts == nil {
 		return status.Errorf(codes.Internal, "security artifact is missing")
-	}
-	log.Infof("Decoding the OC private key...")
-	block, _ := pem.Decode([]byte(m.secArtifacts.OC.PrivateKey))
-	if block == nil {
-		return status.Errorf(codes.Internal, "unable to decode OC private key")
-	}
-	log.Infof("Decoded the OC private key")
-
-	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		return err
 	}
 	if resp.GetSignedResponse() == nil {
 		return status.Errorf(codes.InvalidArgument, "empty signed response")
@@ -343,17 +330,19 @@ func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis
 		return err
 	}
 	log.Infof("Successfully serialized the response")
-
-	log.Infof("Calculating the sha256 sum to sign the response...")
-	hashed := sha256.Sum256(signedResponseBytes)
-	// TODO: Add support for EC keys too.
-	log.Infof("Signing the response...")
-	sig, err := rsa.SignPKCS1v15(nil, priv, crypto.SHA256, hashed[:])
+	block, _ := pem.Decode([]byte(m.secArtifacts.OC.PrivateKey))
+	if block == nil {
+		return fmt.Errorf("unable to decode private key")
+	}
+	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
 		return err
 	}
-	resp.ResponseSignature = base64.StdEncoding.EncodeToString(sig)
-	log.Infof("Response signature set")
+	sig, err := signature.Create(priv, signedResponseBytes)
+	if err != nil {
+		return err
+	}
+	resp.ResponseSignature = sig
 
 	// Populate the OV
 	ov, err := m.fetchOwnershipVoucher(chassis, controllerCard)
