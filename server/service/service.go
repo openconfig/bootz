@@ -146,11 +146,12 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("Response set")
 
 	// Sign the response if Nonce is provided.
-	if req.GetNonce() != "" {
+	nonce := reqGetNonce()
+	if nonce != "" {
 		log.Infof("=============================================================================")
 		log.Infof("====================== Signing the response with nonce ======================")
 		log.Infof("=============================================================================")
-		resp.GetSignedResponse().Nonce = req.Nonce
+		resp.GetSignedResponse().Nonce = nonce
 		if err := s.em.Sign(resp, lookup, req.GetControlCardState().GetSerialNumber()); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
 		}
