@@ -86,24 +86,25 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("=============================================================================")
 	fixedChasis := true
 	ccSerial := ""
-	if len(req.ChassisDescriptor.ControlCards) >= 1 {
+	chassisDesc := req.GetChassisDescriptor()
+	if len(chassisDesc.GetControlCards()) >= 1 {
 		fixedChasis = false
-		ccSerial = req.ChassisDescriptor.GetControlCards()[0].GetSerialNumber()
+		ccSerial = chassisDesc.GetControlCards()[0].GetSerialNumber()
 	}
-	log.Infof("Requesting for %v chassis %v", req.ChassisDescriptor.Manufacturer, req.ChassisDescriptor.SerialNumber)
+	log.Infof("Requesting for %v chassis %v", chassisDesc.GetManufacturer(), chassisDesc.GetSerialNumber())
 	lookup := &EntityLookup{
-		Manufacturer: req.ChassisDescriptor.Manufacturer,
-		SerialNumber: req.ChassisDescriptor.SerialNumber,
+		Manufacturer: chassisDesc.GetManufacturer(),
+		SerialNumber: chassisDesc.GetSerialNumber(),
 	}
 	// Validate the chassis can be serviced
 	chassis, err := s.em.ResolveChassis(lookup, ccSerial)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", req.ChassisDescriptor, err)
+		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", chassisDesc, err)
 	}
 	log.Infof("Verified server can resolve chassis")
 
 	// If chassis can only be booted into secure mode then return error
-	if chassis.BootMode == bpb.BootMode_BOOT_MODE_SECURE && req.Nonce == "" {
+	if chassis.BootMode == bpb.BootMode_BOOT_MODE_SECURE && req.GetNonce() == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
 	}
 
@@ -114,7 +115,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("==================== Fetching data for each control card ====================")
 	log.Infof("=============================================================================")
 	var responses []*bpb.BootstrapDataResponse
-	for _, v := range req.ChassisDescriptor.ControlCards {
+	for _, v := range chassisDesc.GetControlCards() {
 		bootdata, err := s.em.GetBootstrapData(lookup, v)
 		if err != nil {
 			errs.Add(err)
@@ -145,11 +146,12 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("Response set")
 
 	// Sign the response if Nonce is provided.
-	if req.Nonce != "" {
+	nonce := req.GetNonce()
+	if nonce != "" {
 		log.Infof("=============================================================================")
 		log.Infof("====================== Signing the response with nonce ======================")
 		log.Infof("=============================================================================")
-		resp.SignedResponse.Nonce = req.Nonce
+		resp.GetSignedResponse().Nonce = nonce
 		if err := s.em.Sign(resp, lookup, req.GetControlCardState().GetSerialNumber()); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
 		}
