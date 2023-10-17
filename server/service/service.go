@@ -146,7 +146,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("Response set")
 
 	// Sign the response if Nonce is provided.
-	nonce := reqGetNonce()
+	nonce := req.GetNonce()
 	if nonce != "" {
 		log.Infof("=============================================================================")
 		log.Infof("====================== Signing the response with nonce ======================")
