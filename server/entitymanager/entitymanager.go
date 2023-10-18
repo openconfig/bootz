@@ -338,7 +338,7 @@ func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis
 	if err != nil {
 		return err
 	}
-	sig, err := signature.Create(priv, signedResponseBytes)
+	sig, err := signature.Sign(priv, signedResponseBytes)
 	if err != nil {
 		return err
 	}
