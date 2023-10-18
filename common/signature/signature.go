@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package signature provides methods to create and verify signatures.
+// Package signature provides methods to sign and verify signatures.
 package signature
 
 import (
@@ -24,12 +24,12 @@ import (
 	"fmt"
 )
 
-// Create generates a base64-encoded signature of the input data using the provided RSA private key.
-func Create(privateKey *rsa.PrivateKey, input []byte) (string, error) {
+// Sign generates a base64-encoded signature of the input data using the provided RSA private key.
+func Sign(privateKey *rsa.PrivateKey, input []byte) (string, error) {
 	hashed := sha256.Sum256(input)
 	sig, err := rsa.SignPKCS1v15(nil, privateKey, crypto.SHA256, hashed[:])
 	if err != nil {
-		return "", fmt.Errorf("Sign(): unable to create signature: %w", err)
+		return "", fmt.Errorf("Sign(): unable to sign signature: %w", err)
 	}
 	return base64.StdEncoding.EncodeToString(sig), nil
 }

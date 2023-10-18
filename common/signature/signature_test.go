@@ -47,10 +47,10 @@ func TestCreateAndVerify(t *testing.T) {
 	cert, privateKey := keyPair(t)
 	input := []byte("input_data")
 
-	// Create the signature
-	sig, err := Create(privateKey, input)
+	// Sign the signature
+	sig, err := Sign(privateKey, input)
 	if err != nil {
-		t.Fatalf("unable to create signature: %v", err)
+		t.Fatalf("unable to sign signature: %v", err)
 	}
 	// Verify the signature
 	err = Verify(cert, input, sig)
