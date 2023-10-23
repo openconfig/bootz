@@ -36,6 +36,16 @@ import (
 	apb "github.com/openconfig/gnsi/authz"
 )
 
+// MustMarshalBootstrapDataSigned is a helper function that marshals a BootstrapDataSigned message.
+func MustMarshalBootstrapDataSigned(t *testing.T, b *bpb.BootstrapDataSigned) []byte {
+	t.Helper()
+	bytes, err := proto.Marshal(b)
+	if err != nil {
+		t.Fatalf("MustMarshalBootstrapDataSigned(t, m) = %v; want %v", err, nil)
+	}
+	return bytes
+}
+
 func TestNew(t *testing.T) {
 	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
 	ov2 := readTextFromFile(t, "../../testdata/ov_123B.txt")
@@ -268,11 +278,11 @@ func TestSign(t *testing.T) {
 		},
 		serial: "123A",
 		resp: &bpb.GetBootstrapDataResponse{
-			SignedResponse: &bpb.BootstrapDataSigned{
+			SerializedBootstrapData: MustMarshalBootstrapDataSigned(t, &bpb.BootstrapDataSigned{
 				Responses: []*bpb.BootstrapDataResponse{
 					{SerialNum: "123A"},
 				},
-			},
+			}),
 		},
 		wantOV:  ov1,
 		wantOC:  true,
@@ -300,11 +310,7 @@ func TestSign(t *testing.T) {
 				}
 				t.Errorf("Sign() err = %v, want %v", err, test.wantErr)
 			}
-			signedResponseBytes, err := proto.Marshal(test.resp.GetSignedResponse())
-			if err != nil {
-				t.Fatal(err)
-			}
-			hashed := sha256.Sum256(signedResponseBytes)
+			hashed := sha256.Sum256(test.resp.GetSerializedBootstrapData())
 			sigDecoded, err := base64.StdEncoding.DecodeString(test.resp.GetResponseSignature())
 			if err != nil {
 				t.Fatal(err)

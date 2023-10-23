@@ -121,15 +121,10 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, 
 	log.Infof("=============================================================================")
 	log.Infof("===================== Validating the response signature =====================")
 	log.Infof("=============================================================================")
-	log.Infof("Marshalling the response...")
-	signedResponseBytes, err := proto.Marshal(resp.GetSignedResponse())
-	if err != nil {
+	if err := signature.Verify(ocCert, resp.GetSerializedBootstrapData(), resp.GetResponseSignature()); err != nil {
 		return err
 	}
-	log.Infof("Successfully serialized the response")
-	if err := signature.Verify(ocCert, signedResponseBytes, resp.GetResponseSignature()); err != nil {
-		return err
-	}
+	log.Infof("Successfully validated the response")
 	return nil
 }
 
@@ -314,7 +309,11 @@ func main() {
 		}
 	}
 
-	signedResp := resp.GetSignedResponse()
+	var signedResp bpb.BootstrapDataSigned
+	if err := proto.Unmarshal(resp.GetSerializedBootstrapData(), &signedResp); err != nil {
+		log.Exitf("unable to unmarshal serialized bootstrap data: %v", err)
+	}
+
 	if !*insecureBoot && signedResp.GetNonce() != nonce {
 		log.Exitf("GetBootstrapDataResponse nonce does not match")
 	}

@@ -320,16 +320,10 @@ func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis
 	if m.secArtifacts == nil {
 		return status.Errorf(codes.Internal, "security artifact is missing")
 	}
-	if resp.GetSignedResponse() == nil {
-		return status.Errorf(codes.InvalidArgument, "empty signed response")
+	if len(resp.GetSerializedBootstrapData()) == 0 {
+		return status.Errorf(codes.InvalidArgument, "empty serialized bootstrap data")
 	}
 
-	log.Infof("Marshalling the response...")
-	signedResponseBytes, err := proto.Marshal(resp.GetSignedResponse())
-	if err != nil {
-		return err
-	}
-	log.Infof("Successfully serialized the response")
 	block, _ := pem.Decode([]byte(m.secArtifacts.OC.PrivateKey))
 	if block == nil {
 		return fmt.Errorf("unable to decode private key")
@@ -338,7 +332,7 @@ func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis
 	if err != nil {
 		return err
 	}
-	sig, err := signature.Sign(priv, signedResponseBytes)
+	sig, err := signature.Sign(priv, resp.GetSerializedBootstrapData())
 	if err != nil {
 		return err
 	}

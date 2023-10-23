@@ -22,6 +22,7 @@ import (
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	log "github.com/golang/glog"
 	bpb "github.com/openconfig/bootz/proto/bootz"
@@ -138,20 +139,30 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("Successfully fetched data for each control card")
 	log.Infof("=============================================================================")
 
+	nonce := req.GetNonce()
+	signedResponse := &bpb.BootstrapDataSigned{
+		Responses: responses,
+		Nonce:     nonce,
+	}
+	log.Infof("Serializing the response...")
+	signedResponseBytes, err := proto.Marshal(signedResponse)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Successfully serialized the response")
+
 	resp := &bpb.GetBootstrapDataResponse{
-		SignedResponse: &bpb.BootstrapDataSigned{
-			Responses: responses,
-		},
+		// This field is deprecated but we still include it for backwards compatability.
+		SignedResponse:          signedResponse,
+		SerializedBootstrapData: signedResponseBytes,
 	}
 	log.Infof("Response set")
 
 	// Sign the response if Nonce is provided.
-	nonce := req.GetNonce()
 	if nonce != "" {
 		log.Infof("=============================================================================")
 		log.Infof("====================== Signing the response with nonce ======================")
 		log.Infof("=============================================================================")
-		resp.GetSignedResponse().Nonce = nonce
 		if err := s.em.Sign(resp, lookup, req.GetControlCardState().GetSerialNumber()); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
 		}
