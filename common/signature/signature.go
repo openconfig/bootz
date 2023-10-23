@@ -24,13 +24,22 @@ import (
 	"fmt"
 )
 
-// Sign generates a base64-encoded signature of the input data using the provided RSA private key.
-func Sign(privateKey *rsa.PrivateKey, input []byte) (string, error) {
+// Sign generates a base64-encoded signature of the input data using the provided private key.
+// The private key must be RSA.
+func Sign(privateKey crypto.PrivateKey, input []byte) (string, error) {
 	hashed := sha256.Sum256(input)
-	sig, err := rsa.SignPKCS1v15(nil, privateKey, crypto.SHA256, hashed[:])
-	if err != nil {
-		return "", fmt.Errorf("Sign(): unable to sign signature: %w", err)
+	var sig []byte
+	var err error
+	switch priv := privateKey.(type) {
+	case *rsa.PrivateKey:
+		sig, err = rsa.SignPKCS1v15(nil, priv, crypto.SHA256, hashed[:])
+		if err != nil {
+			return "", fmt.Errorf("Sign(): unable to sign signature: %w", err)
+		}
+	default:
+		return "", fmt.Errorf("Verify(): unsupported private key type: %T", priv)
 	}
+
 	return base64.StdEncoding.EncodeToString(sig), nil
 }
 
