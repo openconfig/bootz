@@ -121,10 +121,10 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, 
 	log.Infof("=============================================================================")
 	log.Infof("===================== Validating the response signature =====================")
 	log.Infof("=============================================================================")
-	log.Infof("Successfully serialized the response")
 	if err := signature.Verify(ocCert, resp.GetSerializedBootstrapData(), resp.GetResponseSignature()); err != nil {
 		return err
 	}
+	log.Infof("Successfully validated the response")
 	return nil
 }
 
