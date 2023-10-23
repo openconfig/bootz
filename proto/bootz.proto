@@ -141,7 +141,11 @@ message BootstrapDataSigned {
 }
 
 message GetBootstrapDataResponse {
-  BootstrapDataSigned signed_response = 1;
+  // DEPRECATED: Use serialized_bootstrap_data instead.
+  // Contains the signed bootstrap response. Deserialization of this 
+  // field is not stable so the response_signature should not be used 
+  // to verify this.
+  BootstrapDataSigned signed_response = 1 [deprecated = true];
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field
   // in the GetBootstrapDataRequest message.
@@ -150,12 +154,15 @@ message GetBootstrapDataResponse {
   // voucher, which is indicated by the device not setting the nonce field
   // in the GetBootstrapDataRequest message.
   bytes ownership_certificate = 102;
-  // This is a signature generated over the bytes of the signed_response field,
+  // This is a signature of the serialized_bootstrap_data field,
   // using the ownership_certificate.
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field
   // in the GetBootstrapDataRequest message.
   string response_signature = 103;
+  // Contains the wire format encoding of the BootstrapDataSigned 
+  // message. This field should be verified with the response_signature.
+  bytes serialized_bootstrap_data = 104;
 }
 
 message SoftwareImage {
