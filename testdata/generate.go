@@ -38,6 +38,7 @@ var (
 	vendor             = flag.String("vendor", "", "The name of the vendor to generate self-signed certificates for.")
 	owner              = flag.String("owner", "", "The name of the organization that owns the emulated device.")
 	controlCardSerials = flag.String("serials", "", "Comma-separated list of control card serials to generate OVs for.")
+	serverName         = flag.String("server_name", "localhost", "The DNS name of the Certificate Authority.")
 )
 
 const (
@@ -52,6 +53,7 @@ const (
 func newCertificateAuthority(commonName string, org string) (*x509.Certificate, *rsa.PrivateKey, error) {
 	// Create the certificate authority.
 	ca := &x509.Certificate{
+		DNSNames:     []string{*serverName},
 		SerialNumber: big.NewInt(int64(time.Now().Year())),
 		Subject: pkix.Name{
 			CommonName:   commonName,
