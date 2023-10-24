@@ -103,17 +103,7 @@ func pemEncode(der []byte, pemType string) ([]byte, error) {
 
 // writeFile writes the contents to a new file in the current directory.
 func writeFile(contents []byte, filename string) error {
-	f, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	b, err := f.Write(contents)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Wrote %d bytes to %v\n", b, filename)
-	return nil
+	return os.WriteFile(filename, contents, 0666)
 }
 
 func main() {
