@@ -15,9 +15,6 @@
 package entitymanager
 
 import (
-	"crypto"
-	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -27,6 +24,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/h-fam/errdiff"
+	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -310,24 +308,19 @@ func TestSign(t *testing.T) {
 				}
 				t.Errorf("Sign() err = %v, want %v", err, test.wantErr)
 			}
-			hashed := sha256.Sum256(test.resp.GetSerializedBootstrapData())
-			sigDecoded, err := base64.StdEncoding.DecodeString(test.resp.GetResponseSignature())
-			if err != nil {
-				t.Fatal(err)
-			}
 
-			block, _ := pem.Decode([]byte(artifacts.OC.PrivateKey))
+			block, _ := pem.Decode([]byte(artifacts.OC.Cert))
 			if block == nil {
-				t.Fatal("unable to decode OC private key")
+				t.Fatal("unable to decode OC public key")
 			}
-			priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+			cert, err := x509.ParseCertificate(block.Bytes)
 			if err != nil {
-				t.Fatal("unable to parse OC private key")
+				t.Fatal("unable to parse OC public key")
 			}
 
-			err = rsa.VerifyPKCS1v15(&priv.PublicKey, crypto.SHA256, hashed[:], sigDecoded)
+			err = signature.Verify(cert, test.resp.GetSerializedBootstrapData(), test.resp.GetResponseSignature())
 			if err != nil {
-				t.Errorf("Sign() err == %v, want %v", err, test.wantErr)
+				t.Errorf("Verify() err == %v, want %v", err, test.wantErr)
 			}
 			wantOVByte, err := base64.StdEncoding.DecodeString(test.wantOV)
 			if err != nil {
