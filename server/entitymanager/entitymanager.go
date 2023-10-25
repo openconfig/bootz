@@ -62,31 +62,33 @@ type InMemoryEntityManager struct {
 
 // ResolveChassis returns an entity based on the provided lookup.
 // In cases when the serial for modular chassis is not set, it uses the controller card to find the chassis.
-func (m *InMemoryEntityManager) ResolveChassis(lookup *service.EntityLookup, ccSerial string) (*service.ChassisEntity, error) {
+func (m *InMemoryEntityManager) ResolveChassis(lookup *service.EntityLookup) (*service.ChassisEntity, error) {
+	var chassis *epb.Chassis
+	var found bool
+	var err error
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	chassis, found := m.chassisInventory[*lookup]
-	if !found {
-		if lookup.SerialNumber == "" && ccSerial != "" {
-			ch, err := m.resolveChassisViaControllerCard(lookup, ccSerial)
-			if err != nil {
-				return nil, status.Errorf(codes.NotFound, "Could not find chassis with serial#: %s and manufacturer: %s and controller card %s",
-					lookup.SerialNumber, lookup.Manufacturer, ccSerial)
-			}
-			chassis = ch
-		} else {
-			return nil, status.Errorf(codes.NotFound, "Could not find chassis with serial#: %s and manufacturer: %s and controller card %s",
-				lookup.SerialNumber, lookup.Manufacturer, ccSerial)
+	if lookup.ChassisSerialNumber != "" {
+		chassis, found = m.chassisInventory[*lookup]
+		if !found {
+			return nil, status.Errorf(codes.NotFound, "Could not find fixed chassis with serial: %v and manufacturer: %v", lookup.ChassisSerialNumber, lookup.Manufacturer)
+		}
+	} else {
+		chassis, err = m.resolveChassisViaControllerCard(lookup)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "Could not find modular chassis with control card serial: %v and manufacturer: %v",
+				lookup.ControlCardSerialNumber, lookup.Manufacturer)
 		}
 	}
+
 	return &service.ChassisEntity{BootMode: chassis.GetBootMode()}, nil
 }
 
 // resolveChassisViaControllerCard resolves a chassis based on controller card serial.
-func (m *InMemoryEntityManager) resolveChassisViaControllerCard(lookup *service.EntityLookup, ccSerial string) (*epb.Chassis, error) {
+func (m *InMemoryEntityManager) resolveChassisViaControllerCard(lookup *service.EntityLookup) (*epb.Chassis, error) {
 	for _, ch := range m.chassisInventory {
 		for _, c := range ch.GetControllerCards() {
-			if c.GetSerialNumber() == ccSerial {
+			if c.GetSerialNumber() == lookup.ControlCardSerialNumber {
 				if ch.Manufacturer != lookup.Manufacturer {
 					continue
 				}
@@ -94,7 +96,7 @@ func (m *InMemoryEntityManager) resolveChassisViaControllerCard(lookup *service.
 			}
 		}
 	}
-	return nil, status.Errorf(codes.NotFound, "could not find chassis for controller card with serial# %s", ccSerial)
+	return nil, status.Errorf(codes.NotFound, "could not find chassis for controller card with serial %v", lookup.ControlCardSerialNumber)
 }
 
 func readOCConfig(path string) ([]byte, error) {
@@ -170,11 +172,11 @@ func (m *InMemoryEntityManager) GetBootstrapData(el *service.EntityLookup, contr
 	serial := ""
 	fixedChassis := false
 	if controllerCard == nil {
-		if el.SerialNumber == "" {
+		if el.ChassisSerialNumber == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "chassis type (fixed/modular) can not be determined, either controller card or chassis serial must be set ")
 		}
 		fixedChassis = true
-		serial = el.SerialNumber
+		serial = el.ChassisSerialNumber
 	}
 	if !fixedChassis {
 		serial = controllerCard.SerialNumber
@@ -363,8 +365,8 @@ func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis
 func (m *InMemoryEntityManager) fetchOwnershipVoucher(lookup *service.EntityLookup, ccSerial string) (string, error) {
 	chassis, ok := m.chassisInventory[*lookup]
 	if !ok {
-		if lookup.SerialNumber == "" {
-			chassis, _ = m.resolveChassisViaControllerCard(lookup, ccSerial)
+		if lookup.ChassisSerialNumber == "" {
+			chassis, _ = m.resolveChassisViaControllerCard(lookup)
 			if chassis == nil {
 				return "", status.Errorf(codes.NotFound, "could not find chassis for controller car #: %s", ccSerial)
 			}
@@ -396,8 +398,8 @@ func (m *InMemoryEntityManager) AddChassis(bootMode bpb.BootMode, manufacturer s
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	l := service.EntityLookup{
-		Manufacturer: manufacturer,
-		SerialNumber: serial,
+		Manufacturer:        manufacturer,
+		ChassisSerialNumber: serial,
 	}
 	m.chassisInventory[l] = &epb.Chassis{
 		Manufacturer: manufacturer,
@@ -437,8 +439,8 @@ func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
 	log.Infof("New entity manager is initialized successfully from chassis config file %s", chassisConfigFile)
 	for _, ch := range entities.Chassis {
 		lookup := service.EntityLookup{
-			Manufacturer: ch.GetManufacturer(),
-			SerialNumber: ch.GetSerialNumber(),
+			Manufacturer:        ch.GetManufacturer(),
+			ChassisSerialNumber: ch.GetSerialNumber(),
 		}
 		newManager.chassisInventory[lookup] = ch
 	}
@@ -467,8 +469,8 @@ func (m *InMemoryEntityManager) ReplaceDevice(chassis *service.EntityLookup, new
 	delete(m.chassisInventory, *chassis)
 
 	lookup := service.EntityLookup{
-		Manufacturer: newChassis.GetManufacturer(),
-		SerialNumber: newChassis.GetSerialNumber(),
+		Manufacturer:        newChassis.GetManufacturer(),
+		ChassisSerialNumber: newChassis.GetSerialNumber(),
 	}
 
 	m.chassisInventory[lookup] = newChassis
@@ -486,15 +488,15 @@ func (m *InMemoryEntityManager) DeleteDevice(chassis *service.EntityLookup) {
 }
 
 // GetDevice returns a copy of the chassis at the provided lookup.
-func (m *InMemoryEntityManager) GetDevice(chassis *service.EntityLookup) (*epb.Chassis, error) {
+func (m *InMemoryEntityManager) GetDevice(lookup *service.EntityLookup) (*epb.Chassis, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if val, exists := m.chassisInventory[*chassis]; exists {
+	if val, exists := m.chassisInventory[*lookup]; exists {
 		return proto.Clone(val).(*epb.Chassis), nil
 	}
 
-	return nil, status.Errorf(codes.NotFound, "Could not find chassis with serial#: %s and manufacturer: %s", chassis.SerialNumber, chassis.Manufacturer)
+	return nil, status.Errorf(codes.NotFound, "Could not find chassis with serial#: %s and manufacturer: %s", lookup.ChassisSerialNumber, lookup.Manufacturer)
 }
 
 // GetAll returns a copy of the chassisInventory field.

@@ -57,8 +57,12 @@ type SecurityArtifacts struct {
 // EntityLookup provides a way to resolve chassis and control cards
 // in the EntityManager.
 type EntityLookup struct {
+	// The manufacturer of this entity.
 	Manufacturer string
-	SerialNumber string
+	// The serial number of the chassis. This is not set for modular devices.
+	ChassisSerialNumber string
+	// The serial number of the active control card. This should be set for modular devices.
+	ControlCardSerialNumber string
 }
 
 // ChassisEntity provides the mode that the system is currently
@@ -69,7 +73,7 @@ type ChassisEntity struct {
 
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
-	ResolveChassis(*EntityLookup, string) (*ChassisEntity, error)
+	ResolveChassis(*EntityLookup) (*ChassisEntity, error)
 	GetBootstrapData(*EntityLookup, *bpb.ControlCard) (*bpb.BootstrapDataResponse, error)
 	SetStatus(*bpb.ReportStatusRequest) error
 	Sign(*bpb.GetBootstrapDataResponse, *EntityLookup, string) error
@@ -86,19 +90,21 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("==================== Received request for bootstrap data ====================")
 	log.Infof("=============================================================================")
 	fixedChasis := true
-	ccSerial := ""
 	chassisDesc := req.GetChassisDescriptor()
+	lookup := &EntityLookup{
+		Manufacturer:        chassisDesc.GetManufacturer(),
+		ChassisSerialNumber: chassisDesc.GetSerialNumber(),
+	}
 	if len(chassisDesc.GetControlCards()) >= 1 {
 		fixedChasis = false
-		ccSerial = chassisDesc.GetControlCards()[0].GetSerialNumber()
+		lookup.ControlCardSerialNumber = chassisDesc.GetControlCards()[0].GetSerialNumber()
+		log.Infof("Looking up modular chassis by control card with manufacturer=%v, serial=%v", chassisDesc.GetManufacturer(), lookup.ControlCardSerialNumber)
+	} else {
+		log.Infof("Looking up fixed chassis with manufacturer=%v, serial=%v", chassisDesc.GetManufacturer(), chassisDesc.GetSerialNumber())
 	}
-	log.Infof("Requesting for %v chassis %v", chassisDesc.GetManufacturer(), chassisDesc.GetSerialNumber())
-	lookup := &EntityLookup{
-		Manufacturer: chassisDesc.GetManufacturer(),
-		SerialNumber: chassisDesc.GetSerialNumber(),
-	}
+
 	// Validate the chassis can be serviced
-	chassis, err := s.em.ResolveChassis(lookup, ccSerial)
+	chassis, err := s.em.ResolveChassis(lookup)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", chassisDesc, err)
 	}
@@ -128,7 +134,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		bootdata, err := s.em.GetBootstrapData(lookup, nil)
 		if err != nil {
 			errs.Add(err)
-			log.Infof("Error occurred while retrieving data for fixed chassis with serail number %v", lookup.SerialNumber)
+			log.Infof("Error occurred while retrieving data for fixed chassis with serial number %v", lookup.ChassisSerialNumber)
 		}
 		responses = append(responses, bootdata)
 	}

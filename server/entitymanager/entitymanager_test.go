@@ -90,7 +90,7 @@ func TestNew(t *testing.T) {
 		{
 			desc:        "Successful new with file",
 			chassisConf: "../../testdata/inventory.prototxt",
-			inventory: map[service.EntityLookup]*epb.Chassis{{SerialNumber: chassis.SerialNumber,
+			inventory: map[service.EntityLookup]*epb.Chassis{{ChassisSerialNumber: chassis.SerialNumber,
 				Manufacturer: chassis.Manufacturer}: &chassis},
 			defaults: &epb.Options{
 				Bootzserver: "bootzip:....",
@@ -202,11 +202,11 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 
 	em, _ := New("")
 
-	em.chassisInventory[service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}] = &chassis
+	em.chassisInventory[service.EntityLookup{Manufacturer: "Cisco", ChassisSerialNumber: "123"}] = &chassis
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.fetchOwnershipVoucher(&service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}, test.serial)
+			got, err := em.fetchOwnershipVoucher(&service.EntityLookup{Manufacturer: "Cisco", ChassisSerialNumber: "123"}, test.serial)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("FetchOwnershipVoucher(%v) err = %v, want %v", test.serial, err, test.wantErr)
 			}
@@ -226,8 +226,8 @@ func TestResolveChassis(t *testing.T) {
 	}{{
 		desc: "Default device",
 		input: &service.EntityLookup{
-			SerialNumber: "123",
-			Manufacturer: "Cisco",
+			ChassisSerialNumber: "123",
+			Manufacturer:        "Cisco",
 		},
 		want: &service.ChassisEntity{
 			BootMode: bpb.BootMode_BOOT_MODE_SECURE,
@@ -235,8 +235,8 @@ func TestResolveChassis(t *testing.T) {
 	}, {
 		desc: "Chassis Not Found",
 		input: &service.EntityLookup{
-			SerialNumber: "456",
-			Manufacturer: "Cisco",
+			ChassisSerialNumber: "456",
+			Manufacturer:        "Cisco",
 		},
 		want:    nil,
 		wantErr: true,
@@ -247,7 +247,7 @@ func TestResolveChassis(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.ResolveChassis(test.input, "")
+			got, err := em.ResolveChassis(test.input)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("ResolveChassis(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
@@ -262,7 +262,7 @@ func TestSign(t *testing.T) {
 	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
 	tests := []struct {
 		desc    string
-		chassis service.EntityLookup
+		lookup  service.EntityLookup
 		serial  string
 		resp    *bpb.GetBootstrapDataResponse
 		wantOV  string
@@ -270,9 +270,9 @@ func TestSign(t *testing.T) {
 		wantErr bool
 	}{{
 		desc: "Success",
-		chassis: service.EntityLookup{
-			Manufacturer: "Cisco",
-			SerialNumber: "123",
+		lookup: service.EntityLookup{
+			Manufacturer:        "Cisco",
+			ChassisSerialNumber: "123",
 		},
 		serial: "123A",
 		resp: &bpb.GetBootstrapDataResponse{
@@ -301,7 +301,7 @@ func TestSign(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 
-			err = em.Sign(test.resp, &test.chassis, test.serial)
+			err = em.Sign(test.resp, &test.lookup, test.serial)
 			if err != nil {
 				if test.wantErr {
 					t.Skip()
@@ -548,11 +548,11 @@ func TestGetBootstrapData(t *testing.T) {
 	}
 
 	em, _ := New("")
-	em.chassisInventory[service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}] = &chassis
+	em.chassisInventory[service.EntityLookup{Manufacturer: "Cisco", ChassisSerialNumber: "123"}] = &chassis
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.GetBootstrapData(&service.EntityLookup{SerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
+			got, err := em.GetBootstrapData(&service.EntityLookup{ChassisSerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
 			if (err != nil) != test.wantErr {
 				t.Errorf("GetBootstrapData(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
@@ -681,14 +681,14 @@ func TestGetDevice(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			configsMap := make(map[service.EntityLookup]*epb.Chassis)
 			for _, chassis := range tt.chassisInventory.Chassis {
-				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+				configsMap[service.EntityLookup{ChassisSerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
 			}
 
 			em := InMemoryEntityManager{
 				chassisInventory: configsMap,
 			}
 
-			lookup := service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"}
+			lookup := service.EntityLookup{ChassisSerialNumber: "1234", Manufacturer: "cisco"}
 
 			want, exists := em.chassisInventory[lookup]
 
@@ -729,7 +729,7 @@ func TestGetAll(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			configsMap := make(map[service.EntityLookup]*epb.Chassis)
 			for _, chassis := range tt.chassisInventory.Chassis {
-				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+				configsMap[service.EntityLookup{ChassisSerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
 			}
 
 			em := InMemoryEntityManager{
@@ -775,12 +775,12 @@ func TestReplaceDevice(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			configsMap := make(map[service.EntityLookup]*epb.Chassis)
 			for _, chassis := range tt.chassisInventory.Chassis {
-				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+				configsMap[service.EntityLookup{ChassisSerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
 			}
 
 			want := make(map[service.EntityLookup]*epb.Chassis)
 			for _, chassis := range tt.wantChassisInventory.Chassis {
-				want[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+				want[service.EntityLookup{ChassisSerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
 			}
 
 			em := InMemoryEntityManager{
@@ -792,7 +792,7 @@ func TestReplaceDevice(t *testing.T) {
 				Manufacturer: "cisco",
 			}
 
-			err := em.ReplaceDevice(&service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"}, newObj)
+			err := em.ReplaceDevice(&service.EntityLookup{ChassisSerialNumber: "1234", Manufacturer: "cisco"}, newObj)
 
 			received := em.chassisInventory
 
@@ -849,19 +849,19 @@ func TestDeleteDevice(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			configsMap := make(map[service.EntityLookup]*epb.Chassis)
 			for _, chassis := range tt.chassisInventory.Chassis {
-				configsMap[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+				configsMap[service.EntityLookup{ChassisSerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
 			}
 
 			want := make(map[service.EntityLookup]*epb.Chassis)
 			for _, chassis := range tt.wantChassisInventory.Chassis {
-				want[service.EntityLookup{SerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
+				want[service.EntityLookup{ChassisSerialNumber: chassis.SerialNumber, Manufacturer: chassis.Manufacturer}] = chassis
 			}
 
 			em := InMemoryEntityManager{
 				chassisInventory: configsMap,
 			}
 
-			em.DeleteDevice(&service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"})
+			em.DeleteDevice(&service.EntityLookup{ChassisSerialNumber: "1234", Manufacturer: "cisco"})
 
 			if !(cmp.Equal(want, em.chassisInventory, protocmp.Transform())) {
 				t.Errorf("Result of DeleteDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", want, em.chassisInventory)

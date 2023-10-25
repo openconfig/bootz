@@ -216,7 +216,6 @@ func main() {
 	// TODO: Allow these values to be set e.g. via a flag.
 	chassis := bpb.ChassisDescriptor{
 		Manufacturer: "Cisco",
-		SerialNumber: "123",
 		ControlCards: []*bpb.ControlCard{
 			{
 				SerialNumber: "123A",
