@@ -221,12 +221,12 @@ func (m *InMemoryEntityManager) GetBootstrapData(el *service.EntityLookup, contr
 		return nil, err
 	}
 
-	// TODO: Populate ServerTrustCert and gnsi config
+	// TODO: Populate gnsi config
 	return &bpb.BootstrapDataResponse{
 		SerialNum:        serial,
 		IntendedImage:    chassis.GetSoftwareImage(),
 		BootPasswordHash: chassis.BootloaderPasswordHash,
-		ServerTrustCert:  "FakeTLSCert",
+		ServerTrustCert:  m.secArtifacts.OC.Cert,
 		BootConfig:       bootCfg,
 		Credentials:      &bpb.Credentials{},
 		// TODO: Populate pathz, authz and certificates.
