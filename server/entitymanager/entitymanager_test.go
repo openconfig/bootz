@@ -479,7 +479,7 @@ func TestGetBootstrapData(t *testing.T) {
 				HashAlgorithm: "SHA256",
 			},
 			BootPasswordHash: "ABCD123",
-			ServerTrustCert:  "FakeTLSCert",
+			ServerTrustCert:  "FakeOCCert",
 			BootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(""),
 				OcConfig:     []byte(""),
@@ -520,7 +520,7 @@ func TestGetBootstrapData(t *testing.T) {
 				HashAlgorithm: "SHA256",
 			},
 			BootPasswordHash: "ABCD123",
-			ServerTrustCert:  "FakeTLSCert",
+			ServerTrustCert:  "FakeOCCert",
 			BootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(""),
 				OcConfig:     []byte(""),
@@ -551,7 +551,7 @@ func TestGetBootstrapData(t *testing.T) {
 				HashAlgorithm: "SHA256",
 			},
 			BootPasswordHash: "ABCD123",
-			ServerTrustCert:  "FakeTLSCert",
+			ServerTrustCert:  "FakeOCCert",
 			BootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(""),
 				OcConfig:     []byte(""),
@@ -576,8 +576,18 @@ func TestGetBootstrapData(t *testing.T) {
 	},
 	}
 
-	em, _ := New("")
-	em.chassisInventory[service.EntityLookup{Manufacturer: "Cisco", ChassisSerialNumber: "123"}] = &chassis
+
+	em, err := New("")
+	if err != nil {
+		t.Fatalf("unable to create entitymanager: %v", err)
+	}
+	em.secArtifacts = &service.SecurityArtifacts{
+		OC: &service.KeyPair{
+			PrivateKey: "FakeOCPrivateKey",
+			Cert:       "FakeOCCert",
+		},
+	}
+	em.chassisInventory[service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}] = &chassis
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {

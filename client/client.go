@@ -322,6 +322,9 @@ func main() {
 	log.Infof("=============================================================================")
 	log.Infof("===================== Processing control card configs =======================")
 	log.Infof("=============================================================================")
+	if len(signedResp.GetResponses()) == 0 {
+		log.Exitf("response contained no bootstrap responses")
+	}
 	for _, data := range signedResp.GetResponses() {
 		log.Infof("Received config for control card %v", data.GetSerialNum())
 		log.Infof("Start to download and validate image, received: %+v...", data.GetIntendedImage())
@@ -340,6 +343,29 @@ func main() {
 		log.Infof("Done")
 		log.Infof("=============================================================================")
 	}
+
+	// Reconnect to the server with the provided server_trust_cert.
+	log.Infof("Re-establishing TLS connection with server using provided trust cert")
+	trustCert := signedResp.GetResponses()[0].GetServerTrustCert()
+	if trustCert == "" {
+		log.Exitf("server did not provide a server trust certificate")
+	}
+
+	trustCertPool := x509.NewCertPool()
+	if !trustCertPool.AppendCertsFromPEM([]byte(trustCert)) {
+		log.Exitf("unable to add server trust cert to trust pool")
+	}
+	tlsConfig = &tls.Config{
+		InsecureSkipVerify: false,
+		RootCAs:            trustCertPool,
+	}
+	conn.Close()
+	conn, err = grpc.Dial(bootzAddress, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+	if err != nil {
+		log.Exitf("Client unable to re-connect to Bootstrap Server: %v", err)
+	}
+	c = bpb.NewBootstrapClient(conn)
+	log.Infof("Reconnected to server with fully trusted TLS")
 
 	// 6. ReportProgress
 	log.Infof("=========================== Sending Status Report ===========================")
