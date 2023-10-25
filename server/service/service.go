@@ -59,10 +59,12 @@ type SecurityArtifacts struct {
 type EntityLookup struct {
 	// The manufacturer of this entity.
 	Manufacturer string
-	// The serial number of the chassis. This is not set for modular devices.
+	// The serial number of the chassis. This does not need to be set for modular devices.
 	ChassisSerialNumber string
-	// The serial number of the active control card. This should be set for modular devices.
+	// The serial number of the active control card. This must be set for modular devices.
 	ControlCardSerialNumber string
+	// Whether this lookup is for a modular chassis with control cards.
+	ModularChassis bool
 }
 
 // ChassisEntity provides the mode that the system is currently
@@ -89,14 +91,14 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("=============================================================================")
 	log.Infof("==================== Received request for bootstrap data ====================")
 	log.Infof("=============================================================================")
-	fixedChasis := true
 	chassisDesc := req.GetChassisDescriptor()
 	lookup := &EntityLookup{
 		Manufacturer:        chassisDesc.GetManufacturer(),
 		ChassisSerialNumber: chassisDesc.GetSerialNumber(),
+		ModularChassis:      false,
 	}
 	if len(chassisDesc.GetControlCards()) >= 1 {
-		fixedChasis = false
+		lookup.ModularChassis = true
 		lookup.ControlCardSerialNumber = chassisDesc.GetControlCards()[0].GetSerialNumber()
 		log.Infof("Looking up modular chassis by control card with manufacturer=%v, serial=%v", chassisDesc.GetManufacturer(), lookup.ControlCardSerialNumber)
 	} else {
@@ -130,7 +132,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		}
 		responses = append(responses, bootdata)
 	}
-	if fixedChasis {
+	if !lookup.ModularChassis {
 		bootdata, err := s.em.GetBootstrapData(lookup, nil)
 		if err != nil {
 			errs.Add(err)

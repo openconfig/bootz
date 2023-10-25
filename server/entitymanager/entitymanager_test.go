@@ -90,8 +90,13 @@ func TestNew(t *testing.T) {
 		{
 			desc:        "Successful new with file",
 			chassisConf: "../../testdata/inventory.prototxt",
-			inventory: map[service.EntityLookup]*epb.Chassis{{ChassisSerialNumber: chassis.SerialNumber,
-				Manufacturer: chassis.Manufacturer}: &chassis},
+			inventory: map[service.EntityLookup]*epb.Chassis{
+				{
+					ChassisSerialNumber: chassis.SerialNumber,
+					Manufacturer:        chassis.Manufacturer,
+					ModularChassis:      true,
+				}: &chassis,
+			},
 			defaults: &epb.Options{
 				Bootzserver: "bootzip:....",
 				ArtifactDir: "../../testdata/",
@@ -202,11 +207,15 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 
 	em, _ := New("")
 
-	em.chassisInventory[service.EntityLookup{Manufacturer: "Cisco", ChassisSerialNumber: "123"}] = &chassis
+	em.chassisInventory[service.EntityLookup{
+		ModularChassis:      true,
+		Manufacturer:        "Cisco",
+		ChassisSerialNumber: "123",
+	}] = &chassis
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.fetchOwnershipVoucher(&service.EntityLookup{Manufacturer: "Cisco", ChassisSerialNumber: "123"}, test.serial)
+			got, err := em.fetchOwnershipVoucher(&service.EntityLookup{ModularChassis: true, Manufacturer: "Cisco", ChassisSerialNumber: "123"}, test.serial)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("FetchOwnershipVoucher(%v) err = %v, want %v", test.serial, err, test.wantErr)
 			}
@@ -224,10 +233,11 @@ func TestResolveChassis(t *testing.T) {
 		want    *service.ChassisEntity
 		wantErr bool
 	}{{
-		desc: "Default device",
+		desc: "Fixed form factor device",
 		input: &service.EntityLookup{
 			ChassisSerialNumber: "123",
 			Manufacturer:        "Cisco",
+			ModularChassis:      false,
 		},
 		want: &service.ChassisEntity{
 			BootMode: bpb.BootMode_BOOT_MODE_SECURE,
@@ -240,10 +250,28 @@ func TestResolveChassis(t *testing.T) {
 		},
 		want:    nil,
 		wantErr: true,
+	}, {
+		desc: "Modular chassis",
+		input: &service.EntityLookup{
+			ControlCardSerialNumber: "789A",
+			Manufacturer:            "Cisco",
+			ModularChassis:          true,
+		},
+		want: &service.ChassisEntity{
+			BootMode: bpb.BootMode_BOOT_MODE_SECURE,
+		},
+		wantErr: false,
 	},
 	}
 	em, _ := New("")
 	em.AddChassis(bpb.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
+	em.AddChassis(bpb.BootMode_BOOT_MODE_SECURE, "Cisco", "789")
+	_, err := em.AttachControlCard("789", "Cisco", &epb.ControlCard{
+		SerialNumber: "789A",
+	})
+	if err != nil {
+		t.Fatalf("unable to attach control card to chassis: %v", err)
+	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
@@ -273,6 +301,7 @@ func TestSign(t *testing.T) {
 		lookup: service.EntityLookup{
 			Manufacturer:        "Cisco",
 			ChassisSerialNumber: "123",
+			ModularChassis:      true,
 		},
 		serial: "123A",
 		resp: &bpb.GetBootstrapDataResponse{
@@ -738,7 +767,7 @@ func TestGetAll(t *testing.T) {
 			received := em.GetAll()
 
 			if !(cmp.Equal(configsMap, received, protocmp.Transform())) {
-				t.Errorf("Result of GetDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", configsMap, received)
+				t.Errorf("Result of GetDevice does not match expected\nwant:\n\t%v\nactual:\n\t%v", configsMap, received)
 			}
 		})
 	}
@@ -801,7 +830,7 @@ func TestReplaceDevice(t *testing.T) {
 			if s := errdiff.Check(err, tt.wantErr); s != "" {
 				t.Errorf("Expected error %s, but got error %v", tt.wantErr, err)
 			} else if !(cmp.Equal(want, received, protocmp.Transform())) {
-				t.Errorf("Result of ReplaceDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", want, received)
+				t.Errorf("Result of ReplaceDevice does not match expected\nwant:\n\t%v\nactual:\n\t%v", want, received)
 			}
 		})
 	}
@@ -864,7 +893,7 @@ func TestDeleteDevice(t *testing.T) {
 			em.DeleteDevice(&service.EntityLookup{ChassisSerialNumber: "1234", Manufacturer: "cisco"})
 
 			if !(cmp.Equal(want, em.chassisInventory, protocmp.Transform())) {
-				t.Errorf("Result of DeleteDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", want, em.chassisInventory)
+				t.Errorf("Result of DeleteDevice does not match expected\nwant:\n\t%v\nactual:\n\t%v", want, em.chassisInventory)
 			}
 		})
 	}

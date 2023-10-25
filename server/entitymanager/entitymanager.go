@@ -61,24 +61,24 @@ type InMemoryEntityManager struct {
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
-// In cases when the serial for modular chassis is not set, it uses the controller card to find the chassis.
+// If a control card serial number is provided, it will lookup the chassis by that.
 func (m *InMemoryEntityManager) ResolveChassis(lookup *service.EntityLookup) (*service.ChassisEntity, error) {
 	var chassis *epb.Chassis
 	var found bool
 	var err error
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if lookup.ChassisSerialNumber != "" {
-		chassis, found = m.chassisInventory[*lookup]
-		if !found {
-			return nil, status.Errorf(codes.NotFound, "Could not find fixed chassis with serial: %v and manufacturer: %v", lookup.ChassisSerialNumber, lookup.Manufacturer)
-		}
-	} else {
+	if lookup.ModularChassis {
 		chassis, err = m.resolveChassisViaControllerCard(lookup)
 		if err != nil {
 			return nil, status.Errorf(codes.NotFound, "Could not find modular chassis with control card serial: %v and manufacturer: %v",
 				lookup.ControlCardSerialNumber, lookup.Manufacturer)
 		}
+		return &service.ChassisEntity{BootMode: chassis.GetBootMode()}, nil
+	}
+	chassis, found = m.chassisInventory[*lookup]
+	if !found {
+		return nil, status.Errorf(codes.NotFound, "Could not find fixed chassis with serial: %v and manufacturer: %v", lookup.ChassisSerialNumber, lookup.Manufacturer)
 	}
 
 	return &service.ChassisEntity{BootMode: chassis.GetBootMode()}, nil
@@ -410,6 +410,23 @@ func (m *InMemoryEntityManager) AddChassis(bootMode bpb.BootMode, manufacturer s
 	return m
 }
 
+// AttachControlCard adds a control card to an existing modular chassis in the inventory.
+func (m *InMemoryEntityManager) AttachControlCard(chassisSerial, chassisManufacturer string, controlCard *epb.ControlCard) (*InMemoryEntityManager, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	l := service.EntityLookup{
+		Manufacturer:        chassisManufacturer,
+		ChassisSerialNumber: chassisSerial,
+	}
+	chassis, ok := m.chassisInventory[l]
+	if !ok {
+		return nil, fmt.Errorf("could not find chassis %v in inventory", chassisSerial)
+	}
+	chassis.ControllerCards = append(chassis.ControllerCards, controlCard)
+	log.Infof("Added control card %v to inventory", controlCard.SerialNumber)
+	return m, nil
+}
+
 // GetChassisInventory returns the chassis inventory
 func (m *InMemoryEntityManager) GetChassisInventory() map[service.EntityLookup]*epb.Chassis {
 	return m.chassisInventory
@@ -441,6 +458,7 @@ func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
 		lookup := service.EntityLookup{
 			Manufacturer:        ch.GetManufacturer(),
 			ChassisSerialNumber: ch.GetSerialNumber(),
+			ModularChassis: len(ch.GetControllerCards()) > 0,
 		}
 		newManager.chassisInventory[lookup] = ch
 	}
