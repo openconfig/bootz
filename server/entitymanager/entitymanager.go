@@ -458,7 +458,7 @@ func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
 		lookup := service.EntityLookup{
 			Manufacturer:        ch.GetManufacturer(),
 			ChassisSerialNumber: ch.GetSerialNumber(),
-			ModularChassis: len(ch.GetControllerCards()) > 0,
+			ModularChassis:      len(ch.GetControllerCards()) > 0,
 		}
 		newManager.chassisInventory[lookup] = ch
 	}
