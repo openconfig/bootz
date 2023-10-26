@@ -11,7 +11,7 @@ require (
 	github.com/openconfig/gnmi v0.0.0-20220617175856-41246b1b3507
 	github.com/openconfig/gnsi v1.2.3
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352
-	google.golang.org/grpc v1.56.2
+	google.golang.org/grpc v1.56.3
 	google.golang.org/protobuf v1.31.0
 )
 
