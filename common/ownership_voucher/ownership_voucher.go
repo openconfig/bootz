@@ -20,7 +20,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"go.mozilla.org/pkcs7"
@@ -41,15 +40,8 @@ type Inner struct {
 	ExpiresOn                  string `json:"expires-on"`
 	SerialNumber               string `json:"serial-number"`
 	Assertion                  string `json:"assertion"`
-	PinnedDomainCert           string `json:"pinned-domain-cert"`
+	PinnedDomainCert           []byte `json:"pinned-domain-cert"`
 	DomainCertRevocationChecks bool   `json:"domain-cert-revocation-checks"`
-}
-
-// RemovePemHeaders strips the PEM headers from a certificate so it can be used in an Ownership Voucher.
-func RemovePemHeaders(pemBlock string) string {
-	pemBlock = strings.TrimPrefix(pemBlock, "-----BEGIN CERTIFICATE-----\n")
-	pemBlock = strings.TrimSuffix(pemBlock, "\n-----END CERTIFICATE-----\n")
-	return pemBlock
 }
 
 // VerifyAndUnmarshal unmarshals the contents of an Ownership Voucher
@@ -81,7 +73,7 @@ func New(serial string, pdcPem []byte, vendorCACert *x509.Certificate, vendorCAP
 			CreatedOn:        currentTime.String(),
 			ExpiresOn:        currentTime.Add(ovExpiry).String(),
 			SerialNumber:     serial,
-			PinnedDomainCert: RemovePemHeaders(string(pdcPem)),
+			PinnedDomainCert: pdcPem,
 		},
 	}
 

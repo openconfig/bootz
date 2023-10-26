@@ -28,7 +28,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -54,11 +53,6 @@ var (
 		"https://path/to/image": "../testdata/image.txt",
 	}
 )
-
-// pemEncodeCert adds the correct PEM headers and footers to a raw certificate block.
-func pemEncodeCert(contents string) string {
-	return strings.Join([]string{"-----BEGIN CERTIFICATE-----", contents, "-----END CERTIFICATE-----"}, "\n")
-}
 
 // validateArtifacts checks the signed artifacts in a GetBootstrapDataResponse. Specifically, it:
 // - Checks that the OV in the response is signed by the manufacturer.
@@ -89,13 +83,10 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, 
 	}
 	log.Infof("Verified serial number is %v", serialNumber)
 
-	log.Infof("Adding PEM headers and footers to OV")
-	pdCPEM := pemEncodeCert(parsedOV.OV.PinnedDomainCert)
-
 	// Create a new pool with this PDC.
 	log.Infof("Creating a new pool with the PDC")
 	pdcPool := x509.NewCertPool()
-	if !pdcPool.AppendCertsFromPEM([]byte(pdCPEM)) {
+	if !pdcPool.AppendCertsFromPEM(parsedOV.OV.PinnedDomainCert) {
 		return err
 	}
 

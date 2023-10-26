@@ -15,6 +15,7 @@
 package ownershipvoucher
 
 import (
+	"bytes"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -85,7 +86,7 @@ func TestVerifyAndUnmarshal(t *testing.T) {
 	if err != nil {
 		t.Errorf("VerifyAndUnmarshal err = %v, want nil", err)
 	}
-	if gotPDC, wantPDC := got.OV.PinnedDomainCert, RemovePemHeaders(string(pdcPub)); gotPDC != wantPDC {
+	if gotPDC, wantPDC := got.OV.PinnedDomainCert, pdcPub; !bytes.Equal(gotPDC, wantPDC) {
 		t.Errorf("got PDC = %v, want %v", gotPDC, wantPDC)
 	}
 	if gotSerial := got.OV.SerialNumber; gotSerial != wantSerial {
