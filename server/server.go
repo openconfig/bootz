@@ -16,7 +16,7 @@
 //
 // The bootz server will provide a simple file based bootstrap
 // implementation for devices. The service can be extended by
-// provding your own implementation of the entity manager.
+// providing your own implementation of the entity manager.
 package main
 
 import (

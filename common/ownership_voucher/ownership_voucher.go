@@ -65,7 +65,7 @@ func VerifyAndUnmarshal(in []byte, certPool *x509.CertPool) (*OwnershipVoucher, 
 	ov := OwnershipVoucher{}
 	err = json.Unmarshal(p7.Content, &ov)
 	if err != nil {
-		return nil, fmt.Errorf("failed unmarshaling ownership voucher: %v", err)
+		return nil, fmt.Errorf("failed unmarshalling ownership voucher: %v", err)
 	}
 	if err = p7.VerifyWithChain(certPool); err != nil {
 		return nil, fmt.Errorf("failed to verify OV: %v", err)
