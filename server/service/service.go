@@ -152,7 +152,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("Successfully serialized the response")
 
 	resp := &bpb.GetBootstrapDataResponse{
-		// This field is deprecated but we still include it for backwards compatability.
+		// This field is deprecated but we still include it for backwards compatibility.
 		SignedResponse:          signedResponse,
 		SerializedBootstrapData: signedResponseBytes,
 	}
