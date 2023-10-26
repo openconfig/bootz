@@ -37,7 +37,7 @@ func Sign(privateKey crypto.PrivateKey, input []byte) (string, error) {
 			return "", fmt.Errorf("Sign(): unable to sign signature: %w", err)
 		}
 	default:
-		return "", fmt.Errorf("Verify(): unsupported private key type: %T", priv)
+		return "", fmt.Errorf("Sign(): unsupported private key type: %T", priv)
 	}
 
 	return base64.StdEncoding.EncodeToString(sig), nil
