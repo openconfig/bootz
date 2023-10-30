@@ -70,8 +70,8 @@ func New(serial string, pdcDER []byte, vendorCACert *x509.Certificate, vendorCAP
 	currentTime := time.Now()
 	ov := OwnershipVoucher{
 		OV: Inner{
-			CreatedOn:        currentTime.String(),
-			ExpiresOn:        currentTime.Add(ovExpiry).String(),
+			CreatedOn:        currentTime.Format(time.RFC3339),
+			ExpiresOn:        currentTime.Add(ovExpiry).Format(time.RFC3339),
 			SerialNumber:     serial,
 			PinnedDomainCert: pdcDER,
 		},
