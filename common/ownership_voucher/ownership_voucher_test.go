@@ -90,7 +90,16 @@ func TestVerifyAndUnmarshal(t *testing.T) {
 	if err != nil {
 		t.Errorf("VerifyAndUnmarshal err = %v, want nil", err)
 	}
-	if gotPDC, wantPDC := got.OV.PinnedDomainCert, pdcPub; !bytes.Equal(gotPDC, wantPDC) {
+	wantPDC, _ := pem.Decode(pdcPub)
+	if wantPDC == nil {
+		t.Fatalf("unable to decode PDC Pub")
+	}
+	gotPDC, err := base64.StdEncoding.DecodeString(got.OV.PinnedDomainCert)
+	if err != nil {
+		t.Fatalf("unable to decode PDC: %v", err)
+	}
+
+	if !bytes.Equal(gotPDC, wantPDC.Bytes) {
 		t.Errorf("got PDC = %v, want %v", gotPDC, wantPDC)
 	}
 	if gotSerial := got.OV.SerialNumber; gotSerial != wantSerial {

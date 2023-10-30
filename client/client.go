@@ -88,7 +88,11 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, 
 
 	// Create a new pool with this PDC.
 	log.Infof("Creating a new pool with the PDC")
-	pdc, err := x509.ParseCertificate(parsedOV.OV.PinnedDomainCert)
+	pdcDecoded, err := base64.StdEncoding.DecodeString(parsedOV.OV.PinnedDomainCert)
+	if err != nil {
+		return fmt.Errorf("unable to base64-decode PDC: %v", err)
+	}
+	pdc, err := x509.ParseCertificate(pdcDecoded)
 	if err != nil {
 		return fmt.Errorf("unable to parse PDC DER to x509 certificate: %v", err)
 	}

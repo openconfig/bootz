@@ -18,6 +18,7 @@ package ownershipvoucher
 import (
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -40,7 +41,7 @@ type Inner struct {
 	ExpiresOn                  string `json:"expires-on"`
 	SerialNumber               string `json:"serial-number"`
 	Assertion                  string `json:"assertion"`
-	PinnedDomainCert           []byte `json:"pinned-domain-cert"`
+	PinnedDomainCert           string `json:"pinned-domain-cert"`
 	DomainCertRevocationChecks bool   `json:"domain-cert-revocation-checks"`
 }
 
@@ -73,7 +74,7 @@ func New(serial string, pdcDER []byte, vendorCACert *x509.Certificate, vendorCAP
 			CreatedOn:        currentTime.String(),
 			ExpiresOn:        currentTime.Add(ovExpiry).String(),
 			SerialNumber:     serial,
-			PinnedDomainCert: pdcDER,
+			PinnedDomainCert: base64.StdEncoding.EncodeToString(pdcDER),
 		},
 	}
 
