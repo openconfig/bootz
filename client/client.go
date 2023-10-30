@@ -67,6 +67,9 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, 
 	}
 
 	parsedOV, err := ownershipvoucher.VerifyAndUnmarshal(resp.GetOwnershipVoucher(), vendorCAPool)
+	if err != nil {
+		return fmt.Errorf("unable to verify ownership voucher: %v", err)
+	}
 	log.Infof("=============================================================================")
 	log.Infof("Validated ownership voucher signed by vendor")
 	log.Infof("=============================================================================")
@@ -85,10 +88,12 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, 
 
 	// Create a new pool with this PDC.
 	log.Infof("Creating a new pool with the PDC")
-	pdcPool := x509.NewCertPool()
-	if !pdcPool.AppendCertsFromPEM(parsedOV.OV.PinnedDomainCert) {
-		return err
+	pdc, err := x509.ParseCertificate(parsedOV.OV.PinnedDomainCert)
+	if err != nil {
+		return fmt.Errorf("unable to parse PDC DER to x509 certificate: %v", err)
 	}
+	pdcPool := x509.NewCertPool()
+	pdcPool.AddCert(pdc)
 
 	// Parse the Ownership Certificate.
 	log.Infof("Parsing the OC")

@@ -54,8 +54,12 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pdcDER, _ := pem.Decode(pdcPub)
+	if pdcDER == nil {
+		t.Fatalf("Could not decode PDC Cert")
+	}
 
-	got, err := New(wantSerial, pdcPub, pubCert, privKey)
+	got, err := New(wantSerial, pdcDER.Bytes, pubCert, privKey)
 	if err != nil {
 		t.Errorf("New err = %v, want nil", err)
 	}

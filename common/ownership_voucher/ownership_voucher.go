@@ -66,14 +66,14 @@ func VerifyAndUnmarshal(in []byte, certPool *x509.CertPool) (*OwnershipVoucher, 
 }
 
 // New generates an Ownership Voucher which is signed by the vendor's CA.
-func New(serial string, pdcPem []byte, vendorCACert *x509.Certificate, vendorCAPriv *rsa.PrivateKey) ([]byte, error) {
+func New(serial string, pdcDER []byte, vendorCACert *x509.Certificate, vendorCAPriv *rsa.PrivateKey) ([]byte, error) {
 	currentTime := time.Now()
 	ov := OwnershipVoucher{
 		OV: Inner{
 			CreatedOn:        currentTime.String(),
 			ExpiresOn:        currentTime.Add(ovExpiry).String(),
 			SerialNumber:     serial,
-			PinnedDomainCert: pdcPem,
+			PinnedDomainCert: pdcDER,
 		},
 	}
 
