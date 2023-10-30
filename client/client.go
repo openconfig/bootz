@@ -28,7 +28,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -55,11 +54,6 @@ var (
 	}
 )
 
-// pemEncodeCert adds the correct PEM headers and footers to a raw certificate block.
-func pemEncodeCert(contents string) string {
-	return strings.Join([]string{"-----BEGIN CERTIFICATE-----", contents, "-----END CERTIFICATE-----"}, "\n")
-}
-
 // validateArtifacts checks the signed artifacts in a GetBootstrapDataResponse. Specifically, it:
 // - Checks that the OV in the response is signed by the manufacturer.
 // - Checks that the serial number in the OV matches the one in the original request.
@@ -73,6 +67,9 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, 
 	}
 
 	parsedOV, err := ownershipvoucher.VerifyAndUnmarshal(resp.GetOwnershipVoucher(), vendorCAPool)
+	if err != nil {
+		return fmt.Errorf("unable to verify ownership voucher: %v", err)
+	}
 	log.Infof("=============================================================================")
 	log.Infof("Validated ownership voucher signed by vendor")
 	log.Infof("=============================================================================")
@@ -89,15 +86,14 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, 
 	}
 	log.Infof("Verified serial number is %v", serialNumber)
 
-	log.Infof("Adding PEM headers and footers to OV")
-	pdCPEM := pemEncodeCert(parsedOV.OV.PinnedDomainCert)
-
 	// Create a new pool with this PDC.
 	log.Infof("Creating a new pool with the PDC")
-	pdcPool := x509.NewCertPool()
-	if !pdcPool.AppendCertsFromPEM([]byte(pdCPEM)) {
-		return err
+	pdc, err := x509.ParseCertificate(parsedOV.OV.PinnedDomainCert)
+	if err != nil {
+		return fmt.Errorf("unable to parse PDC DER to x509 certificate: %v", err)
 	}
+	pdcPool := x509.NewCertPool()
+	pdcPool.AddCert(pdc)
 
 	// Parse the Ownership Certificate.
 	log.Infof("Parsing the OC")

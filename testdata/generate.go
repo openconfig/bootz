@@ -183,7 +183,7 @@ func main() {
 	// Generate OVs for each control card.
 	for _, s := range serials {
 		fmt.Printf("Generating OV for control card serial %v\n", s)
-		ov, err := ownershipvoucher.New(s, pdcPem, vendorCAPub, vendorCAPriv)
+		ov, err := ownershipvoucher.New(s, pdc.Raw, vendorCAPub, vendorCAPriv)
 		if err != nil {
 			log.Exitf("unable to create OV: %v", err)
 		}

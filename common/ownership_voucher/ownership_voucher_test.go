@@ -15,6 +15,7 @@
 package ownershipvoucher
 
 import (
+	"bytes"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -53,8 +54,12 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pdcDER, _ := pem.Decode(pdcPub)
+	if pdcDER == nil {
+		t.Fatalf("Could not decode PDC Cert")
+	}
 
-	got, err := New(wantSerial, pdcPub, pubCert, privKey)
+	got, err := New(wantSerial, pdcDER.Bytes, pubCert, privKey)
 	if err != nil {
 		t.Errorf("New err = %v, want nil", err)
 	}
@@ -85,8 +90,13 @@ func TestVerifyAndUnmarshal(t *testing.T) {
 	if err != nil {
 		t.Errorf("VerifyAndUnmarshal err = %v, want nil", err)
 	}
-	if gotPDC, wantPDC := got.OV.PinnedDomainCert, RemovePemHeaders(string(pdcPub)); gotPDC != wantPDC {
-		t.Errorf("got PDC = %v, want %v", gotPDC, wantPDC)
+	wantPDC, _ := pem.Decode(pdcPub)
+	if wantPDC == nil {
+		t.Fatalf("unable to decode PDC Pub")
+	}
+
+	if !bytes.Equal(got.OV.PinnedDomainCert, wantPDC.Bytes) {
+		t.Errorf("got PDC = %v, want %v", got.OV.PinnedDomainCert, wantPDC)
 	}
 	if gotSerial := got.OV.SerialNumber; gotSerial != wantSerial {
 		t.Errorf("got serial = %v, want %v", gotSerial, wantSerial)
