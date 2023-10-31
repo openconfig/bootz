@@ -63,14 +63,9 @@ func TestGenerateAndVerify(t *testing.T) {
 	}
 	pdcPool := x509.NewCertPool()
 	pdcPool.AddCert(pdcCert)
-	ocDER, err := Verify(cms, pdcPool)
+	_, err = Verify(cms, pdcPool)
 	if err != nil {
 		t.Fatalf("error verifying OC: %v", err)
-	}
-	// Finally, make sure we can parse the DER.
-	_, err = x509.ParseCertificate(ocDER)
-	if err != nil {
-		t.Fatalf("error parsing returned OC")
 	}
 
 }

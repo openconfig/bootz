@@ -91,15 +91,11 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse) 
 
 	// Parse the Ownership Certificate.
 	log.Infof("Parsing the OC")
-	ocDER, err := ownercertificate.Verify(resp.GetOwnershipCertificate(), pdcPool)
+	ocCert, err := ownercertificate.Verify(resp.GetOwnershipCertificate(), pdcPool)
 	if err != nil {
 		return err
 	}
 	log.Infof("Validated ownership certificate with OV PDC")
-	ocCert, err := x509.ParseCertificate(ocDER)
-	if err != nil {
-		return err
-	}
 
 	// Validate the response signature.
 	log.Infof("=============================================================================")

@@ -24,8 +24,8 @@ import (
 )
 
 // Verify checks that the provided CMS value is signed by a signer in the provided
-// certPool and returns the pkcs7 content.
-func Verify(in []byte, certPool *x509.CertPool) ([]byte, error) {
+// certPool and returns the Ownership Certificate.
+func Verify(in []byte, certPool *x509.CertPool) (*x509.Certificate, error) {
 	if len(in) == 0 {
 		return nil, fmt.Errorf("owner certificate is empty")
 	}
@@ -36,18 +36,22 @@ func Verify(in []byte, certPool *x509.CertPool) ([]byte, error) {
 	if err = p7.VerifyWithChain(certPool); err != nil {
 		return nil, fmt.Errorf("failed to verify OC: %v", err)
 	}
-	return p7.Content, nil
+	if len(p7.Certificates) == 0 {
+		return nil, fmt.Errorf("no certificates found in pkcs7 message")
+	}
+	return p7.Certificates[0], nil
 }
 
 // GenerateCMS takes an Ownership Certificate keypair and converts it to a CMS structure.
 // The returned CMS object is the DER-encoded Owner Certificate.
 func GenerateCMS(cert *x509.Certificate, priv crypto.PrivateKey) ([]byte, error) {
-	signedMessage, err := pkcs7.NewSignedData(cert.Raw)
+	signedMessage, err := pkcs7.NewSignedData(nil)
 	if err != nil {
 		return nil, err
 	}
 	signedMessage.SetDigestAlgorithm(pkcs7.OIDDigestAlgorithmSHA256)
 	signedMessage.SetEncryptionAlgorithm(pkcs7.OIDEncryptionAlgorithmRSA)
+	signedMessage.AddCertificate(cert)
 
 	err = signedMessage.AddSigner(cert, priv, pkcs7.SignerInfoConfig{})
 	if err != nil {
