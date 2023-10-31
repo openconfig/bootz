@@ -43,7 +43,7 @@ func Verify(in []byte, certPool *x509.CertPool) (*x509.Certificate, error) {
 }
 
 // GenerateCMS takes an Ownership Certificate keypair and converts it to a CMS structure.
-// The returned CMS object is the DER-encoded Owner Certificate.
+// The CMS structure contains the Ownership Certificate in its list of certificates.
 func GenerateCMS(cert *x509.Certificate, priv crypto.PrivateKey) ([]byte, error) {
 	signedMessage, err := pkcs7.NewSignedData(nil)
 	if err != nil {
