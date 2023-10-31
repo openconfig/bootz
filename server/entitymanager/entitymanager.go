@@ -22,6 +22,7 @@ import (
 	"os"
 	"sync"
 
+	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc/codes"
