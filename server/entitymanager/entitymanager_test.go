@@ -23,6 +23,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/h-fam/errdiff"
+	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/server/service"
 	artifacts "github.com/openconfig/bootz/testdata"
@@ -314,8 +315,12 @@ func TestSign(t *testing.T) {
 			if !bytes.Equal(test.resp.GetOwnershipVoucher(), a.OV[test.serial]) {
 				t.Errorf("Sign() ov = %v, want %v", test.resp.GetOwnershipVoucher(), a.OV[test.serial])
 			}
+			wantOC, err := ownercertificate.GenerateCMS(a.OwnerCert, a.OwnerCertPrivateKey)
+			if err != nil {
+				t.Fatalf("unable to generate OC CMS: %v", err)
+			}
 			if test.wantOC {
-				if !bytes.Equal(test.resp.GetOwnershipCertificate(), a.OwnerCert.Raw) {
+				if !bytes.Equal(test.resp.GetOwnershipCertificate(), wantOC) {
 					t.Errorf("Sign() oc = %v, want %v", test.resp.GetOwnershipCertificate(), a.OwnerCert.Raw)
 				}
 			}

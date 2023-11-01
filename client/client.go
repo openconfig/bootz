@@ -30,6 +30,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	ownershipvoucher "github.com/openconfig/bootz/common/ownership_voucher"
 	"github.com/openconfig/bootz/common/signature"
 
@@ -72,11 +73,6 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse) 
 	log.Infof("Validated ownership voucher signed by vendor")
 	log.Infof("=============================================================================")
 
-	oc := resp.GetOwnershipCertificate()
-	if len(oc) == 0 {
-		return fmt.Errorf("received empty ownership certificate from server")
-	}
-
 	// Verify the serial number for this OV
 	log.Infof("Verifying the serial number for this OV")
 	if parsedOV.OV.SerialNumber != serialNumber {
@@ -95,18 +91,8 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse) 
 
 	// Parse the Ownership Certificate.
 	log.Infof("Parsing the OC")
-	ocCert, err := x509.ParseCertificate(oc)
+	ocCert, err := ownercertificate.Verify(resp.GetOwnershipCertificate(), pdcPool)
 	if err != nil {
-		return fmt.Errorf("failed to parse certificate: %v", err)
-	}
-
-	// Verify that the OC is signed by the PDC.
-	log.Infof("Verifying that the OC is signed by the PDC")
-	opts := x509.VerifyOptions{
-		Roots:         pdcPool,
-		Intermediates: x509.NewCertPool(),
-	}
-	if _, err := ocCert.Verify(opts); err != nil {
 		return err
 	}
 	log.Infof("Validated ownership certificate with OV PDC")

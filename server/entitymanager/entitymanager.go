@@ -22,6 +22,7 @@ import (
 	"os"
 	"sync"
 
+	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc/codes"
@@ -272,7 +273,11 @@ func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis
 	log.Infof("OV populated")
 
 	// Populate the OC
-	resp.OwnershipCertificate = m.secArtifacts.OwnerCert.Raw
+	ocCMS, err := ownercertificate.GenerateCMS(m.secArtifacts.OwnerCert, m.secArtifacts.OwnerCertPrivateKey)
+	if err != nil {
+		return err
+	}
+	resp.OwnershipCertificate = ocCMS
 	log.Infof("OC populated")
 	return nil
 }
