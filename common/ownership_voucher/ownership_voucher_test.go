@@ -37,7 +37,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("unable to generate Vendor CA: %v", err)
 	}
 
-	ov, err := New(wantSerial, pdc.Raw, vendorca, vendorcaPrivateKey)
+	ov, err := artifacts.NewOwnershipVoucher(wantSerial, pdc, vendorca, vendorcaPrivateKey)
 	if err != nil {
 		t.Errorf("New err = %v, want nil", err)
 	}

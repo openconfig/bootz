@@ -24,12 +24,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"math/big"
 	"time"
 
-	ownershipvoucher "github.com/openconfig/bootz/common/ownership_voucher"
 	"github.com/openconfig/bootz/server/service"
+	"go.mozilla.org/pkcs7"
 )
 
 const (
@@ -37,7 +38,23 @@ const (
 	caCountry  = "US"
 	caProvince = "CA"
 	caLocality = "Mountain View"
+	ovExpiry   = time.Hour * 24 * 365
 )
+
+// OwnershipVoucher wraps Inner.
+type OwnershipVoucher struct {
+	OV Inner `json:"ietf-voucher:voucher"`
+}
+
+// Inner defines the Ownership Voucher format. See https://www.rfc-editor.org/rfc/rfc8366.html.
+type Inner struct {
+	CreatedOn                  string `json:"created-on"`
+	ExpiresOn                  string `json:"expires-on"`
+	SerialNumber               string `json:"serial-number"`
+	Assertion                  string `json:"assertion"`
+	PinnedDomainCert           []byte `json:"pinned-domain-cert"`
+	DomainCertRevocationChecks bool   `json:"domain-cert-revocation-checks"`
+}
 
 // NewCertificateAuthority creates a new self-signed CA for the chosen organization.
 func NewCertificateAuthority(commonName, org, serverName string) (*x509.Certificate, *rsa.PrivateKey, error) {
@@ -138,6 +155,38 @@ func TLSCertificate(cert *x509.Certificate, privateKey *rsa.PrivateKey) (*tls.Ce
 	return &tlsCert, nil
 }
 
+// NewOwnershipVoucher generates an Ownership Voucher which is signed by the vendor's CA.
+func NewOwnershipVoucher(serial string, pdc, vendorCACert *x509.Certificate, vendorCAPriv crypto.PrivateKey) ([]byte, error) {
+	currentTime := time.Now()
+	ov := OwnershipVoucher{
+		OV: Inner{
+			CreatedOn:        currentTime.Format(time.RFC3339),
+			ExpiresOn:        currentTime.Add(ovExpiry).Format(time.RFC3339),
+			SerialNumber:     serial,
+			PinnedDomainCert: pdc.Raw,
+		},
+	}
+
+	ovBytes, err := json.Marshal(ov)
+	if err != nil {
+		return nil, err
+	}
+
+	signedMessage, err := pkcs7.NewSignedData(ovBytes)
+	if err != nil {
+		return nil, err
+	}
+	signedMessage.SetDigestAlgorithm(pkcs7.OIDDigestAlgorithmSHA256)
+	signedMessage.SetEncryptionAlgorithm(pkcs7.OIDEncryptionAlgorithmRSA)
+
+	err = signedMessage.AddSigner(vendorCACert, vendorCAPriv, pkcs7.SignerInfoConfig{})
+	if err != nil {
+		return nil, err
+	}
+
+	return signedMessage.Finish()
+}
+
 // GenerateSecurityArtifacts generates security artifacts.
 func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, vendorOrg string) (*service.SecurityArtifacts, error) {
 	pdc, pdcPrivateKey, err := NewCertificateAuthority("Pinned Domain Cert", ownerOrg, "localhost")
@@ -158,7 +207,7 @@ func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, ven
 	}
 	ovs := service.OVList{}
 	for _, serial := range controlCardSerials {
-		ov, err := ownershipvoucher.New(serial, pdc.Raw, vendorCA, vendorCAPrivateKey)
+		ov, err := NewOwnershipVoucher(serial, pdc, vendorCA, vendorCAPrivateKey)
 		if err != nil {
 			return nil, err
 		}
