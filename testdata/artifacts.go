@@ -13,7 +13,6 @@
 // limitations under the License.
 
 // Package artifacts contains helper functions to generate x509/RSA Certificate KeyPairs.
-
 package artifacts
 
 import (
