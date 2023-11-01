@@ -15,9 +15,8 @@
 package entitymanager
 
 import (
-	"crypto/x509"
+	"bytes"
 	"encoding/base64"
-	"encoding/pem"
 	"os"
 	"testing"
 
@@ -26,6 +25,7 @@ import (
 	"github.com/h-fam/errdiff"
 	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/server/service"
+	artifacts "github.com/openconfig/bootz/testdata"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
@@ -45,8 +45,10 @@ func MustMarshalBootstrapDataSigned(t *testing.T, b *bpb.BootstrapDataSigned) []
 }
 
 func TestNew(t *testing.T) {
-	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
-	ov2 := readTextFromFile(t, "../../testdata/ov_123B.txt")
+	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", "Cisco")
+	if err != nil {
+		t.Fatalf("unable to generate server artifacts: %v", err)
+	}
 	chassis := epb.Chassis{
 		Name:                   "test",
 		SerialNumber:           "123",
@@ -68,13 +70,13 @@ func TestNew(t *testing.T) {
 			{
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
-				OwnershipVoucher: ov1,
+				OwnershipVoucher: a.OV["123A"],
 				DhcpConfig:       &epb.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
-				OwnershipVoucher: ov2,
+				OwnershipVoucher: a.OV["123B"],
 				DhcpConfig:       &epb.DHCPConfig{},
 			},
 		},
@@ -101,11 +103,6 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
-			desc:        "Unsuccessful with wrong security artifacts",
-			chassisConf: "../../testdata/inv_with_wrong_sec.prototxt",
-			wantErr:     "security artifacts",
-		},
-		{
 			desc:        "Unsuccessful new with wrong file",
 			chassisConf: "../../testdata/wrong_inventory.prototxt",
 			inventory:   map[service.EntityLookup]*epb.Chassis{},
@@ -127,7 +124,7 @@ func TestNew(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			inv, err := New(test.chassisConf)
+			inv, err := New(test.chassisConf, a)
 			if err == nil {
 				opts := []cmp.Option{
 					protocmp.Transform(),
@@ -150,8 +147,10 @@ func TestNew(t *testing.T) {
 }
 
 func TestFetchOwnershipVoucher(t *testing.T) {
-	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
-	ov2 := readTextFromFile(t, "../../testdata/ov_123B.txt")
+	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", "Cisco")
+	if err != nil {
+		t.Fatalf("unable to generate server artifacts: %v", err)
+	}
 	chassis := epb.Chassis{
 		Name:                   "test",
 		SerialNumber:           "123",
@@ -173,13 +172,13 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 			{
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
-				OwnershipVoucher: ov1,
+				OwnershipVoucher: a.OV["123A"],
 				DhcpConfig:       &epb.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
-				OwnershipVoucher: ov2,
+				OwnershipVoucher: a.OV["123B"],
 				DhcpConfig:       &epb.DHCPConfig{},
 			},
 		},
@@ -187,7 +186,7 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 	tests := []struct {
 		desc    string
 		serial  string
-		want    string
+		want    []byte
 		wantErr bool
 	}{{
 		desc:    "Missing OV",
@@ -196,17 +195,17 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 	}, {
 		desc:    "Found OV",
 		serial:  "123A",
-		want:    ov1,
+		want:    a.OV["123A"],
 		wantErr: false,
 	}}
 
-	em, _ := New("")
+	em, _ := New("", a)
 
 	em.chassisInventory[service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}] = &chassis
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.fetchOwnershipVoucher(&service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}, test.serial)
+			got, err := em.fetchOwnershipVoucher(test.serial)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("FetchOwnershipVoucher(%v) err = %v, want %v", test.serial, err, test.wantErr)
 			}
@@ -242,7 +241,7 @@ func TestResolveChassis(t *testing.T) {
 		wantErr: true,
 	},
 	}
-	em, _ := New("")
+	em, _ := New("", nil)
 	em.AddChassis(bpb.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
 
 	for _, test := range tests {
@@ -259,13 +258,15 @@ func TestResolveChassis(t *testing.T) {
 }
 
 func TestSign(t *testing.T) {
-	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
+	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A"}, "Google", "Cisco")
+	if err != nil {
+		t.Fatalf("unable to generate server artifacts: %v", err)
+	}
 	tests := []struct {
 		desc    string
 		chassis service.EntityLookup
 		serial  string
 		resp    *bpb.GetBootstrapDataResponse
-		wantOV  string
 		wantOC  bool
 		wantErr bool
 	}{{
@@ -282,7 +283,6 @@ func TestSign(t *testing.T) {
 				},
 			}),
 		},
-		wantOV:  ov1,
 		wantOC:  true,
 		wantErr: false,
 	}, {
@@ -292,15 +292,13 @@ func TestSign(t *testing.T) {
 	},
 	}
 
-	em, _ := New("../../testdata/inventory.prototxt")
-	artifacts, err := parseSecurityArtifacts(em.defaults.GetArtifactDir())
+	em, err := New("../../testdata/inventory.prototxt", a)
 	if err != nil {
 		t.Fatalf("Could not load security artifacts: %v", err)
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-
 			err = em.Sign(test.resp, &test.chassis, test.serial)
 			if err != nil {
 				if test.wantErr {
@@ -309,29 +307,16 @@ func TestSign(t *testing.T) {
 				t.Errorf("Sign() err = %v, want %v", err, test.wantErr)
 			}
 
-			block, _ := pem.Decode([]byte(artifacts.OC.Cert))
-			if block == nil {
-				t.Fatal("unable to decode OC public key")
-			}
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				t.Fatal("unable to parse OC public key")
-			}
-
-			err = signature.Verify(cert, test.resp.GetSerializedBootstrapData(), test.resp.GetResponseSignature())
+			err = signature.Verify(a.OwnerCert, test.resp.GetSerializedBootstrapData(), test.resp.GetResponseSignature())
 			if err != nil {
 				t.Errorf("Verify() err == %v, want %v", err, test.wantErr)
 			}
-			wantOVByte, err := base64.StdEncoding.DecodeString(test.wantOV)
-			if err != nil {
-				t.Fatalf("Error during Decoding base64 is not expected, %v", err)
-			}
-			if string(test.resp.GetOwnershipVoucher()) != string(wantOVByte) {
-				t.Errorf("Sign() ov = %v, want %v", test.resp.GetOwnershipVoucher(), test.wantOV)
+			if !bytes.Equal(test.resp.GetOwnershipVoucher(), a.OV[test.serial]) {
+				t.Errorf("Sign() ov = %v, want %v", test.resp.GetOwnershipVoucher(), a.OV[test.serial])
 			}
 			if test.wantOC {
-				if gotOC, wantOC := string(test.resp.GetOwnershipCertificate()), artifacts.OC.Cert; gotOC != wantOC {
-					t.Errorf("Sign() oc = %v, want %v", gotOC, wantOC)
+				if !bytes.Equal(test.resp.GetOwnershipCertificate(), a.OwnerCert.Raw) {
+					t.Errorf("Sign() oc = %v, want %v", test.resp.GetOwnershipCertificate(), a.OwnerCert.Raw)
 				}
 			}
 		})
@@ -378,7 +363,7 @@ func TestSetStatus(t *testing.T) {
 		wantErr: true,
 	},
 	}
-	em, _ := New("")
+	em, _ := New("", nil)
 	em.AddChassis(bpb.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
 
 	for _, test := range tests {
@@ -392,8 +377,11 @@ func TestSetStatus(t *testing.T) {
 }
 
 func TestGetBootstrapData(t *testing.T) {
-	ov1 := readTextFromFile(t, "../../testdata/ov_123A.txt")
-	ov2 := readTextFromFile(t, "../../testdata/ov_123B.txt")
+	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", "Cisco")
+	if err != nil {
+		t.Fatalf("unable to generate server artifacts: %v", err)
+	}
+	encodedServerTrustCert := base64.StdEncoding.EncodeToString(a.TrustAnchor.Raw)
 	chassis := epb.Chassis{
 		Name:                   "test",
 		SerialNumber:           "123",
@@ -417,13 +405,13 @@ func TestGetBootstrapData(t *testing.T) {
 			{
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
-				OwnershipVoucher: ov1,
+				OwnershipVoucher: a.OV["123A"],
 				DhcpConfig:       &epb.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
-				OwnershipVoucher: ov2,
+				OwnershipVoucher: a.OV["123B"],
 				DhcpConfig:       &epb.DHCPConfig{},
 			},
 		},
@@ -450,7 +438,7 @@ func TestGetBootstrapData(t *testing.T) {
 				HashAlgorithm: "SHA256",
 			},
 			BootPasswordHash: "ABCD123",
-			ServerTrustCert:  "FakeOCCert",
+			ServerTrustCert:  encodedServerTrustCert,
 			BootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(""),
 				OcConfig:     []byte(""),
@@ -491,7 +479,7 @@ func TestGetBootstrapData(t *testing.T) {
 				HashAlgorithm: "SHA256",
 			},
 			BootPasswordHash: "ABCD123",
-			ServerTrustCert:  "FakeOCCert",
+			ServerTrustCert:  encodedServerTrustCert,
 			BootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(""),
 				OcConfig:     []byte(""),
@@ -522,7 +510,7 @@ func TestGetBootstrapData(t *testing.T) {
 				HashAlgorithm: "SHA256",
 			},
 			BootPasswordHash: "ABCD123",
-			ServerTrustCert:  "FakeOCCert",
+			ServerTrustCert:  encodedServerTrustCert,
 			BootConfig: &bpb.BootConfig{
 				VendorConfig: []byte(""),
 				OcConfig:     []byte(""),
@@ -547,16 +535,11 @@ func TestGetBootstrapData(t *testing.T) {
 	},
 	}
 
-	em, err := New("")
+	em, err := New("", a)
 	if err != nil {
 		t.Fatalf("unable to create entitymanager: %v", err)
 	}
-	em.secArtifacts = &service.SecurityArtifacts{
-		OC: &service.KeyPair{
-			PrivateKey: "FakeOCPrivateKey",
-			Cert:       "FakeOCCert",
-		},
-	}
+
 	em.chassisInventory[service.EntityLookup{Manufacturer: "Cisco", SerialNumber: "123"}] = &chassis
 
 	for _, test := range tests {

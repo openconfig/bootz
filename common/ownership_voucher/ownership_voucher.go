@@ -16,7 +16,7 @@
 package ownershipvoucher
 
 import (
-	"crypto/rsa"
+	"crypto"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
@@ -44,9 +44,9 @@ type Inner struct {
 	DomainCertRevocationChecks bool   `json:"domain-cert-revocation-checks"`
 }
 
-// VerifyAndUnmarshal unmarshals the contents of an Ownership Voucher
-// and verifies that it has been signed by a signer in the given cert pool.
-func VerifyAndUnmarshal(in []byte, certPool *x509.CertPool) (*OwnershipVoucher, error) {
+// Unmarshal unmarshals the contents of an Ownership Voucher. If a certPool is provided,
+// it is used to verify the contents.
+func Unmarshal(in []byte, certPool *x509.CertPool) (*OwnershipVoucher, error) {
 	if len(in) == 0 {
 		return nil, fmt.Errorf("ownership voucher is empty")
 	}
@@ -59,14 +59,16 @@ func VerifyAndUnmarshal(in []byte, certPool *x509.CertPool) (*OwnershipVoucher, 
 	if err != nil {
 		return nil, fmt.Errorf("failed unmarshalling ownership voucher: %v", err)
 	}
-	if err = p7.VerifyWithChain(certPool); err != nil {
-		return nil, fmt.Errorf("failed to verify OV: %v", err)
+	if certPool != nil {
+		if err = p7.VerifyWithChain(certPool); err != nil {
+			return nil, fmt.Errorf("failed to verify OV: %v", err)
+		}
 	}
 	return &ov, nil
 }
 
 // New generates an Ownership Voucher which is signed by the vendor's CA.
-func New(serial string, pdcDER []byte, vendorCACert *x509.Certificate, vendorCAPriv *rsa.PrivateKey) ([]byte, error) {
+func New(serial string, pdcDER []byte, vendorCACert *x509.Certificate, vendorCAPriv crypto.PrivateKey) ([]byte, error) {
 	currentTime := time.Now()
 	ov := OwnershipVoucher{
 		OV: Inner{

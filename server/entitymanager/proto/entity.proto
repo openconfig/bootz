@@ -123,7 +123,7 @@ message ControlCard {
   string serial_number = 2;
 
   //  OwnerShip Voucher
-  string ownership_voucher = 3;
+  bytes ownership_voucher = 3;
 
   DHCPConfig dhcp_config =4 ;
 }
@@ -163,7 +163,7 @@ message Chassis {
   string artifact_dir = 10; 
 
   //  Ownership Voucher for the fix chassis
-  string ownership_voucher = 11;
+  bytes ownership_voucher = 11;
 
   // dhcp config for fixed chassis
   DHCPConfig dhcp_config =12 ;

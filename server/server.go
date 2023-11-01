@@ -25,14 +25,13 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"os"
-	"path/filepath"
 	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/openconfig/bootz/dhcp"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
+	artifacts "github.com/openconfig/bootz/testdata"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -40,96 +39,15 @@ import (
 )
 
 var (
-	port              = flag.String("port", "15006", "The port to start the Bootz server on localhost")
-	dhcpIntf          = flag.String("dhcp_intf", "", "Network interface to use for dhcp server.")
-	artifactDirectory = flag.String("artifact_dir", "../testdata/", "The relative directory to look into for certificates, private keys and OVs.")
-	inventoryConfig   = flag.String("inv_config", "../testdata/inventory_local.prototxt", "Devices' config files to be loaded by inventory manager")
+	port            = flag.String("port", "15006", "The port to start the Bootz server on localhost")
+	dhcpIntf        = flag.String("dhcp_intf", "", "Network interface to use for dhcp server.")
+	inventoryConfig = flag.String("inv_config", "../testdata/inventory_local.prototxt", "Devices' config files to be loaded by inventory manager")
+	generateOVsFor  = flag.String("generate_ovs_for", "", "Comma-separated list of control card serial numbers to generate OVs for.")
 )
 
 type server struct {
 	serv *grpc.Server
 	lis  net.Listener
-}
-
-// readKeyPair reads the cert/key pair from the specified artifacts directory.
-// Certs must have the format {name}_pub.pem and keys must have the format {name}_priv.pem
-func readKeypair(name string) (*service.KeyPair, error) {
-	cert, err := os.ReadFile(filepath.Join(*artifactDirectory, fmt.Sprintf("%v_pub.pem", name)))
-	if err != nil {
-		return nil, fmt.Errorf("unable to read %v cert: %v", name, err)
-	}
-	privateKey, err := os.ReadFile(filepath.Join(*artifactDirectory, fmt.Sprintf("%v_priv.pem", name)))
-	if err != nil {
-		return nil, fmt.Errorf("unable to read %v key: %v", name, err)
-	}
-	return &service.KeyPair{
-		Cert:       string(cert),
-		PrivateKey: string(privateKey),
-	}, nil
-}
-
-// readOVs discovers and reads all available OVs in the artifacts directory.
-func readOVs() (service.OVList, error) {
-	ovs := make(service.OVList)
-	files, err := os.ReadDir(*artifactDirectory)
-	if err != nil {
-		return nil, fmt.Errorf("unable to list files in artifact directory: %v", err)
-	}
-	for _, f := range files {
-		if strings.HasPrefix(f.Name(), "ov") {
-			bytes, err := os.ReadFile(filepath.Join(*artifactDirectory, f.Name()))
-			if err != nil {
-				return nil, err
-			}
-			trimmed := strings.TrimPrefix(f.Name(), "ov_")
-			trimmed = strings.TrimSuffix(trimmed, ".txt")
-			ovs[trimmed] = string(bytes)
-		}
-	}
-	if len(ovs) == 0 {
-		return nil, fmt.Errorf("found no OVs in artifacts directory")
-	}
-	return ovs, err
-}
-
-// generateServerTLSCert creates a new TLS keypair from the PDC.
-func generateServerTLSCert(pdc *service.KeyPair) (*tls.Certificate, error) {
-	tlsCert, err := tls.X509KeyPair([]byte(pdc.Cert), []byte(pdc.PrivateKey))
-	if err != nil {
-		return nil, fmt.Errorf("unable to generate Server TLS Certificate from PDC %v", err)
-	}
-	return &tlsCert, err
-}
-
-// parseSecurityArtifacts reads from the specified directory to find the required keypairs and ownership vouchers.
-func parseSecurityArtifacts() (*service.SecurityArtifacts, error) {
-	oc, err := readKeypair("oc")
-	if err != nil {
-		return nil, err
-	}
-	pdc, err := readKeypair("pdc")
-	if err != nil {
-		return nil, err
-	}
-	vendorCA, err := readKeypair("vendorca")
-	if err != nil {
-		return nil, err
-	}
-	ovs, err := readOVs()
-	if err != nil {
-		return nil, err
-	}
-	tlsCert, err := generateServerTLSCert(pdc)
-	if err != nil {
-		return nil, err
-	}
-	return &service.SecurityArtifacts{
-		OC:         oc,
-		PDC:        pdc,
-		VendorCA:   vendorCA,
-		OV:         ovs,
-		TLSKeypair: tlsCert,
-	}, nil
 }
 
 func (s *server) Start() error {
@@ -145,18 +63,17 @@ func newServer() (*server, error) {
 	if *port == "" {
 		return nil, fmt.Errorf("no port selected. specify with the --port flag")
 	}
-	if *artifactDirectory == "" {
-		return nil, fmt.Errorf("no artifact directory selected. specify with the --artifact_dir flag")
-	}
 
 	log.Infof("Setting up server security artifacts: OC, OVs, PDC, VendorCA")
-	sa, err := parseSecurityArtifacts()
+	serials := strings.Split(*generateOVsFor, ",")
+
+	sa, err := artifacts.GenerateSecurityArtifacts(serials, "Google", "Cisco")
 	if err != nil {
 		return nil, err
 	}
 
 	log.Infof("Setting up entities")
-	em, err := entitymanager.New(*inventoryConfig)
+	em, err := entitymanager.New(*inventoryConfig, sa)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initiate inventory manager %v", err)
 	}
@@ -170,9 +87,8 @@ func newServer() (*server, error) {
 	c := service.New(em)
 
 	trustBundle := x509.NewCertPool()
-	if !trustBundle.AppendCertsFromPEM([]byte(sa.PDC.Cert)) {
-		return nil, fmt.Errorf("unable to add PDC cert to trust pool")
-	}
+	trustBundle.AddCert(sa.TrustAnchor)
+
 	tls := &tls.Config{
 		Certificates: []tls.Certificate{*sa.TLSKeypair},
 		RootCAs:      trustBundle,
