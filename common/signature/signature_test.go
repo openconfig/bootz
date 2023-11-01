@@ -15,45 +15,25 @@
 package signature
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"math/big"
 	"testing"
+
+	artifacts "github.com/openconfig/bootz/testdata"
 )
 
-func keyPair(t *testing.T) (certificate *x509.Certificate, privateKey *rsa.PrivateKey) {
-	t.Helper()
-	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
-	if err != nil {
-		t.Fatalf("unable to create RSA private key: %v", err)
-	}
-	template := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-	}
-
-	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
-	if err != nil {
-		t.Fatalf("unable to create x509 certificate: %v", err)
-	}
-	cert, err := x509.ParseCertificate(certDER)
-	if err != nil {
-		t.Fatalf("unable to parse DER certificate: %v", err)
-	}
-	return cert, privateKey
-}
-
 func TestCreateAndVerify(t *testing.T) {
-	cert, privateKey := keyPair(t)
+	oc, ocPrivateKey, err := artifacts.NewCertificateAuthority("Owner Certificate", "Google", "localhost")
+	if err != nil {
+		t.Fatalf("unable to generate test OC: %v", err)
+	}
 	input := []byte("input_data")
 
 	// Sign the signature
-	sig, err := Sign(privateKey, input)
+	sig, err := Sign(ocPrivateKey, input)
 	if err != nil {
 		t.Fatalf("unable to sign signature: %v", err)
 	}
 	// Verify the signature
-	err = Verify(cert, input, sig)
+	err = Verify(oc, input, sig)
 	if err != nil {
 		t.Errorf("unable to verify signature: %v", err)
 	}

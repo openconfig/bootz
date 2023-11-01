@@ -17,86 +17,41 @@ package ownershipvoucher
 import (
 	"bytes"
 	"crypto/x509"
-	"encoding/base64"
-	"encoding/pem"
 	"testing"
 
-	_ "embed"
+	artifacts "github.com/openconfig/bootz/testdata"
 )
 
 var (
 	wantSerial = "123A"
-	//go:embed testdata/ov_123A.txt
-	testOV string
-	//go:embed testdata/pdc_pub.pem
-	pdcPub []byte
-	//go:embed testdata/vendorca_pub.pem
-	vendorCAPub []byte
-	//go:embed testdata/vendorca_priv.pem
-	vendorCAPriv []byte
 )
 
 // Tests that a new OV can be created and it can be unpacked and verified.
-func TestNew(t *testing.T) {
-	pubPEM, _ := pem.Decode(vendorCAPub)
-	if pubPEM == nil {
-		t.Fatal("could not decode Vendor CA Public key")
-	}
-	pubCert, err := x509.ParseCertificate(pubPEM.Bytes)
+func TestEndToEnd(t *testing.T) {
+	pdc, _, err := artifacts.NewCertificateAuthority("Pinned Domain Cert", "Google", "localhost")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unable to generate PDC: %v", err)
 	}
-	privPEM, _ := pem.Decode(vendorCAPriv)
-	if privPEM == nil {
-		t.Fatal("could not decode Vendor CA private key")
-	}
-	privKey, err := x509.ParsePKCS1PrivateKey(privPEM.Bytes)
+	vendorca, vendorcaPrivateKey, err := artifacts.NewCertificateAuthority("Cisco Certificate Authority", "Cisco", "localhost")
 	if err != nil {
-		t.Fatal(err)
-	}
-	pdcDER, _ := pem.Decode(pdcPub)
-	if pdcDER == nil {
-		t.Fatalf("Could not decode PDC Cert")
+		t.Fatalf("unable to generate Vendor CA: %v", err)
 	}
 
-	got, err := New(wantSerial, pdcDER.Bytes, pubCert, privKey)
+	ov, err := artifacts.NewOwnershipVoucher(wantSerial, pdc, vendorca, vendorcaPrivateKey)
 	if err != nil {
 		t.Errorf("New err = %v, want nil", err)
 	}
 
 	vendorCAPool := x509.NewCertPool()
-	if !vendorCAPool.AppendCertsFromPEM(vendorCAPub) {
-		t.Fatalf("unable to add vendor root CA to pool")
-	}
+	vendorCAPool.AddCert(vendorca)
 
-	_, err = VerifyAndUnmarshal(got, vendorCAPool)
+	got, err := Unmarshal(ov, vendorCAPool)
 	if err != nil {
 		t.Errorf("VerifyAndUnmarshal err = %v, want nil", err)
 	}
-}
 
-// Tests VerifyAndUnmarshal using a known good OV.
-func TestVerifyAndUnmarshal(t *testing.T) {
-	vendorCAPool := x509.NewCertPool()
-	if !vendorCAPool.AppendCertsFromPEM(vendorCAPub) {
-		t.Fatalf("unable to add vendor root CA to pool")
-	}
-
-	decodedOV, err := base64.StdEncoding.DecodeString(testOV)
-	if err != nil {
-		t.Fatalf("unable to decode ownership voucher to bytes: %v", err)
-	}
-	got, err := VerifyAndUnmarshal(decodedOV, vendorCAPool)
-	if err != nil {
-		t.Errorf("VerifyAndUnmarshal err = %v, want nil", err)
-	}
-	wantPDC, _ := pem.Decode(pdcPub)
-	if wantPDC == nil {
-		t.Fatalf("unable to decode PDC Pub")
-	}
-
-	if !bytes.Equal(got.OV.PinnedDomainCert, wantPDC.Bytes) {
-		t.Errorf("got PDC = %v, want %v", got.OV.PinnedDomainCert, wantPDC)
+	if !bytes.Equal(got.OV.PinnedDomainCert, pdc.Raw) {
+		t.Errorf("got PDC = %v, want %v", got.OV.PinnedDomainCert, pdc.Raw)
 	}
 	if gotSerial := got.OV.SerialNumber; gotSerial != wantSerial {
 		t.Errorf("got serial = %v, want %v", gotSerial, wantSerial)

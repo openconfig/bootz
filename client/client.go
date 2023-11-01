@@ -24,7 +24,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/pem"
 	"flag"
 	"fmt"
 	"os"
@@ -48,7 +47,6 @@ var (
 	verifyTLSCert = flag.Bool("verify_tls_cert", false, "Whether to verify the TLS certificate presented by the Bootz server. If false, all TLS connections are implicitly trusted.")
 	insecureBoot  = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
 	port          = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
-	rootCA        = flag.String("root_ca_cert_path", "../testdata/vendorca_pub.pem", "The relative path to a file containing a PEM encoded certificate for the manufacturer CA.")
 	urlImageMap   = map[string]string{
 		"https://path/to/image": "../testdata/image.txt",
 	}
@@ -58,15 +56,15 @@ var (
 // - Checks that the OV in the response is signed by the manufacturer.
 // - Checks that the serial number in the OV matches the one in the original request.
 // - Verifies that the Ownership Certificate is in the chain of signers of the Pinned Domain Cert.
-func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, rootCA []byte) error {
-	// Create a CA pool for the device to validate that the vendor has signed this OV.
-	log.Infof("Creating a CA pool for the device to validate the vendor has signed this OV")
-	vendorCAPool := x509.NewCertPool()
-	if !vendorCAPool.AppendCertsFromPEM(rootCA) {
-		return fmt.Errorf("unable to add vendor root CA to pool")
-	}
-
-	parsedOV, err := ownershipvoucher.VerifyAndUnmarshal(resp.GetOwnershipVoucher(), vendorCAPool)
+func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse) error {
+	// Normally, clients should unmarshal the OV CMS struct and verify that it has been signed by a trusted CA.
+	// E.g.:
+	// certPool := x509.NewCertPool()
+	// certPool.AddCert(vendorCA)
+	// parsedOV, err := ownershipvoucher.Unmarshal(resp.GetOwnershipVoucher(), certPool)
+	// In this emulator, we don't have a static Vendor Certificate Authority so we unmarshal without
+	// verifying.
+	parsedOV, err := ownershipvoucher.Unmarshal(resp.GetOwnershipVoucher(), nil)
 	if err != nil {
 		return fmt.Errorf("unable to verify ownership voucher: %v", err)
 	}
@@ -97,7 +95,7 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse, 
 
 	// Parse the Ownership Certificate.
 	log.Infof("Parsing the OC")
-	ocCert, err := certFromPemBlock(oc)
+	ocCert, err := x509.ParseCertificate(oc)
 	if err != nil {
 		return fmt.Errorf("failed to parse certificate: %v", err)
 	}
@@ -159,14 +157,6 @@ func downloadImage(url string) ([]byte, error) {
 	return f, nil
 }
 
-func certFromPemBlock(data []byte) (*x509.Certificate, error) {
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return nil, fmt.Errorf("failed to parse certificate PEM")
-	}
-	return x509.ParseCertificate(block.Bytes)
-}
-
 // generateNonce() generates a fixed-length nonce.
 func generateNonce() (string, error) {
 	b := make([]byte, nonceLength)
@@ -183,27 +173,6 @@ func main() {
 	log.Infof("=============================================================================")
 	log.Infof("=========================== BootZ Client Emulator ===========================")
 	log.Infof("=============================================================================")
-
-	log.Infof("=============================================================================")
-	log.Infof("======================== Loading Root CA Certificate ========================")
-	log.Infof("=============================================================================")
-	if *rootCA == "" {
-		log.Exitf("No Root CA certificate file specified")
-	}
-	log.Infof("Reading Root CA certificate file...")
-	rootCABytes, err := os.ReadFile(*rootCA)
-	if err != nil {
-		log.Exitf("Error opening Root CA file: %v", err)
-	}
-	log.Infof("Successfully read Root CA certificate file")
-
-	// Verify the Root CA cert is valid.
-	log.Infof("Verifying Root CA certificate...")
-	caCert, err := certFromPemBlock(rootCABytes)
-	if err != nil {
-		log.Exitf("Error parsing Root CA certificate")
-	}
-	log.Infof("Loaded Root CA certificate: %v", string(caCert.Subject.CommonName))
 
 	log.Infof("=============================================================================")
 	log.Infof("================== Constructing a fake device for testing ===================")
@@ -300,7 +269,7 @@ func main() {
 		log.Infof("=============================================================================")
 		log.Infof("====================== Validating response signature ========================")
 		log.Infof("=============================================================================")
-		if err := validateArtifacts(activeControlCard.GetSerialNumber(), resp, rootCABytes); err != nil {
+		if err := validateArtifacts(activeControlCard.GetSerialNumber(), resp); err != nil {
 			log.Exitf("Error validating signed data: %v", err)
 		}
 	}
@@ -347,11 +316,19 @@ func main() {
 	if trustCert == "" {
 		log.Exitf("server did not provide a server trust certificate")
 	}
+	//Decode the trust cert
+	trustCertDecoded, err := base64.StdEncoding.DecodeString(trustCert)
+	if err != nil {
+		log.Exitf("unable to base64-decode trust cert")
+	}
+	trustAnchor, err := x509.ParseCertificate(trustCertDecoded)
+	if err != nil {
+		log.Exitf("unable to parse server trust certificate")
+	}
 
 	trustCertPool := x509.NewCertPool()
-	if !trustCertPool.AppendCertsFromPEM([]byte(trustCert)) {
-		log.Exitf("unable to add server trust cert to trust pool")
-	}
+	trustCertPool.AddCert(trustAnchor)
+
 	tlsConfig = &tls.Config{
 		InsecureSkipVerify: false,
 		RootCAs:            trustCertPool,

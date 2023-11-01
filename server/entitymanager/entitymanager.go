@@ -16,15 +16,10 @@
 package entitymanager
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"os"
-	"path/filepath"
-	"regexp"
 	"sync"
 
 	"github.com/openconfig/bootz/common/signature"
@@ -39,10 +34,6 @@ import (
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 	apb "github.com/openconfig/gnsi/authz"
-)
-
-var (
-	rxBase64 = regexp.MustCompile(`^(?:[A-Za-z0-9+\\/]{4})*(?:[A-Za-z0-9+\\/]{2}==|[A-Za-z0-9+\\/]{3}=|[A-Za-z0-9+\\/]{4})$`)
 )
 
 // InMemoryEntityManager provides a simple in memory handler
@@ -226,7 +217,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(el *service.EntityLookup, contr
 		SerialNum:        serial,
 		IntendedImage:    chassis.GetSoftwareImage(),
 		BootPasswordHash: chassis.BootloaderPasswordHash,
-		ServerTrustCert:  m.secArtifacts.OC.Cert,
+		ServerTrustCert:  base64.StdEncoding.EncodeToString(m.secArtifacts.TrustAnchor.Raw),
 		BootConfig:       bootCfg,
 		Credentials:      &bpb.Credentials{},
 		// TODO: Populate pathz, authz and certificates.
@@ -254,64 +245,6 @@ func (m *InMemoryEntityManager) SetStatus(req *bpb.ReportStatusRequest) error {
 	return nil
 }
 
-// // readKeyPair reads the cert/key pair from the specified directory.
-// Certs must have the format {name}_pub.pem and keys must have the format {name}_priv.pem
-func readKeypair(dir, name string) (*service.KeyPair, error) {
-	cert, err := os.ReadFile(filepath.Join(dir, fmt.Sprintf("%v_pub.pem", name)))
-	if err != nil {
-		return nil, fmt.Errorf("unable to read %v cert: %v", name, err)
-	}
-	privateKey, err := os.ReadFile(filepath.Join(dir, fmt.Sprintf("%v_priv.pem", name)))
-	if err != nil {
-		return nil, fmt.Errorf("unable to read %v key: %v", name, err)
-	}
-	return &service.KeyPair{
-		Cert:       string(cert),
-		PrivateKey: string(privateKey),
-	}, nil
-}
-
-// loadServerTLSCert uses the PDC key as the server certificate.
-func loadServerTLSCert(pdc *service.KeyPair) (*tls.Certificate, error) {
-	tlsCert, err := tls.X509KeyPair([]byte(pdc.Cert), []byte(pdc.PrivateKey))
-	if err != nil {
-		return nil, fmt.Errorf("unable to load PDC keys %v", err)
-	}
-	return &tlsCert, err
-}
-
-// parseSecurityArtifacts reads from the specified directory to find the required keypairs and ownership vouchers.
-func parseSecurityArtifacts(artifactDir string) (*service.SecurityArtifacts, error) {
-	oc, err := readKeypair(artifactDir, "oc")
-	if err != nil {
-		return nil, err
-	}
-	pdc, err := readKeypair(artifactDir, "pdc")
-	if err != nil {
-		return nil, err
-	}
-	vendorCA, err := readKeypair(artifactDir, "vendorca")
-	if err != nil {
-		return nil, err
-	}
-	// use pdc key as server cer
-	tlsCert, err := loadServerTLSCert(pdc)
-	if err != nil {
-		return nil, err
-	}
-	return &service.SecurityArtifacts{
-		OC:         oc,
-		PDC:        pdc,
-		VendorCA:   vendorCA,
-		TLSKeypair: tlsCert,
-	}, nil
-}
-
-// isBase64 check if a string is base64 encoded.
-func isBase64(str string) bool {
-	return rxBase64.MatchString(str)
-}
-
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
 func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
 	m.mu.Lock()
@@ -324,62 +257,33 @@ func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis
 		return status.Errorf(codes.InvalidArgument, "empty serialized bootstrap data")
 	}
 
-	block, _ := pem.Decode([]byte(m.secArtifacts.OC.PrivateKey))
-	if block == nil {
-		return fmt.Errorf("unable to decode private key")
-	}
-	priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		return err
-	}
-	sig, err := signature.Sign(priv, resp.GetSerializedBootstrapData())
+	sig, err := signature.Sign(m.secArtifacts.OwnerCertPrivateKey, resp.GetSerializedBootstrapData())
 	if err != nil {
 		return err
 	}
 	resp.ResponseSignature = sig
 
 	// Populate the OV
-	ov, err := m.fetchOwnershipVoucher(chassis, controllerCard)
+	ov, err := m.fetchOwnershipVoucher(controllerCard)
 	if err != nil {
 		return err
 	}
-	ovByte := []byte(ov)
-	if isBase64(ov) {
-		ovByte, err = base64.StdEncoding.DecodeString(ov)
-		if err != nil {
-			return status.Errorf(codes.Internal, "unable to decode ov from base64")
-		}
-	}
-	resp.OwnershipVoucher = ovByte
+	resp.OwnershipVoucher = ov
 	log.Infof("OV populated")
 
 	// Populate the OC
-	resp.OwnershipCertificate = []byte(m.secArtifacts.OC.Cert)
+	resp.OwnershipCertificate = m.secArtifacts.OwnerCert.Raw
 	log.Infof("OC populated")
 	return nil
 }
 
 // fetchOwnershipVoucher retrieves the ownership voucher for a control card
-func (m *InMemoryEntityManager) fetchOwnershipVoucher(lookup *service.EntityLookup, ccSerial string) (string, error) {
-	chassis, ok := m.chassisInventory[*lookup]
+func (m *InMemoryEntityManager) fetchOwnershipVoucher(ccSerial string) ([]byte, error) {
+	ov, ok := m.secArtifacts.OV[ccSerial]
 	if !ok {
-		if lookup.SerialNumber == "" {
-			chassis, _ = m.resolveChassisViaControllerCard(lookup, ccSerial)
-			if chassis == nil {
-				return "", status.Errorf(codes.NotFound, "could not find chassis for controller car #: %s", ccSerial)
-			}
-		}
+		return nil, status.Errorf(codes.NotFound, "OV not found for serial %v", ccSerial)
 	}
-	for _, c := range chassis.GetControllerCards() {
-		if c.GetSerialNumber() == ccSerial {
-			return c.GetOwnershipVoucher(), nil
-		}
-	}
-	// Handle fixed chassis.
-	if len(chassis.GetControllerCards()) == 0 {
-		return chassis.GetOwnershipVoucher(), nil
-	}
-	return "", status.Errorf(codes.NotFound, "could not find controller card or fixed chassis with serial#: %s", ccSerial)
+	return ov, nil
 }
 
 // AddControlCard adds a new control card to the entity manager.
@@ -414,11 +318,12 @@ func (m *InMemoryEntityManager) GetChassisInventory() map[service.EntityLookup]*
 }
 
 // New returns a new in-memory entity manager.
-func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
+func New(chassisConfigFile string, artifacts *service.SecurityArtifacts) (*InMemoryEntityManager, error) {
 	newManager := &InMemoryEntityManager{
 		chassisInventory:    map[service.EntityLookup]*epb.Chassis{},
 		controlCardStatuses: map[string]bpb.ControlCardState_ControlCardStatus{},
 		defaults:            &epb.Options{GnsiGlobalConfig: &epb.GNSIConfig{}},
+		secArtifacts:        artifacts,
 	}
 	if chassisConfigFile == "" {
 		return newManager, nil
@@ -443,14 +348,6 @@ func New(chassisConfigFile string) (*InMemoryEntityManager, error) {
 		newManager.chassisInventory[lookup] = ch
 	}
 	newManager.defaults = entities.GetOptions()
-	if newManager.defaults.ArtifactDir != "" {
-		newManager.secArtifacts, err = parseSecurityArtifacts(entities.Options.ArtifactDir)
-		if err != nil {
-			log.Errorf("Error in parsing security artifacts : %v", err)
-			return nil, fmt.Errorf("error in parsing security artifacts : %v", err)
-		}
-	}
-
 	return newManager, nil
 }
 
