@@ -16,7 +16,6 @@ package entitymanager
 
 import (
 	"bytes"
-	"bytes"
 	"encoding/base64"
 	"os"
 	"testing"
@@ -316,12 +315,12 @@ func TestSign(t *testing.T) {
 			if !bytes.Equal(test.resp.GetOwnershipVoucher(), a.OV[test.serial]) {
 				t.Errorf("Sign() ov = %v, want %v", test.resp.GetOwnershipVoucher(), a.OV[test.serial])
 			}
-			wantOC, err := ownercertificate.GenerateCMS(cert, priv)
+			wantOC, err := ownercertificate.GenerateCMS(a.OwnerCert, a.OwnerCertPrivateKey)
 			if err != nil {
 				t.Fatalf("unable to generate OC CMS: %v", err)
 			}
 			if test.wantOC {
-				if !bytes.Equal(test.resp.GetOwnershipCertificate(), a.OwnerCert.Raw) {
+				if !bytes.Equal(test.resp.GetOwnershipCertificate(), wantOC) {
 					t.Errorf("Sign() oc = %v, want %v", test.resp.GetOwnershipCertificate(), a.OwnerCert.Raw)
 				}
 			}
