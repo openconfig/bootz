@@ -16,56 +16,31 @@ package ownercertificate
 
 import (
 	"crypto/x509"
-	"encoding/pem"
 	"testing"
 
 	_ "embed"
-)
 
-var (
-	//go:embed testdata/oc_pub.pem
-	ocPub []byte
-	//go:embed testdata/pdc_pub.pem
-	pdcPub []byte
-	//go:embed testdata/oc_priv.pem
-	ocPriv []byte
+	artifacts "github.com/openconfig/bootz/testdata"
 )
 
 // Tests that the CMS structure can be created and that it can be verified with a PDC.
 func TestGenerateAndVerify(t *testing.T) {
-	block, _ := pem.Decode(ocPub)
-	if block == nil {
-		t.Fatalf("error decoding OC certificate")
-	}
-	ownerCert, err := x509.ParseCertificate(block.Bytes)
+	pdc, pdcPrivateKey, err := artifacts.NewCertificateAuthority("Pinned Domain Cert", "Google", "localhost")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewCertificateAuthority(): %v", err)
 	}
-	block, _ = pem.Decode(ocPriv)
-	if block == nil {
-		t.Fatalf("error decoding OC private key")
-	}
-	ownerCertPrivateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	oc, ocPrivateKey, err := artifacts.NewSignedCertificate("Owner Certificate", "Google", "localhost", pdc, pdcPrivateKey)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewSignedCertificate(): %v", err)
 	}
-	block, _ = pem.Decode(pdcPub)
-	if block == nil {
-		t.Fatalf("error decoding PDC certificate")
-	}
-	pdcCert, err := x509.ParseCertificate(block.Bytes)
+	cms, err := GenerateCMS(oc, ocPrivateKey)
 	if err != nil {
-		t.Fatal(err)
-	}
-	cms, err := GenerateCMS(ownerCert, ownerCertPrivateKey)
-	if err != nil {
-		t.Fatalf("error generating CMS: %v", err)
+		t.Fatalf("GenerateCMS(): %v", err)
 	}
 	pdcPool := x509.NewCertPool()
-	pdcPool.AddCert(pdcCert)
+	pdcPool.AddCert(pdc)
 	_, err = Verify(cms, pdcPool)
 	if err != nil {
-		t.Fatalf("error verifying OC: %v", err)
+		t.Fatalf("Verify(): %v", err)
 	}
-
 }
