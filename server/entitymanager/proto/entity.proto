@@ -121,10 +121,6 @@ message  DHCPConfig {
 message ControlCard {
   string part_number = 1;
   string serial_number = 2;
-
-  //  OwnerShip Voucher
-  bytes ownership_voucher = 3;
-
   DHCPConfig dhcp_config =4 ;
 }
 
@@ -158,12 +154,6 @@ message Chassis {
 
   // config to be loaded on the chassis
   Config config = 9; 
-   
-  // The directory to look into for certificates, private keys and OVs.
-  string artifact_dir = 10; 
-
-  //  Ownership Voucher for the fix chassis
-  bytes ownership_voucher = 11;
 
   // dhcp config for fixed chassis
   DHCPConfig dhcp_config =12 ;

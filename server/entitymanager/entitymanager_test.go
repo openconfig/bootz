@@ -69,16 +69,14 @@ func TestNew(t *testing.T) {
 		},
 		ControllerCards: []*epb.ControlCard{
 			{
-				SerialNumber:     "123A",
-				PartNumber:       "123A",
-				OwnershipVoucher: a.OV["123A"],
-				DhcpConfig:       &epb.DHCPConfig{},
+				SerialNumber: "123A",
+				PartNumber:   "123A",
+				DhcpConfig:   &epb.DHCPConfig{},
 			},
 			{
-				SerialNumber:     "123B",
-				PartNumber:       "123B",
-				OwnershipVoucher: a.OV["123B"],
-				DhcpConfig:       &epb.DHCPConfig{},
+				SerialNumber: "123B",
+				PartNumber:   "123B",
+				DhcpConfig:   &epb.DHCPConfig{},
 			},
 		},
 		DhcpConfig: &epb.DHCPConfig{},
@@ -173,13 +171,11 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 			{
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
-				OwnershipVoucher: a.OV["123A"],
 				DhcpConfig:       &epb.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
-				OwnershipVoucher: a.OV["123B"],
 				DhcpConfig:       &epb.DHCPConfig{},
 			},
 		},
@@ -410,13 +406,11 @@ func TestGetBootstrapData(t *testing.T) {
 			{
 				SerialNumber:     "123A",
 				PartNumber:       "123A",
-				OwnershipVoucher: a.OV["123A"],
 				DhcpConfig:       &epb.DHCPConfig{},
 			},
 			{
 				SerialNumber:     "123B",
 				PartNumber:       "123B",
-				OwnershipVoucher: a.OV["123B"],
 				DhcpConfig:       &epb.DHCPConfig{},
 			},
 		},
