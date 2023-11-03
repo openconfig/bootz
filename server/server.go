@@ -17,37 +17,32 @@
 // The bootz server will provide a simple file based bootstrap
 // implementation for devices. The service can be extended by
 // providing your own implementation of the entity manager.
-package main
+package server
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"flag"
 	"fmt"
 	"net"
-	"strings"
+	"net/http"
+	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/openconfig/bootz/dhcp"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
-	artifacts "github.com/openconfig/bootz/testdata"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
-var (
-	port            = flag.String("port", "15006", "The port to start the Bootz server on localhost")
-	dhcpIntf        = flag.String("dhcp_intf", "", "Network interface to use for dhcp server.")
-	inventoryConfig = flag.String("inv_config", "../testdata/inventory_local.prototxt", "Devices' config files to be loaded by inventory manager")
-	generateOVsFor  = flag.String("generate_ovs_for", "", "Comma-separated list of control card serial numbers to generate OVs for.")
-)
-
 type server struct {
-	serv *grpc.Server
-	lis  net.Listener
+	serv    *grpc.Server
+	lis     net.Listener
+	service *service.Service
 }
 
 func (s *server) Start() error {
@@ -58,29 +53,38 @@ func (s *server) Stop() {
 	s.serv.GracefulStop()
 }
 
-// newServer creates a new Bootz gRPC server from flags.
-func newServer() (*server, error) {
-	if *port == "" {
-		return nil, fmt.Errorf("no port selected. specify with the --port flag")
-	}
+type bootzServerOpts interface {
+	isbootzServerOpts()
+}
 
-	log.Infof("Setting up server security artifacts: OC, OVs, PDC, VendorCA")
-	serials := strings.Split(*generateOVsFor, ",")
+type dhcpOpts struct {
+	intf string
+}
 
-	sa, err := artifacts.GenerateSecurityArtifacts(serials, "Google", "Cisco")
-	if err != nil {
-		return nil, err
-	}
+func (*dhcpOpts) isbootzServerOpts() {}
 
-	log.Infof("Setting up entities")
-	em, err := entitymanager.New(*inventoryConfig, sa)
-	if err != nil {
-		return nil, fmt.Errorf("unable to initiate inventory manager %v", err)
-	}
+type imgSrvOpts struct {
+	imagesLocation string
+	address        string
+	certFile       string
+	keyFile        string
+}
 
-	if *dhcpIntf != "" {
-		if err := startDhcpServer(em); err != nil {
-			return nil, fmt.Errorf("unable to start dhcp server %v", err)
+func (*imgSrvOpts) isbootzServerOpts() {}
+
+// NewServer start a new Bootz gRPC , dhcp, and image server based on specefied flags.
+func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *service.SecurityArtifacts, opts ...bootzServerOpts) (*server, error) {
+
+	for _, opt := range opts {
+		switch opt := opt.(type) {
+		case *dhcpOpts:
+			if err := StartDhcpServer(em, opt.intf); err != nil {
+				return nil, fmt.Errorf("unable to start dhcp server %v", err)
+			}
+		case *imgSrvOpts:
+			StartImgaeServer(opt.address, opt.imagesLocation, opt.certFile, opt.keyFile)
+		default:
+			continue
 		}
 	}
 
@@ -94,38 +98,23 @@ func newServer() (*server, error) {
 		RootCAs:      trustBundle,
 	}
 	log.Infof("Creating server...")
-	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)))
+	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)), grpc.UnaryInterceptor(bootzInterceptor))
 	bpb.RegisterBootstrapServer(s, c)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", *port))
+	lis, err := net.Listen("tcp", bootzAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error listening on port: %v", err)
 	}
 	log.Infof("Server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
-	return &server{serv: s, lis: lis}, nil
+	return &server{serv: s, lis: lis, service: c}, nil
+
 }
 
-func main() {
-	flag.Parse()
-
-	log.Infof("=============================================================================")
-	log.Infof("=========================== BootZ Server Emulator ===========================")
-	log.Infof("=============================================================================")
-
-	s, err := newServer()
-	if err != nil {
-		log.Exit(err)
-	}
-
-	if err := s.Start(); err != nil {
-		log.Exit(err)
-	}
-}
-
-func startDhcpServer(em *entitymanager.InMemoryEntityManager) error {
+// StartDhcpServer start dhcp server based on the dhcpIntf interface and dhcp configuration added for devices
+func StartDhcpServer(em *entitymanager.InMemoryEntityManager, dhcpIntf string) error {
 	conf := &dhcp.Config{
-		Interface:  *dhcpIntf,
+		Interface:  dhcpIntf,
 		AddressMap: make(map[string]*dhcp.Entry),
 	}
 
@@ -143,4 +132,81 @@ func startDhcpServer(em *entitymanager.InMemoryEntityManager) error {
 	}
 
 	return dhcp.Start(conf)
+}
+
+func StartImgaeServer(imagesLocation string, address string, key, cert string) {
+	go func() {
+		fs := http.FileServer(http.Dir(imagesLocation))
+		http.Handle("/", fs)
+		if err := http.ListenAndServeTLS(address, cert, key, fs); err != nil {
+			log.Fatalf("Error starting image server: %v", err)
+		}
+	}()
+}
+
+// A struct to record the boot logs for connected chassis.
+type BootzReqLog struct {
+	StartTimeStamp int
+	EndTimeStamp   int
+	BootResponse   *bpb.BootstrapDataResponse
+	BootRequest    *bpb.GetBootstrapDataRequest
+	Err            error
+}
+
+type BootzStatusLog struct {
+	CardStatus []bpb.ControlCardState_ControlCardStatus
+	Status     []bpb.ReportStatusRequest_BootstrapStatus
+}
+type BootzLogs map[service.EntityLookup]*BootzReqLog
+type BootzStatus map[string]*BootzStatusLog
+
+var (
+	bootzReqLogs    = BootzLogs{}
+	bootzStatusLogs = BootzStatus{}
+	muRw            sync.RWMutex
+)
+
+func bootzInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	start := time.Now()
+	switch breq := req.(type) {
+	case *bpb.GetBootstrapDataRequest:
+		bootzLog := &BootzReqLog{
+			StartTimeStamp: start.Nanosecond(),
+			BootRequest:    breq,
+		}
+		h, err := handler(ctx, req)
+		bootzLog.Err = err
+		bres, _ := h.(*bpb.BootstrapDataResponse)
+		bootzLog.BootResponse = bres
+		ch := breq.GetChassisDescriptor()
+		muRw.Lock()
+		defer muRw.Unlock()
+		if ch.GetSerialNumber() != "" {
+			bootzReqLogs[service.EntityLookup{SerialNumber: ch.GetSerialNumber(), Manufacturer: ch.GetManufacturer()}] = bootzLog
+		}
+		ccStatus := breq.GetControlCardState()
+		if ccStatus != nil && ccStatus.GetSerialNumber() != "" {
+			bootzReqLogs[service.EntityLookup{SerialNumber: ccStatus.GetSerialNumber(), Manufacturer: ch.GetManufacturer()}] = bootzLog
+		}
+		return h, err
+	case *bpb.ReportStatusRequest:
+		muRw.Lock()
+		defer muRw.Unlock()
+		for _, cc := range breq.GetStates() {
+			serial := cc.GetSerialNumber()
+			_, ok := bootzStatusLogs[cc.GetSerialNumber()]
+			if ok {
+				bootzStatusLogs[serial] = &BootzStatusLog{
+					CardStatus: []bpb.ControlCardState_ControlCardStatus{},
+					Status:     []bpb.ReportStatusRequest_BootstrapStatus{},
+				}
+			}
+			bootzStatusLogs[serial].Status = append(bootzStatusLogs[serial].Status, breq.GetStatus())
+			bootzStatusLogs[serial].CardStatus = append(bootzStatusLogs[serial].CardStatus, cc.GetStatus())
+		}
+		return handler(ctx, req)
+	default:
+		return handler(ctx, req)
+
+	}
 }

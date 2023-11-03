@@ -18,7 +18,7 @@ go_library(
     name = "server_lib",
     srcs = ["server.go"],
     importpath = "github.com/openconfig/bootz/server",
-    visibility = ["//visibility:private"],
+    visibility = ["//visibility:public"],
     deps = [
         "//server/entitymanager",
         "//server/service",

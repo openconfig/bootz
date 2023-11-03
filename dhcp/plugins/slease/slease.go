@@ -45,6 +45,8 @@ type ipv4Entry struct {
 
 var ipv4Records = map[string]*ipv4Entry{}
 var ipv6Records = map[string]net.IP{}
+var Ipv4Assigned = map[string]net.IP{}
+var Ipv6Assigned = map[string]net.IP{}
 
 func setup4(args ...string) (handler.Handler4, error) {
 	for _, r := range args {
@@ -74,10 +76,12 @@ func handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	log.Debugf("Got packet: %v", req.Summary())
 	if e, ok := ipv4Records[req.ClientHWAddr.String()]; ok {
 		resp4(e, resp)
+		Ipv4Assigned[req.ClientHWAddr.String()] = resp.ServerIPAddr
 	} else if req.Options.Has(dhcpv4.OptionClientIdentifier) {
 		cid := req.GetOneOption(dhcpv4.OptionClientIdentifier)
 		if e, ok := ipv4Records[toString(cid)]; ok {
 			resp4(e, resp)
+			Ipv4Assigned[toString(cid)] = resp.ServerIPAddr
 		}
 	}
 	return resp, false
@@ -104,6 +108,7 @@ func handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 	if mac, err := dhcpv6.ExtractMAC(req); err == nil {
 		if ip, ok := ipv6Records[mac.String()]; ok {
 			resp.AddOption(createIpv6LeaseOption(m, ip))
+			Ipv6Assigned[mac.String()] = ip
 		}
 	} else {
 		duid := m.Options.ClientID()
@@ -111,6 +116,7 @@ func handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 			ei := en.EnterpriseIdentifier[:len(en.EnterpriseIdentifier)]
 			if ip, ok := ipv6Records[toString(ei)]; ok {
 				resp.AddOption(createIpv6LeaseOption(m, ip))
+				Ipv6Assigned[toString(ei)] = ip
 			}
 		}
 	}

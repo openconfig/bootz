@@ -31,6 +31,7 @@ import (
 	plleasetime "github.com/coredhcp/coredhcp/plugins/leasetime"
 	plserverid "github.com/coredhcp/coredhcp/plugins/serverid"
 	plbootz "github.com/openconfig/bootz/dhcp/plugins/bootz"
+	"github.com/openconfig/bootz/dhcp/plugins/slease"
 	plslease "github.com/openconfig/bootz/dhcp/plugins/slease"
 )
 
@@ -91,6 +92,19 @@ type Server struct {
 
 var instance *Server = nil
 var lock = &sync.Mutex{}
+
+// AssignedIP returns the asigned ip related to hwAddr (mac or serial)
+func AssignedIP(hwAddr string) string {
+	ipv4, ok := slease.Ipv4Assigned[hwAddr]
+	if ok {
+		return ipv4.String()
+	}
+	ipv6, ok := slease.Ipv6Assigned[hwAddr]
+	if ok {
+		return ipv6.String()
+	}
+	return ""
+}
 
 // Start starts the dhcp server with the given configuration.
 func Start(conf *Config) error {

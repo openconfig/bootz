@@ -12,17 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package server
 
 import (
 	"flag"
 	"testing"
+
+	"github.com/openconfig/bootz/server/entitymanager"
+	artifacts "github.com/openconfig/bootz/testdata"
 )
 
 // TestStartup tests that a gRPC server can be created with the default flags.
 func TestStartup(t *testing.T) {
+	sa, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", "Cisco")
+	if err != nil {
+		t.Fatalf("unable to generate server artifacts: %v", err)
+	}
 	flag.Parse()
-	_, err := newServer()
+	_, err = NewServer("5000", "", &entitymanager.InMemoryEntityManager{}, sa)
 	if err != nil {
 		t.Fatalf("newServer() err = %v, want nil", err)
 	}
