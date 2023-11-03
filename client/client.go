@@ -47,7 +47,7 @@ const nonceLength = 16
 var (
 	verifyTLSCert = flag.Bool("verify_tls_cert", false, "Whether to verify the TLS certificate presented by the Bootz server. If false, all TLS connections are implicitly trusted.")
 	insecureBoot  = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
-	port          = flag.String("port", "", "The port to listen to on localhost for the bootz server.")
+	port          = flag.String("port", "15006", "The port to listen to on localhost for the bootz server.")
 	urlImageMap   = map[string]string{
 		"https://path/to/image": "../testdata/image.txt",
 	}
@@ -302,7 +302,7 @@ func main() {
 	if trustCert == "" {
 		log.Exitf("server did not provide a server trust certificate")
 	}
-	//Decode the trust cert
+	// Decode the trust cert
 	trustCertDecoded, err := base64.StdEncoding.DecodeString(trustCert)
 	if err != nil {
 		log.Exitf("unable to base64-decode trust cert")

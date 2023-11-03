@@ -42,7 +42,7 @@ var (
 	port            = flag.String("port", "15006", "The port to start the Bootz server on localhost")
 	dhcpIntf        = flag.String("dhcp_intf", "", "Network interface to use for dhcp server.")
 	inventoryConfig = flag.String("inv_config", "../testdata/inventory_local.prototxt", "Devices' config files to be loaded by inventory manager")
-	generateOVsFor  = flag.String("generate_ovs_for", "", "Comma-separated list of control card serial numbers to generate OVs for.")
+	generateOVsFor  = flag.String("generate_ovs_for", "123A,123B", "Comma-separated list of control card serial numbers to generate OVs for.")
 )
 
 type server struct {

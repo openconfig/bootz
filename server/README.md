@@ -5,17 +5,18 @@ server.
 
 ## Usage
 
-To run the server, build it and then run it with at least the `port` flag specified. The default value of `artifact_dir` works for this implementation. We recommend using the flag `alsologtostderr` to get a verbose output.
+To run the server, build it and then run using the below commands. Use --alsologtostderr to get verbose logs on the terminal.
 
 ```shell
 cd server
 go build server.go
-./server -port 8080 -alsologtostderr
+./server -alsologtostderr
 ```
 
 Once running, run the client implementation in another terminal. See [client readme](../client/README.md).
 
 ### Flags
 
-* `port`: The port to start to the Bootz Server on localhost.
-* `artifact_dir`: A relative directory to look for security artifacts. See README.md in the testdata directory for an explanation of these.
+* `port`: The port to start to the Bootz Server on localhost. Defaults to 15006 which is the standard Bootz port.
+* `generate_ovs_for`: A comma-separated list of control card or chassis serial numbers to generate Ownership Vouchers for. If unset, defaults to the standard test case of using control cards "123A" and "123B".
+* `inv_config`: A path to a textproto file that stores the server's inventory config.

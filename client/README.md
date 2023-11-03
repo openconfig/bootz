@@ -8,19 +8,16 @@ and image or applying a config are mocked out and are simply logged.
 
 First, make sure the server is running. See [server readme](../server/README.md).
 
-To run the client, build it and then run it with at least the `port` flag specified. The default value of `root_ca_cert_path` works for this implementation. We recommend using the flag `alsologtostderr` to get a verbose output.
+To run the client, build it and then run using the below commands. Use --alsologtostderr to get verbose logs on the terminal.
 
 ```shell
 cd client
 go build client.go
-./client -port 8080 -alsologtostderr
+./client -alsologtostderr
 ```
 
 ### Flags
 
-* `port`: The port to listen to the Bootz Server on localhost.
+* `port`: The port to listen to the Bootz Server on localhost. Defaults to the standard Bootz port of 15006.
 * `insecure_boot`: Whether to set start the emulated client in an insecure
   boot mode, in which ownership voucher and certificates aren't checked.
-* `root_ca_cert_path`: A path to a file that contains a PEM encoded
-  certificate for the trusted ZTP Signing authority. This certificate will be
-  used to validate the ownership voucher.
