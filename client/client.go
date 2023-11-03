@@ -302,7 +302,7 @@ func main() {
 	if trustCert == "" {
 		log.Exitf("server did not provide a server trust certificate")
 	}
-	//Decode the trust cert
+	// Decode the trust cert
 	trustCertDecoded, err := base64.StdEncoding.DecodeString(trustCert)
 	if err != nil {
 		log.Exitf("unable to base64-decode trust cert")
