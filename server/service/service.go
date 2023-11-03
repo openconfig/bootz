@@ -20,6 +20,7 @@ import (
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
@@ -166,7 +167,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		log.Infof("====================== Signing the response with nonce ======================")
 		log.Infof("=============================================================================")
 		if err := s.em.Sign(resp, lookup, req.GetControlCardState().GetSerialNumber()); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
+			return nil, status.Errorf(codes.Internal, fmt.Sprintf("failed to sign bootz response: %v", err))
 		}
 		log.Infof("Signed with nonce")
 	}

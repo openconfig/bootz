@@ -178,6 +178,7 @@ func bootzInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServ
 		bootzLog.Err = err
 		bres, _ := h.(*bpb.BootstrapDataResponse)
 		bootzLog.BootResponse = bres
+		bootzLog.EndTimeStamp = time.Now().Nanosecond()
 		ch := breq.GetChassisDescriptor()
 		muRw.Lock()
 		defer muRw.Unlock()
@@ -195,7 +196,7 @@ func bootzInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServ
 		for _, cc := range breq.GetStates() {
 			serial := cc.GetSerialNumber()
 			_, ok := bootzStatusLogs[cc.GetSerialNumber()]
-			if ok {
+			if !ok {
 				bootzStatusLogs[serial] = &BootzStatusLog{
 					CardStatus: []bpb.ControlCardState_ControlCardStatus{},
 					Status:     []bpb.ReportStatusRequest_BootstrapStatus{},

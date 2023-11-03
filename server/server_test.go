@@ -29,7 +29,7 @@ func TestStartup(t *testing.T) {
 		t.Fatalf("unable to generate server artifacts: %v", err)
 	}
 	flag.Parse()
-	_, err = NewServer("5000", "", &entitymanager.InMemoryEntityManager{}, sa)
+	_, err = NewServer("localhost:5000", &entitymanager.InMemoryEntityManager{}, sa)
 	if err != nil {
 		t.Fatalf("newServer() err = %v, want nil", err)
 	}
