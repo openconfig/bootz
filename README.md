@@ -265,8 +265,8 @@ can install production configuration and certificates into the device.
     mac-addresses of the device, and responds with the static IP address of
     the bootstrap server.
    2. DHCP server also assigns an IP address and a gateway to the device.
-   3. The DHCP response option code should be OPTION_V4_SZTP_REDIRECT(136) or
-    OPTION_V6_SZTP_REDIRECT(143).
+   3. The DHCP response option code should be OPTION_V4_SZTP_REDIRECT(143) or
+    OPTION_V6_SZTP_REDIRECT(136).
    4. The format of the DHCP message (other than response option code) follows
     [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
       1. The URI will be in the format of bootz://&lt;host or ip>:&lt;port>
