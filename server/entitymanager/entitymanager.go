@@ -16,6 +16,7 @@
 package entitymanager
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -54,7 +55,7 @@ type InMemoryEntityManager struct {
 
 // ResolveChassis returns an entity based on the provided lookup.
 // If a control card serial is provided, it also looks up chassis' by its control cards.
-func (m *InMemoryEntityManager) ResolveChassis(lookup *service.EntityLookup, ccSerial string) (*service.ChassisEntity, error) {
+func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *service.EntityLookup, ccSerial string) (*service.ChassisEntity, error) {
 	chassis, err := m.lookupChassis(lookup, ccSerial)
 	if err != nil {
 		return nil, err
@@ -152,7 +153,7 @@ func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
 }
 
 // GetBootstrapData fetches and returns the bootstrap data response from the server.
-func (m *InMemoryEntityManager) GetBootstrapData(lookup *service.EntityLookup, controllerCard *bpb.ControlCard) (*bpb.BootstrapDataResponse, error) {
+func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, lookup *service.EntityLookup, controllerCard *bpb.ControlCard) (*bpb.BootstrapDataResponse, error) {
 	serial := lookup.SerialNumber
 	if controllerCard != nil {
 		serial = controllerCard.GetSerialNumber()
@@ -189,7 +190,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(lookup *service.EntityLookup, c
 }
 
 // SetStatus updates the status for each control card on the chassis.
-func (m *InMemoryEntityManager) SetStatus(req *bpb.ReportStatusRequest) error {
+func (m *InMemoryEntityManager) SetStatus(ctx context.Context, req *bpb.ReportStatusRequest) error {
 	if len(req.GetStates()) == 0 {
 		return status.Errorf(codes.InvalidArgument, "no control card or fixed chassis states provided")
 	}
@@ -209,7 +210,7 @@ func (m *InMemoryEntityManager) SetStatus(req *bpb.ReportStatusRequest) error {
 }
 
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
-func (m *InMemoryEntityManager) Sign(resp *bpb.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
+func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// Check if security artifacts are provided for signing.

@@ -16,6 +16,7 @@ package entitymanager
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"os"
 	"testing"
@@ -212,6 +213,7 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 }
 
 func TestResolveChassis(t *testing.T) {
+	ctx := context.Background()
 	tests := []struct {
 		desc    string
 		input   *service.EntityLookup
@@ -241,7 +243,7 @@ func TestResolveChassis(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.ResolveChassis(test.input, "")
+			got, err := em.ResolveChassis(ctx, test.input, "")
 			if (err != nil) != test.wantErr {
 				t.Fatalf("ResolveChassis(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
@@ -257,6 +259,7 @@ func TestSign(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to generate server artifacts: %v", err)
 	}
+	ctx := context.Background()
 	tests := []struct {
 		desc    string
 		chassis service.EntityLookup
@@ -294,7 +297,7 @@ func TestSign(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			err = em.Sign(test.resp, &test.chassis, test.serial)
+			err = em.Sign(ctx, test.resp, &test.chassis, test.serial)
 			if err != nil {
 				if test.wantErr {
 					t.Skip()
@@ -323,6 +326,7 @@ func TestSign(t *testing.T) {
 }
 
 func TestSetStatus(t *testing.T) {
+	ctx := context.Background()
 	tests := []struct {
 		desc    string
 		input   *bpb.ReportStatusRequest
@@ -367,7 +371,7 @@ func TestSetStatus(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			err := em.SetStatus(test.input)
+			err := em.SetStatus(ctx, test.input)
 			if (err != nil) != test.wantErr {
 				t.Errorf("SetStatus(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
@@ -380,6 +384,7 @@ func TestGetBootstrapData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to generate server artifacts: %v", err)
 	}
+	ctx := context.Background()
 	encodedServerTrustCert := base64.StdEncoding.EncodeToString(a.TrustAnchor.Raw)
 	chassis := epb.Chassis{
 		Name:                   "test",
@@ -540,7 +545,7 @@ func TestGetBootstrapData(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.GetBootstrapData(&service.EntityLookup{SerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
+			got, err := em.GetBootstrapData(ctx, &service.EntityLookup{SerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
 			if (err != nil) != test.wantErr {
 				t.Errorf("GetBootstrapData(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
