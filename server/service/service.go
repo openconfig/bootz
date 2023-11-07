@@ -71,10 +71,10 @@ type ChassisEntity struct {
 
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
-	ResolveChassis(*EntityLookup, string) (*ChassisEntity, error)
-	GetBootstrapData(*EntityLookup, *bpb.ControlCard) (*bpb.BootstrapDataResponse, error)
-	SetStatus(*bpb.ReportStatusRequest) error
-	Sign(*bpb.GetBootstrapDataResponse, *EntityLookup, string) error
+	ResolveChassis(context.Context, *EntityLookup, string) (*ChassisEntity, error)
+	GetBootstrapData(context.Context, *EntityLookup, *bpb.ControlCard) (*bpb.BootstrapDataResponse, error)
+	SetStatus(context.Context, *bpb.ReportStatusRequest) error
+	Sign(context.Context, *bpb.GetBootstrapDataResponse, *EntityLookup, string) error
 }
 
 // Service represents the server and entity manager.
@@ -100,7 +100,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		SerialNumber: chassisDesc.GetSerialNumber(),
 	}
 	// Validate the chassis can be serviced
-	chassis, err := s.em.ResolveChassis(lookup, ccSerial)
+	chassis, err := s.em.ResolveChassis(ctx, lookup, ccSerial)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", chassisDesc, err)
 	}
@@ -119,7 +119,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("=============================================================================")
 	var responses []*bpb.BootstrapDataResponse
 	for _, v := range chassisDesc.GetControlCards() {
-		bootdata, err := s.em.GetBootstrapData(lookup, v)
+		bootdata, err := s.em.GetBootstrapData(ctx, lookup, v)
 		if err != nil {
 			errs.Add(err)
 			log.Infof("Error occurred while retrieving data for Serial Number %v", v.SerialNumber)
@@ -127,7 +127,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		responses = append(responses, bootdata)
 	}
 	if fixedChasis {
-		bootdata, err := s.em.GetBootstrapData(lookup, nil)
+		bootdata, err := s.em.GetBootstrapData(ctx, lookup, nil)
 		if err != nil {
 			errs.Add(err)
 			log.Infof("Error occurred while retrieving data for fixed chassis with serail number %v", lookup.SerialNumber)
@@ -165,7 +165,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		log.Infof("=============================================================================")
 		log.Infof("====================== Signing the response with nonce ======================")
 		log.Infof("=============================================================================")
-		if err := s.em.Sign(resp, lookup, req.GetControlCardState().GetSerialNumber()); err != nil {
+		if err := s.em.Sign(ctx, resp, lookup, req.GetControlCardState().GetSerialNumber()); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
 		}
 		log.Infof("Signed with nonce")
@@ -178,7 +178,7 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 	log.Infof("=============================================================================")
 	log.Infof("========================== Status report received ===========================")
 	log.Infof("=============================================================================")
-	return &bpb.EmptyResponse{}, s.em.SetStatus(req)
+	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
 }
 
 // SetDeviceConfiguration is a public API for allowing the device configuration to be set for each device the
