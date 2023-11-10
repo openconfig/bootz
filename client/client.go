@@ -173,7 +173,7 @@ func generateNonce() (string, error) {
 
 func validateChassisDescriptor(chassis *bpb.ChassisDescriptor) {
 	if chassis.GetManufacturer() == "" || chassis.GetPartNumber() == "" {
-		log.Exitf("Chassis validation error: chassis %v does not have required fields: %v", chassis)
+		log.Exitf("Chassis validation error: chassis %v does not have required fields", chassis)
 	}
 	populatedSlots := make(map[int32]bool)
 	if len(chassis.GetControlCards()) > 0 {
