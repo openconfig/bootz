@@ -57,32 +57,32 @@ type bootzServerOpts interface {
 	isbootzServerOpts()
 }
 
-type dhcpOpts struct {
+type DHCPOpts struct {
 	intf string
 }
 
-func (*dhcpOpts) isbootzServerOpts() {}
+func (*DHCPOpts) isbootzServerOpts() {}
 
-type imgSrvOpts struct {
-	imagesLocation string
-	address        string
-	certFile       string
-	keyFile        string
+type ImgSrvOpts struct {
+	ImagesLocation string
+	Address        string
+	CertFile       string
+	KeyFile        string
 }
 
-func (*imgSrvOpts) isbootzServerOpts() {}
+func (*ImgSrvOpts) isbootzServerOpts() {}
 
 // NewServer start a new Bootz gRPC , dhcp, and image server based on specefied flags.
 func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *service.SecurityArtifacts, opts ...bootzServerOpts) (*server, error) {
 
 	for _, opt := range opts {
 		switch opt := opt.(type) {
-		case *dhcpOpts:
+		case *DHCPOpts:
 			if err := StartDhcpServer(em, opt.intf); err != nil {
 				return nil, fmt.Errorf("unable to start dhcp server %v", err)
 			}
-		case *imgSrvOpts:
-			StartImgaeServer(opt.address, opt.imagesLocation, opt.certFile, opt.keyFile)
+		case *ImgSrvOpts:
+			StartImgaeServer(opt)
 		default:
 			continue
 		}
@@ -134,11 +134,11 @@ func StartDhcpServer(em *entitymanager.InMemoryEntityManager, dhcpIntf string) e
 	return dhcp.Start(conf)
 }
 
-func StartImgaeServer(imagesLocation string, address string, key, cert string) {
+func StartImgaeServer(opt *ImgSrvOpts) {
 	go func() {
-		fs := http.FileServer(http.Dir(imagesLocation))
+		fs := http.FileServer(http.Dir(opt.ImagesLocation))
 		http.Handle("/", fs)
-		if err := http.ListenAndServeTLS(address, cert, key, fs); err != nil {
+		if err := http.ListenAndServeTLS(opt.Address, opt.CertFile, opt.KeyFile, fs); err != nil {
 			log.Fatalf("Error starting image server: %v", err)
 		}
 	}()
