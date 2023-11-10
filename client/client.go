@@ -36,19 +36,37 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
+// Describes a modular chassis with two control cards.
+const defaultChassisDescriptor = `
+manufacturer: 'Cisco' 
+part_number: '123'
+control_cards { 
+	serial_number: '123A' 
+	slot: 1 
+	part_number: '123A' 
+} 
+control_cards { 
+	serial_number: '123B' 
+	slot: 2 
+	part_number: '123B'
+}
+`
+
 // Represents a 128 bit nonce.
 const nonceLength = 16
 
 var (
-	verifyTLSCert = flag.Bool("verify_tls_cert", false, "Whether to verify the TLS certificate presented by the Bootz server. If false, all TLS connections are implicitly trusted.")
-	insecureBoot  = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
-	port          = flag.String("port", "15006", "The port to listen to on localhost for the bootz server.")
-	urlImageMap   = map[string]string{
+	verifyTLSCert     = flag.Bool("verify_tls_cert", false, "Whether to verify the TLS certificate presented by the Bootz server. If false, all TLS connections are implicitly trusted.")
+	insecureBoot      = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
+	port              = flag.String("port", "15006", "The port to connect to on localhost for the bootz server.")
+	chassisDescriptor = flag.String("chassis_descriptor", defaultChassisDescriptor, "A textproto formatting of the ChassisDescriptor message.")
+	urlImageMap       = map[string]string{
 		"https://path/to/image": "../testdata/image.txt",
 	}
 )
@@ -153,6 +171,29 @@ func generateNonce() (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
+func validateChassisDescriptor(chassis *bpb.ChassisDescriptor) {
+	if chassis.GetManufacturer() == "" || chassis.GetPartNumber() == "" {
+		log.Exitf("Chassis validation error: chassis %v does not have required fields", chassis)
+	}
+	populatedSlots := make(map[int32]bool)
+	if len(chassis.GetControlCards()) > 0 {
+		for _, cc := range chassis.GetControlCards() {
+			slotPopulated := populatedSlots[cc.GetSlot()]
+			if slotPopulated {
+				log.Exitf("Chassis validation error: slot %d already populated by another control card", cc.GetSlot())
+			}
+			populatedSlots[cc.GetSlot()] = true
+			if cc.GetPartNumber() == "" || cc.GetSerialNumber() == "" {
+				log.Exitf("Chassis validation error: control card %v does not have required fields: %v", cc)
+			}
+		}
+		return
+	}
+	if chassis.GetSerialNumber() == "" {
+		log.Exitf("Chassis validation error: fixed form factor chassis does not contain serial number: %v", chassis)
+	}
+}
+
 func main() {
 	ctx := context.Background()
 	flag.Parse()
@@ -164,25 +205,25 @@ func main() {
 	log.Infof("================== Constructing a fake device for testing ===================")
 	log.Infof("=============================================================================")
 	// Construct the fake device.
-	// TODO: Allow these values to be set e.g. via a flag.
-	chassis := bpb.ChassisDescriptor{
-		Manufacturer: "Cisco",
-		SerialNumber: "123",
-		ControlCards: []*bpb.ControlCard{
-			{
-				SerialNumber: "123A",
-				Slot:         1,
-				PartNumber:   "123A",
-			},
-			{
-				SerialNumber: "123B",
-				Slot:         2,
-				PartNumber:   "123B",
-			},
-		},
+	chassis := &bpb.ChassisDescriptor{}
+	err := prototext.Unmarshal([]byte(*chassisDescriptor), chassis)
+	if err != nil {
+		log.Exitf("Error un-marshalling chassis descriptor %s: %v", *chassisDescriptor, err)
 	}
-
-	log.Infof("%v chassis %v starting with SecureOnly = %v", chassis.Manufacturer, chassis.SerialNumber, !*insecureBoot)
+	validateChassisDescriptor(chassis)
+	controlCardState := &bpb.ControlCardState{
+		Status: bpb.ControlCardState_CONTROL_CARD_STATUS_NOT_INITIALIZED,
+	}
+	if len(chassis.GetControlCards()) > 0 {
+		// For this implementation, we pick the first control card as the active one. On a real device, the active control
+		// card should set its own serial number here.
+		controlCardState.SerialNumber = chassis.GetControlCards()[0].GetSerialNumber()
+		log.Infof("%v modular chassis with %d control cards starting with SecureOnly = %v", chassis.Manufacturer, len(chassis.GetControlCards()), !*insecureBoot)
+	} else {
+		controlCardState.SerialNumber = chassis.GetSerialNumber()
+		log.Infof("%v fixed form factor chassis %v starting with SecureOnly = %v", chassis.Manufacturer, chassis.SerialNumber, !*insecureBoot)
+	}
+	log.Infof("Active control card is %v", controlCardState.GetSerialNumber())
 
 	// 1. DHCP Discovery of Bootstrap Server
 	// This step emulates the retrieval of the bootz server IP
@@ -208,11 +249,7 @@ func main() {
 	c := bpb.NewBootstrapClient(conn)
 	log.Infof("Client connected to bootz server")
 
-	// This is the active control card making the bootz request.
 	log.Infof("=============================================================================")
-	log.Infof("Setting active control card with serial number: %v, slot: %v, part number: %v",
-		chassis.ControlCards[0].SerialNumber, chassis.ControlCards[0].Slot, chassis.ControlCards[0].PartNumber)
-	activeControlCard := chassis.ControlCards[0]
 
 	nonce := ""
 	if !*insecureBoot {
@@ -229,14 +266,11 @@ func main() {
 	log.Infof("======================== Retrieving bootstrap data ==========================")
 	log.Infof("=============================================================================")
 	log.Infof("Building bootstrap data request")
+
 	req := &bpb.GetBootstrapDataRequest{
-		ChassisDescriptor: &chassis,
-		// This is the active control card, e.g. the one making the bootz request.
-		ControlCardState: &bpb.ControlCardState{
-			SerialNumber: activeControlCard.GetSerialNumber(),
-			Status:       bpb.ControlCardState_CONTROL_CARD_STATUS_NOT_INITIALIZED,
-		},
-		Nonce: nonce,
+		ChassisDescriptor: chassis,
+		ControlCardState:  controlCardState,
+		Nonce:             nonce,
 	}
 	log.Infof("Built bootstrap data request with %v chassis %v and control card %v with status %v and nonce %v",
 		req.ChassisDescriptor.Manufacturer, req.ChassisDescriptor.SerialNumber, req.ControlCardState.SerialNumber, req.ControlCardState.Status, req.Nonce)
@@ -255,7 +289,7 @@ func main() {
 		log.Infof("=============================================================================")
 		log.Infof("====================== Validating response signature ========================")
 		log.Infof("=============================================================================")
-		if err := validateArtifacts(activeControlCard.GetSerialNumber(), resp); err != nil {
+		if err := validateArtifacts(controlCardState.GetSerialNumber(), resp); err != nil {
 			log.Exitf("Error validating signed data: %v", err)
 		}
 	}
