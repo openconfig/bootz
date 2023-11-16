@@ -166,7 +166,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		log.Infof("====================== Signing the response with nonce ======================")
 		log.Infof("=============================================================================")
 		if err := s.em.Sign(ctx, resp, lookup, req.GetControlCardState().GetSerialNumber()); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to sign bootz response")
+			return nil, err
 		}
 		log.Infof("Signed with nonce")
 	}

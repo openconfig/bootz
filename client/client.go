@@ -184,7 +184,7 @@ func validateChassisDescriptor(chassis *bpb.ChassisDescriptor) {
 			}
 			populatedSlots[cc.GetSlot()] = true
 			if cc.GetPartNumber() == "" || cc.GetSerialNumber() == "" {
-				log.Exitf("Chassis validation error: control card %v does not have required fields: %v", cc)
+				log.Exitf("Chassis validation error: control card %v does not have required fields", cc)
 			}
 		}
 		return
