@@ -39,17 +39,17 @@ import (
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
-type server struct {
+type Server struct {
 	serv    *grpc.Server
 	lis     net.Listener
 	service *service.Service
 }
 
-func (s *server) Start() error {
+func (s *Server) Start() error {
 	return s.serv.Serve(s.lis)
 }
 
-func (s *server) Stop() {
+func (s *Server) Stop() {
 	s.serv.GracefulStop()
 }
 
@@ -72,9 +72,15 @@ type ImgSrvOpts struct {
 
 func (*ImgSrvOpts) isbootzServerOpts() {}
 
-// NewServer start a new Bootz gRPC , dhcp, and image server based on specefied flags.
-func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *service.SecurityArtifacts, opts ...bootzServerOpts) (*server, error) {
+type InterceptorOpts struct {
+	BootzInterceptor grpc.UnaryServerInterceptor
+}
 
+func (*InterceptorOpts) isbootzServerOpts() {}
+
+// NewServer start a new Bootz gRPC , dhcp, and image server based on specefied flags.
+func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *service.SecurityArtifacts, opts ...bootzServerOpts) (*Server, error) {
+	var interceptor grpc.ServerOption
 	for _, opt := range opts {
 		switch opt := opt.(type) {
 		case *DHCPOpts:
@@ -83,6 +89,8 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *se
 			}
 		case *ImgSrvOpts:
 			StartImgaeServer(opt)
+		case *InterceptorOpts:
+			interceptor = grpc.UnaryInterceptor(opt.BootzInterceptor)
 		default:
 			continue
 		}
@@ -98,7 +106,13 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *se
 		RootCAs:      trustBundle,
 	}
 	log.Infof("Creating server...")
-	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)), grpc.UnaryInterceptor(bootzInterceptor))
+	s := &grpc.Server{}
+	if interceptor != nil {
+		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)), interceptor)
+	} else {
+		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)))
+	}
+
 	bpb.RegisterBootstrapServer(s, c)
 
 	lis, err := net.Listen("tcp", bootzAddr)
@@ -107,7 +121,7 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *se
 	}
 	log.Infof("Server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
-	return &server{serv: s, lis: lis, service: c}, nil
+	return &Server{serv: s, lis: lis, service: c}, nil
 
 }
 
@@ -174,6 +188,7 @@ func bootzInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServ
 			StartTimeStamp: start.Nanosecond(),
 			BootRequest:    breq,
 		}
+		fmt.Printf("bootz request %v\n", req)
 		h, err := handler(ctx, req)
 		bootzLog.Err = err
 		bres, _ := h.(*bpb.BootstrapDataResponse)
@@ -189,8 +204,11 @@ func bootzInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServ
 		if ccStatus != nil && ccStatus.GetSerialNumber() != "" {
 			bootzReqLogs[service.EntityLookup{SerialNumber: ccStatus.GetSerialNumber(), Manufacturer: ch.GetManufacturer()}] = bootzLog
 		}
+		fmt.Printf("bootz response %v:%v\n", h, err)
+
 		return h, err
 	case *bpb.ReportStatusRequest:
+		fmt.Printf("Status request %v", req)
 		muRw.Lock()
 		defer muRw.Unlock()
 		for _, cc := range breq.GetStates() {

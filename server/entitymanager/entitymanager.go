@@ -143,7 +143,9 @@ func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
 		}
 		bootConfig.OcConfig = ocConf
 	}
-	if conf.GetVendorConfigFile() != "" {
+	if len(conf.GetVendorConfig()) > 0 {
+		bootConfig.VendorConfig = conf.GetVendorConfig()
+	} else if conf.GetVendorConfigFile() != "" {
 		cliConf, err := os.ReadFile(string(conf.VendorConfigFile))
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not populate vendor config %v", err)
@@ -187,7 +189,7 @@ func (m *InMemoryEntityManager) GetBootstrapData(el *service.EntityLookup, contr
 	out:
 		for _, ch := range m.chassisInventory {
 			for _, c := range ch.GetControllerCards() {
-				if c.GetSerialNumber() == controllerCard.GetSerialNumber() && c.GetPartNumber() == controllerCard.PartNumber {
+				if c.GetSerialNumber() == controllerCard.GetSerialNumber() { //&& c.GetPartNumber() == controllerCard.PartNumber {
 					if ch.Manufacturer != el.Manufacturer {
 						continue
 					}
