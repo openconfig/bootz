@@ -23,13 +23,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/coredhcp/coredhcp/logger"
+
 	cdconfig "github.com/coredhcp/coredhcp/config"
 	cdplugins "github.com/coredhcp/coredhcp/plugins"
-	cdserver "github.com/coredhcp/coredhcp/server"
-
 	plDNS "github.com/coredhcp/coredhcp/plugins/dns"
 	plleasetime "github.com/coredhcp/coredhcp/plugins/leasetime"
 	plserverid "github.com/coredhcp/coredhcp/plugins/serverid"
+	cdserver "github.com/coredhcp/coredhcp/server"
 	plbootz "github.com/openconfig/bootz/dhcp/plugins/bootz"
 	plslease "github.com/openconfig/bootz/dhcp/plugins/slease"
 )
@@ -92,6 +93,16 @@ type Server struct {
 var instance *Server = nil
 var lock = &sync.Mutex{}
 
+var log = logger.GetLogger("bootz/dhcp")
+
+func init() {
+	for _, plugin := range desiredPlugins {
+		if err := cdplugins.RegisterPlugin(plugin); err != nil {
+			log.Fatalf("Failed to register plugin '%s': %v", plugin.Name, err)
+		}
+	}
+}
+
 // Start starts the dhcp server with the given configuration.
 func Start(conf *Config) error {
 	lock.Lock()
@@ -109,12 +120,6 @@ func Start(conf *Config) error {
 	c, err := cdconfig.Load(configFile)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %v", err)
-	}
-
-	for _, plugin := range desiredPlugins {
-		if err := cdplugins.RegisterPlugin(plugin); err != nil {
-			return fmt.Errorf("failed to register plugin '%s': %v", plugin.Name, err)
-		}
 	}
 
 	srv, err := cdserver.Start(c)
