@@ -464,10 +464,9 @@ type ControlCard struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	PartNumber       string      `protobuf:"bytes,1,opt,name=part_number,json=partNumber,proto3" json:"part_number,omitempty"`
-	SerialNumber     string      `protobuf:"bytes,2,opt,name=serial_number,json=serialNumber,proto3" json:"serial_number,omitempty"`
-	OwnershipVoucher []byte      `protobuf:"bytes,3,opt,name=ownership_voucher,json=ownershipVoucher,proto3" json:"ownership_voucher,omitempty"`
-	DhcpConfig       *DHCPConfig `protobuf:"bytes,4,opt,name=dhcp_config,json=dhcpConfig,proto3" json:"dhcp_config,omitempty"`
+	PartNumber   string      `protobuf:"bytes,1,opt,name=part_number,json=partNumber,proto3" json:"part_number,omitempty"`
+	SerialNumber string      `protobuf:"bytes,2,opt,name=serial_number,json=serialNumber,proto3" json:"serial_number,omitempty"`
+	DhcpConfig   *DHCPConfig `protobuf:"bytes,4,opt,name=dhcp_config,json=dhcpConfig,proto3" json:"dhcp_config,omitempty"`
 }
 
 func (x *ControlCard) Reset() {
@@ -516,13 +515,6 @@ func (x *ControlCard) GetSerialNumber() string {
 	return ""
 }
 
-func (x *ControlCard) GetOwnershipVoucher() []byte {
-	if x != nil {
-		return x.OwnershipVoucher
-	}
-	return nil
-}
-
 func (x *ControlCard) GetDhcpConfig() *DHCPConfig {
 	if x != nil {
 		return x.DhcpConfig
@@ -544,8 +536,6 @@ type Chassis struct {
 	SoftwareImage          *bootz.SoftwareImage `protobuf:"bytes,7,opt,name=software_image,json=softwareImage,proto3" json:"software_image,omitempty"`
 	ControllerCards        []*ControlCard       `protobuf:"bytes,8,rep,name=controller_cards,json=controllerCards,proto3" json:"controller_cards,omitempty"`
 	Config                 *Config              `protobuf:"bytes,9,opt,name=config,proto3" json:"config,omitempty"`
-	ArtifactDir            string               `protobuf:"bytes,10,opt,name=artifact_dir,json=artifactDir,proto3" json:"artifact_dir,omitempty"`
-	OwnershipVoucher       []byte               `protobuf:"bytes,11,opt,name=ownership_voucher,json=ownershipVoucher,proto3" json:"ownership_voucher,omitempty"`
 	DhcpConfig             *DHCPConfig          `protobuf:"bytes,12,opt,name=dhcp_config,json=dhcpConfig,proto3" json:"dhcp_config,omitempty"`
 }
 
@@ -640,20 +630,6 @@ func (x *Chassis) GetControllerCards() []*ControlCard {
 func (x *Chassis) GetConfig() *Config {
 	if x != nil {
 		return x.Config
-	}
-	return nil
-}
-
-func (x *Chassis) GetArtifactDir() string {
-	if x != nil {
-		return x.ArtifactDir
-	}
-	return ""
-}
-
-func (x *Chassis) GetOwnershipVoucher() []byte {
-	if x != nil {
-		return x.OwnershipVoucher
 	}
 	return nil
 }

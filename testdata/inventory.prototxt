@@ -14,18 +14,15 @@ chassis {
     controller_cards {
         serial_number: "123A"
         part_number: "123A"
-        dhcp_config: {
-
-        }    }
+        dhcp_config: {}    
+    }
     controller_cards {
         serial_number: "123B"
         part_number: "123B"
-        dhcp_config: {
-            
-        }
+        dhcp_config: {}
     }
     software_image {
-        name: "Default Image" 
+        name: "Default Image"
 		version: "1.0"
 		url: "https://path/to/image"
 		os_image_hash: "e9c0f8b575cbfcb42ab3b78ecc87efa3b011d9a5d10b09fa4e96f240bf6a82f5"

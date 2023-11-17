@@ -49,6 +49,9 @@ service Bootstrap {
 // description of the chassis and its constituent control cards.
 message GetBootstrapDataRequest {
   ChassisDescriptor chassis_descriptor = 1;
+  // Describes the current state of the active control card making the
+  // bootstrap request. For fixed form factor devices, the active control
+  // card is the chassis itself.
   ControlCardState control_card_state = 2;
   // A nonce that the bootstrap server should use when signing the response.
   // Not settting this field indicates that the device is configured not to
@@ -120,7 +123,7 @@ message BootstrapDataResponse {
   // The device should set this hash as its Bootloader password.
   string boot_password_hash = 3;
   // This certificate should be used to validate the server when reporting
-  // progress.
+  // progress. The format is a base64 encoding of an x509 DER certificate.
   string server_trust_cert = 4;
   // Boot configuration is specified as structured data.
   BootConfig boot_config = 5;
@@ -149,19 +152,26 @@ message GetBootstrapDataResponse {
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field
   // in the GetBootstrapDataRequest message.
+  // The field is a CMS message (RFC 5652) signed by a trusted
+  // vendor Certificate Authority.
   bytes ownership_voucher = 101;
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field
   // in the GetBootstrapDataRequest message.
+  // The field is a CMS message (RFC 5652) which includes and is 
+  // signed by the OwnershipCertificate.
   bytes ownership_certificate = 102;
   // This is a signature of the serialized_bootstrap_data field,
   // using the ownership_certificate.
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field
   // in the GetBootstrapDataRequest message.
+  // The field is a base64-encoding of a signature generated using PKCS1v15 
+  // with SHA256 as the hashing algorithm.
   string response_signature = 103;
   // Contains the wire format encoding of the BootstrapDataSigned 
-  // message. This field should be verified with the response_signature.
+  // message. This field should be verified with the response_signature
+  // before unmarshalling.
   bytes serialized_bootstrap_data = 104;
 }
 
@@ -207,11 +217,31 @@ message ReportStatusRequest {
   }
   BootstrapStatus status = 1;
   string status_message = 2;
+  // Lists the current states of all control cards in the chassis.
+  // For a fixed form factor chassis, this should contain a single 
+  // state matching the chassis serial number.
   repeated ControlCardState states = 3;
 }
 
 // Used in  RPC methods that are not expected to return a response.
 message EmptyResponse {
+}
+
+// Chassis represents a single chassis owned by an organization.
+message Chassis {
+  string serial_number = 1;
+  string manufacturer = 2;
+  string part_number = 3;
+  repeated ControlCard control_cards = 4;
+  string hostname = 5;
+  BootMode boot_mode = 6;
+  SoftwareImage software_image = 7;
+  string management_ip = 8;
+  BootConfig boot_config = 9;
+  Credentials credentials = 10;
+  gnsi.pathz.v1.UploadRequest pathz = 11;
+  gnsi.authz.v1.UploadRequest authz = 12;
+  gnsi.certz.v1.UploadRequest certificates = 13;
 }
 
 // BootMode specifies if the chassis should utilize OV data.

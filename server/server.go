@@ -39,6 +39,8 @@ import (
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
+
+
 type Server struct {
 	serv    *grpc.Server
 	lis     net.Listener
