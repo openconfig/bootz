@@ -24,6 +24,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"sync"
@@ -39,12 +40,11 @@ import (
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
-
-
 type Server struct {
 	serv    *grpc.Server
 	lis     net.Listener
 	service *service.Service
+	httpSrv *http.Server
 }
 
 func (s *Server) Start() error {
@@ -53,6 +53,9 @@ func (s *Server) Start() error {
 
 func (s *Server) Stop() {
 	s.serv.GracefulStop()
+	if s.httpSrv != nil {
+		s.httpSrv.Shutdown(context.Background())
+	}
 }
 
 type bootzServerOpts interface {
@@ -83,6 +86,7 @@ func (*InterceptorOpts) isbootzServerOpts() {}
 // NewServer start a new Bootz gRPC , dhcp, and image server based on specefied flags.
 func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *service.SecurityArtifacts, opts ...bootzServerOpts) (*Server, error) {
 	var interceptor grpc.ServerOption
+	server := &Server{}
 	for _, opt := range opts {
 		switch opt := opt.(type) {
 		case *DHCPOpts:
@@ -90,7 +94,7 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *se
 				return nil, fmt.Errorf("unable to start dhcp server %v", err)
 			}
 		case *ImgSrvOpts:
-			StartImgaeServer(opt)
+			server.httpSrv = StartImgaeServer(opt)
 		case *InterceptorOpts:
 			interceptor = grpc.UnaryInterceptor(opt.BootzInterceptor)
 		default:
@@ -123,7 +127,10 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *se
 	}
 	log.Infof("Server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
-	return &Server{serv: s, lis: lis, service: c}, nil
+	server.serv = s
+	server.service = c
+	server.lis = lis
+	return server, nil
 
 }
 
@@ -150,14 +157,38 @@ func StartDhcpServer(em *entitymanager.InMemoryEntityManager, dhcpIntf string) e
 	return dhcp.Start(conf)
 }
 
-func StartImgaeServer(opt *ImgSrvOpts) {
+func startHttpServer(wg *sync.WaitGroup) *http.Server {
+	srv := &http.Server{Addr: ":8080"}
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "hello world\n")
+	})
+
 	go func() {
-		fs := http.FileServer(http.Dir(opt.ImagesLocation))
-		http.Handle("/", fs)
-		if err := http.ListenAndServeTLS(opt.Address, opt.CertFile, opt.KeyFile, fs); err != nil {
+		defer wg.Done() // let main know we are done cleaning up
+
+		// always returns error. ErrServerClosed on graceful close
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			// unexpected error. port in use?
+			log.Fatalf("ListenAndServe(): %v", err)
+		}
+	}()
+
+	// returning reference so caller can call Shutdown()
+	return srv
+}
+
+func StartImgaeServer(opt *ImgSrvOpts) *http.Server {
+	fs := http.FileServer(http.Dir(opt.ImagesLocation))
+	mux := http.NewServeMux()
+	mux.Handle("/", fs)
+	srv := &http.Server{Addr: opt.Address, Handler: fs}
+	go func() {
+		if err := srv.ListenAndServeTLS(opt.CertFile, opt.KeyFile); err != http.ErrServerClosed {
 			log.Fatalf("Error starting image server: %v", err)
 		}
 	}()
+	return srv
 }
 
 // A struct to record the boot logs for connected chassis.
