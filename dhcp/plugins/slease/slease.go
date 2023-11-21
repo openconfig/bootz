@@ -94,7 +94,6 @@ func AssignedIP(hwAddr string) string {
 	if ok {
 		return ipv6.String()
 	}
-
 	return ""
 }
 
