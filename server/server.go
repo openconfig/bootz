@@ -85,7 +85,7 @@ type InterceptorOpts struct {
 
 func (*InterceptorOpts) isbootzServerOpts() {}
 
-// NewServer start a new Bootz gRPC , dhcp, and image server based on specefied flags.
+// NewServer start a new Bootz gRPC , dhcp, and image server based on specified flags.
 func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *service.SecurityArtifacts, opts ...bootzServerOpts) (*Server, error) {
 	var interceptor grpc.ServerOption
 	server := &Server{}
