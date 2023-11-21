@@ -86,15 +86,9 @@ func CleanLog() {
 func AssignedIP(hwAddr string) string {
 	muRw.RLock()
 	defer muRw.RUnlock()
-	for key, val := range ipv4Assigned {
-		fmt.Printf("%s:%s", key, val)
-	}
 	ipv4, ok := ipv4Assigned[hwAddr]
 	if ok {
 		return ipv4.String()
-	}
-	for key, val := range ipv6Assigned {
-		fmt.Printf("%s:%s", key, val)
 	}
 	ipv6, ok := ipv6Assigned[hwAddr]
 	if ok {
