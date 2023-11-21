@@ -96,7 +96,7 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *se
 				return nil, fmt.Errorf("unable to start dhcp server %v", err)
 			}
 		case *ImgSrvOpts:
-			server.httpSrv = StartImgaeServer(opt)
+			server.httpSrv = StartImageServer(opt)
 		case *InterceptorOpts:
 			interceptor = grpc.UnaryInterceptor(opt.BootzInterceptor)
 		default:
@@ -159,8 +159,8 @@ func StartDhcpServer(em *entitymanager.InMemoryEntityManager, dhcpIntf string) e
 	return dhcp.Start(conf)
 }
 
-// StartImgaeServer starts an https server as an image server
-func StartImgaeServer(opt *ImgSrvOpts) *http.Server {
+// StartImageServer starts an https server as an image server.
+func StartImageServer(opt *ImgSrvOpts) *http.Server {
 	fs := http.FileServer(http.Dir(opt.ImagesLocation))
 	mux := http.NewServeMux()
 	mux.Handle("/", fs)

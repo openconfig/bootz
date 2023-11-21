@@ -311,7 +311,7 @@ func New(chassisConfigFile string, artifacts *service.SecurityArtifacts) (*InMem
 }
 
 // ReplaceDevice replaces an existing chassis with a new chassis object.
-// If the chassis is not found, it is added to the inventroy.
+// If the chassis is not found, it is added to the inventory.
 func (m *InMemoryEntityManager) ReplaceDevice(old *service.EntityLookup, new *epb.Chassis) error {
 	// Chassis: old device lookup, newChassis: new device
 
