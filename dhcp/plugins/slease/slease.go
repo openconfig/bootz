@@ -74,7 +74,7 @@ func setup6(args ...string) (handler.Handler6, error) {
 	return handler6, nil
 }
 
-// CleanLog cleans the log of assigned ip. This is only added to help with testing bootz and not recommened for other cases.
+// CleanLog cleans the log of assigned ip. This is only added to help with testing bootz and not recommend for other cases.
 func CleanLog() {
 	muRw.Lock()
 	defer muRw.Unlock()
@@ -82,7 +82,7 @@ func CleanLog() {
 	ipv6Assigned = map[string]net.IP{}
 }
 
-// AssignedIP returns the asigned ip related to hwAddr (mac or serial)
+// AssignedIP returns the assigned ip related to hwAddr (mac or serial)
 func AssignedIP(hwAddr string) string {
 	muRw.RLock()
 	defer muRw.RUnlock()
