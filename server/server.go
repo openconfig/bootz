@@ -24,11 +24,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
-	"sync"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/openconfig/bootz/dhcp"
@@ -58,16 +55,19 @@ func (s *Server) Stop() {
 	}
 }
 
+// bootzServerOpts is used to pass optional args to NewServer.
 type bootzServerOpts interface {
 	isbootzServerOpts()
 }
 
+// DHCPOpts is an struct that captures dhcp server config.
 type DHCPOpts struct {
 	intf string
 }
 
 func (*DHCPOpts) isbootzServerOpts() {}
 
+// ImgSrvOpts is an struct that captures dhcp server config.
 type ImgSrvOpts struct {
 	ImagesLocation string
 	Address        string
@@ -77,6 +77,8 @@ type ImgSrvOpts struct {
 
 func (*ImgSrvOpts) isbootzServerOpts() {}
 
+// InterceptorOpts is an struct that is used to pass an interceptor function.
+// This option is added to enable proper testing of bootz.
 type InterceptorOpts struct {
 	BootzInterceptor grpc.UnaryServerInterceptor
 }
@@ -157,27 +159,7 @@ func StartDhcpServer(em *entitymanager.InMemoryEntityManager, dhcpIntf string) e
 	return dhcp.Start(conf)
 }
 
-func startHttpServer(wg *sync.WaitGroup) *http.Server {
-	srv := &http.Server{Addr: ":8080"}
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "hello world\n")
-	})
-
-	go func() {
-		defer wg.Done() // let main know we are done cleaning up
-
-		// always returns error. ErrServerClosed on graceful close
-		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-			// unexpected error. port in use?
-			log.Fatalf("ListenAndServe(): %v", err)
-		}
-	}()
-
-	// returning reference so caller can call Shutdown()
-	return srv
-}
-
+// StartImgaeServer starts an https server as an image server
 func StartImgaeServer(opt *ImgSrvOpts) *http.Server {
 	fs := http.FileServer(http.Dir(opt.ImagesLocation))
 	mux := http.NewServeMux()
@@ -189,76 +171,4 @@ func StartImgaeServer(opt *ImgSrvOpts) *http.Server {
 		}
 	}()
 	return srv
-}
-
-// A struct to record the boot logs for connected chassis.
-type BootzReqLog struct {
-	StartTimeStamp int
-	EndTimeStamp   int
-	BootResponse   *bpb.BootstrapDataResponse
-	BootRequest    *bpb.GetBootstrapDataRequest
-	Err            error
-}
-
-type BootzStatusLog struct {
-	CardStatus []bpb.ControlCardState_ControlCardStatus
-	Status     []bpb.ReportStatusRequest_BootstrapStatus
-}
-type BootzLogs map[service.EntityLookup]*BootzReqLog
-type BootzStatus map[string]*BootzStatusLog
-
-var (
-	bootzReqLogs    = BootzLogs{}
-	bootzStatusLogs = BootzStatus{}
-	muRw            sync.RWMutex
-)
-
-func bootzInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	start := time.Now()
-	switch breq := req.(type) {
-	case *bpb.GetBootstrapDataRequest:
-		bootzLog := &BootzReqLog{
-			StartTimeStamp: start.Nanosecond(),
-			BootRequest:    breq,
-		}
-		fmt.Printf("bootz request %v\n", req)
-		h, err := handler(ctx, req)
-		bootzLog.Err = err
-		bres, _ := h.(*bpb.BootstrapDataResponse)
-		bootzLog.BootResponse = bres
-		bootzLog.EndTimeStamp = time.Now().Nanosecond()
-		ch := breq.GetChassisDescriptor()
-		muRw.Lock()
-		defer muRw.Unlock()
-		if ch.GetSerialNumber() != "" {
-			bootzReqLogs[service.EntityLookup{SerialNumber: ch.GetSerialNumber(), Manufacturer: ch.GetManufacturer()}] = bootzLog
-		}
-		ccStatus := breq.GetControlCardState()
-		if ccStatus != nil && ccStatus.GetSerialNumber() != "" {
-			bootzReqLogs[service.EntityLookup{SerialNumber: ccStatus.GetSerialNumber(), Manufacturer: ch.GetManufacturer()}] = bootzLog
-		}
-		fmt.Printf("bootz response %v:%v\n", h, err)
-
-		return h, err
-	case *bpb.ReportStatusRequest:
-		fmt.Printf("Status request %v", req)
-		muRw.Lock()
-		defer muRw.Unlock()
-		for _, cc := range breq.GetStates() {
-			serial := cc.GetSerialNumber()
-			_, ok := bootzStatusLogs[cc.GetSerialNumber()]
-			if !ok {
-				bootzStatusLogs[serial] = &BootzStatusLog{
-					CardStatus: []bpb.ControlCardState_ControlCardStatus{},
-					Status:     []bpb.ReportStatusRequest_BootstrapStatus{},
-				}
-			}
-			bootzStatusLogs[serial].Status = append(bootzStatusLogs[serial].Status, breq.GetStatus())
-			bootzStatusLogs[serial].CardStatus = append(bootzStatusLogs[serial].CardStatus, cc.GetStatus())
-		}
-		return handler(ctx, req)
-	default:
-		return handler(ctx, req)
-
-	}
 }
