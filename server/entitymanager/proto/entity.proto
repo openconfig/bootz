@@ -66,13 +66,16 @@ message BootConfig {
 
   // Native format vendor configuration file
   string vendor_config_file = 2;
+  bytes vendor_config =3;
 
   // JSON rendered OC configuration file
-  string oc_config_file = 3;
+  string oc_config_file = 4;
+  bytes oc_config  = 5;
+
 
   // Bootloader key-value parameters that are required as part of boot
   // configuration.
-  google.protobuf.Struct bootloader_config = 4;
+  google.protobuf.Struct bootloader_config = 6;
 }  
 
 message GNSIConfig {

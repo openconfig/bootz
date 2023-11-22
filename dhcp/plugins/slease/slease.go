@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -45,6 +46,9 @@ type ipv4Entry struct {
 
 var ipv4Records = map[string]*ipv4Entry{}
 var ipv6Records = map[string]net.IP{}
+var muRw sync.RWMutex
+var ipv4Assigned = map[string]net.IP{}
+var ipv6Assigned = map[string]net.IP{}
 
 func setup4(args ...string) (handler.Handler4, error) {
 	for _, r := range args {
@@ -70,14 +74,40 @@ func setup6(args ...string) (handler.Handler6, error) {
 	return handler6, nil
 }
 
+// CleanLog cleans the log of assigned ip. This is only added to help with testing bootz and not recommend for other cases.
+func CleanLog() {
+	muRw.Lock()
+	defer muRw.Unlock()
+	ipv4Assigned = map[string]net.IP{}
+	ipv6Assigned = map[string]net.IP{}
+}
+
+// AssignedIP returns the assigned ip related to hwAddr (mac or serial)
+func AssignedIP(hwAddr string) string {
+	muRw.RLock()
+	defer muRw.RUnlock()
+	ipv4, ok := ipv4Assigned[hwAddr]
+	if ok {
+		return ipv4.String()
+	}
+	ipv6, ok := ipv6Assigned[hwAddr]
+	if ok {
+		return ipv6.String()
+	}
+	return ""
+}
+
 func handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
-	log.Debugf("Got packet: %v", req.Summary())
+	muRw.Lock()
+	defer muRw.Unlock()
 	if e, ok := ipv4Records[req.ClientHWAddr.String()]; ok {
 		resp4(e, resp)
+		ipv4Assigned[req.ClientHWAddr.String()] = resp.ServerIPAddr
 	} else if req.Options.Has(dhcpv4.OptionClientIdentifier) {
 		cid := req.GetOneOption(dhcpv4.OptionClientIdentifier)
 		if e, ok := ipv4Records[toString(cid)]; ok {
 			resp4(e, resp)
+			ipv4Assigned[toString(cid)] = resp.ServerIPAddr
 		}
 	}
 	return resp, false
@@ -90,7 +120,8 @@ func resp4(e *ipv4Entry, resp *dhcpv4.DHCPv4) {
 }
 
 func handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
-	log.Debugf("Got packet: %v", req.Summary())
+	muRw.Lock()
+	defer muRw.Unlock()
 	m, err := req.GetInnerMessage()
 	if err != nil {
 		log.Errorf("Could not decapsulate request: %v", err)
@@ -104,6 +135,7 @@ func handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 	if mac, err := dhcpv6.ExtractMAC(req); err == nil {
 		if ip, ok := ipv6Records[mac.String()]; ok {
 			resp.AddOption(createIpv6LeaseOption(m, ip))
+			ipv6Assigned[mac.String()] = ip
 		}
 	} else {
 		duid := m.Options.ClientID()
@@ -111,6 +143,7 @@ func handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 			ei := en.EnterpriseIdentifier[:len(en.EnterpriseIdentifier)]
 			if ip, ok := ipv6Records[toString(ei)]; ok {
 				resp.AddOption(createIpv6LeaseOption(m, ip))
+				ipv6Assigned[toString(ei)] = ip
 			}
 		}
 	}

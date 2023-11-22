@@ -139,7 +139,9 @@ func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
 		}
 		bootConfig.OcConfig = ocConf
 	}
-	if conf.GetVendorConfigFile() != "" {
+	if len(conf.GetVendorConfig()) > 0 {
+		bootConfig.VendorConfig = conf.GetVendorConfig()
+	} else if conf.GetVendorConfigFile() != "" {
 		cliConf, err := os.ReadFile(string(conf.VendorConfigFile))
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not populate vendor config %v", err)
@@ -309,11 +311,20 @@ func New(chassisConfigFile string, artifacts *service.SecurityArtifacts) (*InMem
 }
 
 // ReplaceDevice replaces an existing chassis with a new chassis object.
+// If the chassis is not found, it is added to the inventory.
 func (m *InMemoryEntityManager) ReplaceDevice(old *service.EntityLookup, new *epb.Chassis) error {
 	// Chassis: old device lookup, newChassis: new device
 
 	// todo: Validate before replace
 	// todo: Forward error from validateConfig
+
+	if old == nil || old.SerialNumber == "" {
+		return status.Error(codes.InvalidArgument, "chassis serial must be set")
+	}
+
+	if new == nil || new.SerialNumber == "" {
+		return status.Error(codes.InvalidArgument, "chassis config or serial can not be nil")
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -324,7 +335,8 @@ func (m *InMemoryEntityManager) ReplaceDevice(old *service.EntityLookup, new *ep
 		}
 	}
 
-	return status.Errorf(codes.NotFound, "chassis %+v not found", *old)
+	m.chassisInventory = append(m.chassisInventory, new)
+	return nil
 }
 
 // DeleteDevice removes the chassis at the provided lookup from the entitymanager.

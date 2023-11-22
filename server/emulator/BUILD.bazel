@@ -12,18 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_library(
-    name = "server_lib",
-    srcs = ["server.go"],
-    importpath = "github.com/openconfig/bootz/server",
-    visibility = ["//visibility:public"],
+    name = "emulator_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/openconfig/bootz/server/emulator",
+    visibility = ["//visibility:private"],
     deps = [
         "//server/entitymanager",
         "//server/service",
         "//proto:bootz",
+        "//testdata",
         "@com_github_golang_glog//:glog",
         "@org_golang_google_grpc//:go_default_library",
     ],
+)
+
+go_binary(
+    name = "emulator",
+    embed = [":emulator_lib"],
+    visibility = ["//visibility:public"],
 )

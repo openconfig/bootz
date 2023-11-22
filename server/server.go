@@ -17,70 +17,90 @@
 // The bootz server will provide a simple file based bootstrap
 // implementation for devices. The service can be extended by
 // providing your own implementation of the entity manager.
-package main
+package server
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"flag"
 	"fmt"
 	"net"
-	"strings"
+	"net/http"
 
 	log "github.com/golang/glog"
 	"github.com/openconfig/bootz/dhcp"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
-	artifacts "github.com/openconfig/bootz/testdata"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
-var (
-	port            = flag.String("port", "15006", "The port to start the Bootz server on localhost")
-	dhcpIntf        = flag.String("dhcp_intf", "", "Network interface to use for dhcp server.")
-	inventoryConfig = flag.String("inv_config", "../testdata/inventory_local.prototxt", "Devices' config files to be loaded by inventory manager")
-	generateOVsFor  = flag.String("generate_ovs_for", "123A,123B", "Comma-separated list of control card serial numbers to generate OVs for.")
-)
-
-type server struct {
-	serv *grpc.Server
-	lis  net.Listener
+type Server struct {
+	serv    *grpc.Server
+	lis     net.Listener
+	service *service.Service
+	httpSrv *http.Server
 }
 
-func (s *server) Start() error {
+func (s *Server) Start() error {
 	return s.serv.Serve(s.lis)
 }
 
-func (s *server) Stop() {
+func (s *Server) Stop() {
 	s.serv.GracefulStop()
+	if s.httpSrv != nil {
+		s.httpSrv.Shutdown(context.Background())
+	}
 }
 
-// newServer creates a new Bootz gRPC server from flags.
-func newServer() (*server, error) {
-	if *port == "" {
-		return nil, fmt.Errorf("no port selected. specify with the --port flag")
-	}
+// bootzServerOpts is used to pass optional args to NewServer.
+type bootzServerOpts interface {
+	isbootzServerOpts()
+}
 
-	log.Infof("Setting up server security artifacts: OC, OVs, PDC, VendorCA")
-	serials := strings.Split(*generateOVsFor, ",")
+// DHCPOpts is an struct that captures dhcp server config.
+type DHCPOpts struct {
+	intf string
+}
 
-	sa, err := artifacts.GenerateSecurityArtifacts(serials, "Google", "Cisco")
-	if err != nil {
-		return nil, err
-	}
+func (*DHCPOpts) isbootzServerOpts() {}
 
-	log.Infof("Setting up entities")
-	em, err := entitymanager.New(*inventoryConfig, sa)
-	if err != nil {
-		return nil, fmt.Errorf("unable to initiate inventory manager %v", err)
-	}
+// ImgSrvOpts is an struct that captures dhcp server config.
+type ImgSrvOpts struct {
+	ImagesLocation string
+	Address        string
+	CertFile       string
+	KeyFile        string
+}
 
-	if *dhcpIntf != "" {
-		if err := startDhcpServer(em); err != nil {
-			return nil, fmt.Errorf("unable to start dhcp server %v", err)
+func (*ImgSrvOpts) isbootzServerOpts() {}
+
+// InterceptorOpts is an struct that is used to pass an interceptor function.
+// This option is added to enable proper testing of bootz.
+type InterceptorOpts struct {
+	BootzInterceptor grpc.UnaryServerInterceptor
+}
+
+func (*InterceptorOpts) isbootzServerOpts() {}
+
+// NewServer start a new Bootz gRPC , dhcp, and image server based on specified flags.
+func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *service.SecurityArtifacts, opts ...bootzServerOpts) (*Server, error) {
+	var interceptor grpc.ServerOption
+	server := &Server{}
+	for _, opt := range opts {
+		switch opt := opt.(type) {
+		case *DHCPOpts:
+			if err := StartDhcpServer(em, opt.intf); err != nil {
+				return nil, fmt.Errorf("unable to start dhcp server %v", err)
+			}
+		case *ImgSrvOpts:
+			server.httpSrv = StartImageServer(opt)
+		case *InterceptorOpts:
+			interceptor = grpc.UnaryInterceptor(opt.BootzInterceptor)
+		default:
+			continue
 		}
 	}
 
@@ -94,38 +114,32 @@ func newServer() (*server, error) {
 		RootCAs:      trustBundle,
 	}
 	log.Infof("Creating server...")
-	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)))
+	s := &grpc.Server{}
+	if interceptor != nil {
+		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)), interceptor)
+	} else {
+		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)))
+	}
+
 	bpb.RegisterBootstrapServer(s, c)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", *port))
+	lis, err := net.Listen("tcp", bootzAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error listening on port: %v", err)
 	}
 	log.Infof("Server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
-	return &server{serv: s, lis: lis}, nil
+	server.serv = s
+	server.service = c
+	server.lis = lis
+	return server, nil
+
 }
 
-func main() {
-	flag.Parse()
-
-	log.Infof("=============================================================================")
-	log.Infof("=========================== BootZ Server Emulator ===========================")
-	log.Infof("=============================================================================")
-
-	s, err := newServer()
-	if err != nil {
-		log.Exit(err)
-	}
-
-	if err := s.Start(); err != nil {
-		log.Exit(err)
-	}
-}
-
-func startDhcpServer(em *entitymanager.InMemoryEntityManager) error {
+// StartDhcpServer start dhcp server based on the dhcpIntf interface and dhcp configuration added for devices
+func StartDhcpServer(em *entitymanager.InMemoryEntityManager, dhcpIntf string) error {
 	conf := &dhcp.Config{
-		Interface:  *dhcpIntf,
+		Interface:  dhcpIntf,
 		AddressMap: make(map[string]*dhcp.Entry),
 	}
 
@@ -143,4 +157,18 @@ func startDhcpServer(em *entitymanager.InMemoryEntityManager) error {
 	}
 
 	return dhcp.Start(conf)
+}
+
+// StartImageServer starts an https server as an image server.
+func StartImageServer(opt *ImgSrvOpts) *http.Server {
+	fs := http.FileServer(http.Dir(opt.ImagesLocation))
+	mux := http.NewServeMux()
+	mux.Handle("/", fs)
+	srv := &http.Server{Addr: opt.Address, Handler: fs}
+	go func() {
+		if err := srv.ListenAndServeTLS(opt.CertFile, opt.KeyFile); err != http.ErrServerClosed {
+			log.Fatalf("Error starting image server: %v", err)
+		}
+	}()
+	return srv
 }
