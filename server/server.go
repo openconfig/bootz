@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Bootz server reference implementation.
+// Package server is the Bootz server reference implementation.
 //
 // The bootz server will provide a simple file based bootstrap
 // implementation for devices. The service can be extended by
