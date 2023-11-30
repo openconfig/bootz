@@ -37,6 +37,7 @@ import (
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
+// Server is the bootz emulator server.
 type Server struct {
 	serv    *grpc.Server
 	lis     net.Listener
@@ -44,10 +45,12 @@ type Server struct {
 	httpSrv *http.Server
 }
 
+// Start starts up the bootz emulator server.
 func (s *Server) Start() error {
 	return s.serv.Serve(s.lis)
 }
 
+// Stop shuts down the bootz emulator server.
 func (s *Server) Stop() {
 	s.serv.GracefulStop()
 	if s.httpSrv != nil {
