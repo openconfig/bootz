@@ -63,15 +63,9 @@ type EntityLookup struct {
 	SerialNumber string
 }
 
-// ChassisEntity provides the mode that the system is currently
-// configured.
-type ChassisEntity struct {
-	BootMode bpb.BootMode
-}
-
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
-	ResolveChassis(context.Context, *EntityLookup, string) (*ChassisEntity, error)
+	ResolveChassis(context.Context, *EntityLookup, string) (*bpb.Chassis, error)
 	GetBootstrapData(context.Context, *EntityLookup, *bpb.ControlCard) (*bpb.BootstrapDataResponse, error)
 	SetStatus(context.Context, *bpb.ReportStatusRequest) error
 	Sign(context.Context, *bpb.GetBootstrapDataResponse, *EntityLookup, string) error

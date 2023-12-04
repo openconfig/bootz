@@ -55,12 +55,12 @@ type InMemoryEntityManager struct {
 
 // ResolveChassis returns an entity based on the provided lookup.
 // If a control card serial is provided, it also looks up chassis' by its control cards.
-func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *service.EntityLookup, ccSerial string) (*service.ChassisEntity, error) {
+func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *service.EntityLookup, ccSerial string) (*bpb.Chassis, error) {
 	chassis, err := m.lookupChassis(lookup, ccSerial)
 	if err != nil {
 		return nil, err
 	}
-	return &service.ChassisEntity{BootMode: chassis.GetBootMode()}, nil
+	return &bpb.Chassis{BootMode: chassis.BootMode}, nil
 }
 
 func (m *InMemoryEntityManager) lookupChassis(lookup *service.EntityLookup, ccSerial string) (*epb.Chassis, error) {

@@ -1,7 +1,7 @@
 options {
     bootzserver: "bootzip:...."
     gnsi_global_config:{
-        authz_upload_file:"../testdata/authz.prototext"
+        authz_upload_file:"../../testdata/authz.prototext"
     }
 }
 chassis {

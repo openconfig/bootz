@@ -217,7 +217,7 @@ func TestResolveChassis(t *testing.T) {
 	tests := []struct {
 		desc    string
 		input   *service.EntityLookup
-		want    *service.ChassisEntity
+		want    *bpb.Chassis
 		wantErr bool
 	}{{
 		desc: "Default device",
@@ -225,7 +225,7 @@ func TestResolveChassis(t *testing.T) {
 			SerialNumber: "123",
 			Manufacturer: "Cisco",
 		},
-		want: &service.ChassisEntity{
+		want: &bpb.Chassis{
 			BootMode: bpb.BootMode_BOOT_MODE_SECURE,
 		},
 	}, {
@@ -247,7 +247,7 @@ func TestResolveChassis(t *testing.T) {
 			if (err != nil) != test.wantErr {
 				t.Fatalf("ResolveChassis(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
-			if !cmp.Equal(got, test.want) {
+			if !cmp.Equal(got, test.want, protocmp.Transform()) {
 				t.Errorf("ResolveChassis(%v) got %v, want %v", test.input, got, test.want)
 			}
 		})
