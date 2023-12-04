@@ -20,9 +20,11 @@ import (
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
+	"net"
 
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -61,6 +63,8 @@ type SecurityArtifacts struct {
 type EntityLookup struct {
 	Manufacturer string
 	SerialNumber string
+	PartNumber   string
+	IPAddress    string
 }
 
 // EntityManager maintains the entities and their states.
@@ -81,6 +85,11 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("=============================================================================")
 	log.Infof("==================== Received request for bootstrap data ====================")
 	log.Infof("=============================================================================")
+	peerAddr, err := peerAddressFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Received GetBootstrapData request from %v", peerAddr)
 	fixedChasis := true
 	ccSerial := ""
 	chassisDesc := req.GetChassisDescriptor()
@@ -92,6 +101,8 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	lookup := &EntityLookup{
 		Manufacturer: chassisDesc.GetManufacturer(),
 		SerialNumber: chassisDesc.GetSerialNumber(),
+		PartNumber:   chassisDesc.GetPartNumber(),
+		IPAddress:    peerAddr,
 	}
 	// Validate the chassis can be serviced
 	chassis, err := s.em.ResolveChassis(ctx, lookup, ccSerial)
@@ -179,6 +190,21 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 // will be responsible for configuring.  This will be only available for testing.
 func (s *Service) SetDeviceConfiguration(ctx context.Context) error {
 	return status.Errorf(codes.Unimplemented, "Unimplemented")
+}
+
+func peerAddressFromContext(ctx context.Context) (string, error) {
+	var address string
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return "", status.Error(codes.InvalidArgument, "no peer information found in request context")
+	}
+	switch a := p.Addr.(type) {
+	case *net.TCPAddr:
+		address = a.IP.String()
+	default:
+		return "", status.Errorf(codes.InvalidArgument, "unsupported peer address type %T", a)
+	}
+	return address, nil
 }
 
 // New creates a new service.
