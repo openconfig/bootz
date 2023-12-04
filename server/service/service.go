@@ -193,18 +193,15 @@ func (s *Service) SetDeviceConfiguration(ctx context.Context) error {
 }
 
 func peerAddressFromContext(ctx context.Context) (string, error) {
-	var address string
 	p, ok := peer.FromContext(ctx)
 	if !ok {
 		return "", status.Error(codes.InvalidArgument, "no peer information found in request context")
 	}
-	switch a := p.Addr.(type) {
-	case *net.TCPAddr:
-		address = a.IP.String()
-	default:
-		return "", status.Errorf(codes.InvalidArgument, "unsupported peer address type %T", a)
+	a, ok := p.Addr.(*net.TCPAddr)
+	if !ok {
+		return "", status.Errorf(codes.InvalidArgument, "peer address type must be TCP")
 	}
-	return address, nil
+	return a.IP.String(), nil
 }
 
 // New creates a new service.
