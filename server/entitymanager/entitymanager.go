@@ -155,7 +155,7 @@ func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
 }
 
 // GetBootstrapData fetches and returns the bootstrap data response from the server.
-func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, lookup *service.EntityLookup, controllerCard *bpb.ControlCard) (*bpb.BootstrapDataResponse, error) {
+func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, ch *bpb.Chassis, lookup *service.EntityLookup, controllerCard *bpb.ControlCard) (*bpb.BootstrapDataResponse, error) {
 	serial := lookup.SerialNumber
 	if controllerCard != nil {
 		serial = controllerCard.GetSerialNumber()
