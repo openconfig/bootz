@@ -545,7 +545,8 @@ func TestGetBootstrapData(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.GetBootstrapData(ctx, &service.EntityLookup{SerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
+			//TODO(https://github.com/openconfig/bootz/issues/105): Populate bpb.Chassis once epb.Chassis has been de-duplicated.
+			got, err := em.GetBootstrapData(ctx, &bpb.Chassis{}, &service.EntityLookup{SerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
 			if (err != nil) != test.wantErr {
 				t.Errorf("GetBootstrapData(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}

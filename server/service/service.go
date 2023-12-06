@@ -70,7 +70,7 @@ type EntityLookup struct {
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
 	ResolveChassis(context.Context, *EntityLookup, string) (*bpb.Chassis, error)
-	GetBootstrapData(context.Context, *EntityLookup, *bpb.ControlCard) (*bpb.BootstrapDataResponse, error)
+	GetBootstrapData(context.Context, *bpb.Chassis, *EntityLookup, *bpb.ControlCard) (*bpb.BootstrapDataResponse, error)
 	SetStatus(context.Context, *bpb.ReportStatusRequest) error
 	Sign(context.Context, *bpb.GetBootstrapDataResponse, *EntityLookup, string) error
 }
@@ -124,7 +124,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("=============================================================================")
 	var responses []*bpb.BootstrapDataResponse
 	for _, v := range chassisDesc.GetControlCards() {
-		bootdata, err := s.em.GetBootstrapData(ctx, lookup, v)
+		bootdata, err := s.em.GetBootstrapData(ctx, chassis, lookup, v)
 		if err != nil {
 			errs.Add(err)
 			log.Infof("Error occurred while retrieving data for Serial Number %v", v.SerialNumber)
@@ -132,7 +132,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		responses = append(responses, bootdata)
 	}
 	if fixedChasis {
-		bootdata, err := s.em.GetBootstrapData(ctx, lookup, nil)
+		bootdata, err := s.em.GetBootstrapData(ctx, chassis, lookup, nil)
 		if err != nil {
 			errs.Add(err)
 			log.Infof("Error occurred while retrieving data for fixed chassis with serail number %v", lookup.SerialNumber)
