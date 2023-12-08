@@ -11,12 +11,12 @@ allow vendors the freedom to implement the intent based on their own internal AP
 The server is being built in 3 stages:
 
 * **Open source reference implementation**
-    * Demonstrates the sequence of exchanges that occur between the network device and bootz server with mocked out implementation details
-    * The reference implementation is imported directly into Google and the main server business logic code is re-used by the production Bootz server
+  * Demonstrates the sequence of exchanges that occur between the network device and bootz server with mocked out implementation details
+  * The reference implementation is imported directly into Google and the main server business logic code is re-used by the production Bootz server
 * **Phase 1 (MVP)**
-    * Build a Bootz server which provides basic bootstrap data (default credentials, software image and startup config).
+  * Build a Bootz server which provides basic bootstrap data (default credentials, software image and startup config).
 * **Phase 2**
-    * Extends on phase 1 to provide TPM enrollment, attestation, namespace support and gNSI support
+  * Extends on phase 1 to provide TPM enrollment, attestation, namespace support and gNSI support
 
 ## High Level Design
 Refer to README for API flow.
