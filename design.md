@@ -7,7 +7,7 @@ Bootz is a new standard introduced to define a structured data format to take a 
 ## Objective
 The server is being built in 3 stages:
 
-* **Open source reference implementation** (https://github.com/openconfig/bootz)
+* **Open source reference implementation**
  + Demonstrates the sequence of exchanges that occur between the network device and bootz server with mocked out implementation details
  + The reference implementation is imported directly into Google and the main server business logic code is re-used by the production Bootz server
 * **Phase 1 (MVP)**
