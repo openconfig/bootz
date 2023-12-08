@@ -25,6 +25,7 @@ Refer to README for API flow.
 At a high level, the Bootz server is a gRPC server that exposes two RPCs:
 * GetBootstrapData
 * ReportStatus
+
 Devices call these gRPCs once they’re available on Google’s network to bootstrap themselves into a manageable state.
 
 ## Code Architecture
