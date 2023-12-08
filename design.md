@@ -17,7 +17,7 @@ The server is being built in 3 stages:
 
 ## High Level Design
 Refer to README for API flow.
- <diagram>
+![alt text](https://github.com/openconfig/bootz/blob/main/design_images/sequence_diagram.png)
 
 At a high level, the Bootz server is a gRPC server that exposes two RPCs:
 * GetBootstrapData
@@ -27,7 +27,7 @@ Devices call these gRPCs once they’re available on Google’s network to boots
 ## Code Architecture
 Our goal is for the internal Bootz implementation to share as much code with the open source reference implementation as possible. To achieve this, we have a platform-agnostic Bootz library which is hosted on GitHub that provides common functionality to both the reference implementation and the internal implementation. It’s then regularly synced to Google internally. Downstream dependencies of Bootz server will have interfaces defined in this library so that vendors and Google can plug in their own implementations. Vendors are encouraged to align their client code with the reference implementation where possible to mitigate failures during testing.
 
-<diagram 2>
+![alt text](https://github.com/openconfig/bootz/blob/main/design_images/venn_diagram.png)
 
 service is the primary library that will be shared between implementations. It defines the gRPC service and has an interface for an EntityManager. This EntityManager contains the methods needed to fetch and process data from sources outside the Bootz server e.g. cryptographic secret storage, config generators. The Google internal server layer imports the service  package and is responsible for initialization of the server and the actual handling of gRPC requests.
 
