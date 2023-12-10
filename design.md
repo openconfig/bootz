@@ -8,7 +8,7 @@ is meant to allow operators of equipment to provide a data-only bootstrap reques
 allow vendors the freedom to implement the intent based on their own internal APIs.
 
 ## Objective
-The server is being built in 3 stages:
+The server is being implemented in 3 stages:
 
 * **Open source reference implementation**
   * Demonstrates the sequence of exchanges that occur between the network device and bootz server with mocked out implementation details
