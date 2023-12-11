@@ -58,13 +58,57 @@ type SecurityArtifacts struct {
 	TLSKeypair *tls.Certificate
 }
 
-// EntityLookup provides a way to resolve chassis and control cards
-// in the EntityManager.
+// EntityLookup is used to resolve the fields of an active control card to a chassis.
+// For fixed form factor devices, the active control card is the chassis itself.
 type EntityLookup struct {
+	// The manufacturer of this control card or chassis.
 	Manufacturer string
+	// The serial number of this control card or chassis.
 	SerialNumber string
-	PartNumber   string
-	IPAddress    string
+	// The hardware model/part number of this control card or chassis.
+	PartNumber string
+	// The reported IP address of the management interface for this control
+	// card or chassis.
+	IPAddress string
+	// Whether this chassis appears to be a modular device.
+	Modular bool
+}
+
+// buildEntityLookup constructs an EntityLookup object from a bootstrap request.
+func buildEntityLookup(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*EntityLookup, error) {
+	peerAddr, err := peerAddressFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	activeControlCardSerial := req.GetControlCardState().GetSerialNumber()
+	if activeControlCardSerial == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "no active control card serial provided")
+	}
+	var partNumber string
+	var modular bool
+	if len(req.GetChassisDescriptor().GetControlCards()) == 0 {
+		modular = false
+		partNumber = req.GetChassisDescriptor().GetPartNumber()
+	} else {
+		modular = true
+		for _, card := range req.GetChassisDescriptor().GetControlCards() {
+			if card.GetSerialNumber() == activeControlCardSerial {
+				partNumber = card.GetPartNumber()
+				break
+			}
+		}
+	}
+	if partNumber == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "active control card with serial %v not found in chassis descriptor", activeControlCardSerial)
+	}
+	lookup := &EntityLookup{
+		Manufacturer: req.GetChassisDescriptor().GetManufacturer(),
+		SerialNumber: activeControlCardSerial,
+		PartNumber:   partNumber,
+		IPAddress:    peerAddr,
+		Modular:      modular,
+	}
+	return lookup, nil
 }
 
 // EntityManager maintains the entities and their states.
