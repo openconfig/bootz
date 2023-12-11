@@ -81,6 +81,9 @@ func buildEntityLookup(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*
 		return nil, err
 	}
 	activeControlCardSerial := req.GetControlCardState().GetSerialNumber()
+	if activeControlCardSerial == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "no active control card serial provided")
+	}
 	var partNumber string
 	var modular bool
 	if len(req.GetChassisDescriptor().GetControlCards()) == 0 {

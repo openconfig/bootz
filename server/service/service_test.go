@@ -123,6 +123,18 @@ func TestBuildEntityLookup(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "Fixed form factor does not set active control card",
+			ctx:  peerAddressContext(t, "1.1.1.1"),
+			req: &bpb.GetBootstrapDataRequest{
+				ChassisDescriptor: &bpb.ChassisDescriptor{
+					Manufacturer: "Cisco",
+					SerialNumber: "1234",
+					PartNumber:   "ABC",
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name:    "No address in context",
 			ctx:     context.Background(),
 			wantErr: true,
