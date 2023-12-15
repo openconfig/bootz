@@ -339,7 +339,7 @@ func TestSetStatus(t *testing.T) {
 		},
 		wantErr: true,
 	}, {
-		desc: "Control card initialized",
+		desc: "Known control card initialized",
 		input: &bpb.ReportStatusRequest{
 			Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 			StatusMessage: "Bootstrap status succeeded",
@@ -352,18 +352,18 @@ func TestSetStatus(t *testing.T) {
 		},
 		wantErr: false,
 	}, {
-		desc: "Unknown control card",
+		desc: "Unseen control card initialized",
 		input: &bpb.ReportStatusRequest{
 			Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 			StatusMessage: "Bootstrap status succeeded",
 			States: []*bpb.ControlCardState{
 				{
-					SerialNumber: "123C",
+					SerialNumber: "123B",
 					Status:       *bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED.Enum(),
 				},
 			},
 		},
-		wantErr: true,
+		wantErr: false,
 	},
 	}
 	em, _ := New("", nil)

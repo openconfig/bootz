@@ -165,10 +165,6 @@ func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, ch *bpb.Ch
 		return nil, err
 	}
 	log.Infof("Control card located in inventory")
-	// TODO: for now add status for the controller card. We may need to move all runtime info to bootz service.
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.controlCardStatuses[serial] = bpb.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
 	bootCfg, err := populateBootConfig(chassis.GetConfig().GetBootConfig())
 	if err != nil {
 		return nil, err
@@ -203,7 +199,8 @@ func (m *InMemoryEntityManager) SetStatus(ctx context.Context, req *bpb.ReportSt
 	for _, c := range req.GetStates() {
 		previousStatus, ok := m.controlCardStatuses[c.GetSerialNumber()]
 		if !ok {
-			return status.Errorf(codes.NotFound, "control card %v not found in inventory", c.GetSerialNumber())
+			previousStatus = bpb.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
+			m.controlCardStatuses[c.GetSerialNumber()] = previousStatus
 		}
 		log.Infof("control card %v changed status from %v to %v", c.GetSerialNumber(), previousStatus, c.GetStatus())
 		m.controlCardStatuses[c.GetSerialNumber()] = c.GetStatus()
