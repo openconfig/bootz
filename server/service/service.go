@@ -74,6 +74,33 @@ type EntityLookup struct {
 	Modular bool
 }
 
+// Describes a Chassis that has been resolved from an organization's inventory.
+type Chassis struct {
+	// The intended hostname of the chassis.
+	Hostname string
+	// The mode this chassis should boot into.
+	BootMode bpb.BootMode
+	// The intended software image to install on the device.
+	SoftwareImage *bpb.SoftwareImage
+	// The realm this chassis exists in, typically lab or prod.
+	Realm string
+	// The manufacturer of this chassis.
+	Manufacturer string
+	// The part number of this chassis.
+	PartNumber string
+	// The serial number of this chassis.
+	Serial string
+	// Describes the control cards that exist in this chassis.
+	ControlCards []*ControlCard
+}
+
+// Describes a control card that exists in a resolved Chassis.
+type ControlCard struct {
+	Manufacturer string
+	PartNumber   string
+	Serial       string
+}
+
 // buildEntityLookup constructs an EntityLookup object from a bootstrap request.
 func buildEntityLookup(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*EntityLookup, error) {
 	peerAddr, err := peerAddressFromContext(ctx)
@@ -113,8 +140,8 @@ func buildEntityLookup(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*
 
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
-	ResolveChassis(context.Context, *EntityLookup, string) (*bpb.Chassis, error)
-	GetBootstrapData(context.Context, *bpb.Chassis, *EntityLookup, *bpb.ControlCard) (*bpb.BootstrapDataResponse, error)
+	ResolveChassis(context.Context, *EntityLookup, string) (*Chassis, error)
+	GetBootstrapData(context.Context, *Chassis, *EntityLookup, *bpb.ControlCard) (*bpb.BootstrapDataResponse, error)
 	SetStatus(context.Context, *bpb.ReportStatusRequest) error
 	Sign(context.Context, *bpb.GetBootstrapDataResponse, *EntityLookup, string) error
 }

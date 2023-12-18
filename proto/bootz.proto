@@ -227,23 +227,6 @@ message ReportStatusRequest {
 message EmptyResponse {
 }
 
-// Chassis represents a single chassis owned by an organization.
-message Chassis {
-  string serial_number = 1;
-  string manufacturer = 2;
-  string part_number = 3;
-  repeated ControlCard control_cards = 4;
-  string hostname = 5;
-  BootMode boot_mode = 6;
-  SoftwareImage software_image = 7;
-  string management_ip = 8;
-  BootConfig boot_config = 9;
-  Credentials credentials = 10;
-  gnsi.pathz.v1.UploadRequest pathz = 11;
-  gnsi.authz.v1.UploadRequest authz = 12;
-  gnsi.certz.v1.UploadRequest certificates = 13;
-}
-
 // BootMode specifies if the chassis should utilize OV data.
 // Secure mode uses the OV validation.
 enum BootMode {

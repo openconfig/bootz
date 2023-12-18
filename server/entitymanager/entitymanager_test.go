@@ -217,7 +217,7 @@ func TestResolveChassis(t *testing.T) {
 	tests := []struct {
 		desc    string
 		input   *service.EntityLookup
-		want    *bpb.Chassis
+		want    *service.Chassis
 		wantErr bool
 	}{{
 		desc: "Default device",
@@ -225,8 +225,12 @@ func TestResolveChassis(t *testing.T) {
 			SerialNumber: "123",
 			Manufacturer: "Cisco",
 		},
-		want: &bpb.Chassis{
-			BootMode: bpb.BootMode_BOOT_MODE_SECURE,
+		want: &service.Chassis{
+			Manufacturer: "Cisco",
+			Realm:        "prod",
+			Serial:       "123",
+			BootMode:     bpb.BootMode_BOOT_MODE_SECURE,
+			ControlCards: []*service.ControlCard{},
 		},
 	}, {
 		desc: "Chassis Not Found",
@@ -247,8 +251,8 @@ func TestResolveChassis(t *testing.T) {
 			if (err != nil) != test.wantErr {
 				t.Fatalf("ResolveChassis(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
-			if !cmp.Equal(got, test.want, protocmp.Transform()) {
-				t.Errorf("ResolveChassis(%v) got %v, want %v", test.input, got, test.want)
+			if diff := cmp.Diff(got, test.want, protocmp.Transform()); diff != "" {
+				t.Errorf("ResolveChassis(%v) diff = %v", test.input, diff)
 			}
 		})
 	}
@@ -546,7 +550,7 @@ func TestGetBootstrapData(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			// TODO(https://github.com/openconfig/bootz/issues/105): Populate bpb.Chassis once epb.Chassis has been de-duplicated.
-			got, err := em.GetBootstrapData(ctx, &bpb.Chassis{}, &service.EntityLookup{SerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
+			got, err := em.GetBootstrapData(ctx, &service.Chassis{}, &service.EntityLookup{SerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
 			if (err != nil) != test.wantErr {
 				t.Errorf("GetBootstrapData(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
