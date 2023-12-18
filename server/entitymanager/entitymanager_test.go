@@ -423,17 +423,34 @@ func TestGetBootstrapData(t *testing.T) {
 		},
 	}
 	tests := []struct {
-		desc                string
-		input               *bpb.ControlCard
-		chassisSerial       string
-		chassisManufacturer string
-		want                *bpb.BootstrapDataResponse
-		wantErr             bool
+		desc              string
+		chassis           *service.Chassis
+		controlCardSerial string
+		want              *bpb.BootstrapDataResponse
+		wantErr           bool
 	}{{
-		desc:                "No controller card, but valid chassis (success)",
-		input:               nil,
-		chassisSerial:       "123",
-		chassisManufacturer: "Cisco",
+		desc:              "Success",
+		controlCardSerial: "123",
+		chassis: &service.Chassis{
+			Serial: "123",
+			SoftwareImage: &bpb.SoftwareImage{
+				Name:          "Default Image",
+				Version:       "1.0",
+				Url:           "https://path/to/image",
+				OsImageHash:   "ABCDEF",
+				HashAlgorithm: "SHA256",
+			},
+			BootloaderPasswordHash: "ABCD123",
+			BootConfig: &bpb.BootConfig{
+				VendorConfig: []byte(""),
+				OcConfig:     []byte(""),
+			},
+			Authz: &apb.UploadRequest{
+				Version:   "v0.1694813669807611349",
+				CreatedOn: 1694813669807,
+				Policy:    "{\"name\":\"default\",\"request\":{\"paths\":[\"*\"]},\"source\":{\"principals\":[\"cafyauto\"]}}",
+			},
+		},
 		want: &bpb.BootstrapDataResponse{
 			SerialNum: "123",
 			IntendedImage: &bpb.SoftwareImage{
@@ -457,87 +474,6 @@ func TestGetBootstrapData(t *testing.T) {
 			},
 		},
 		wantErr: false,
-	}, {
-		desc:    "No controller card and no chassis serial (fail)",
-		input:   nil,
-		wantErr: true,
-	}, {
-		desc: "Control card not found",
-		input: &bpb.ControlCard{
-			SerialNumber: "456A",
-		},
-		wantErr: true,
-	}, {
-		desc: "Successful bootstrap, valid chassis serial and controller card",
-		input: &bpb.ControlCard{
-			SerialNumber: "123A",
-			PartNumber:   "123A",
-		},
-		chassisSerial:       "123",
-		chassisManufacturer: "Cisco",
-		want: &bpb.BootstrapDataResponse{
-			SerialNum: "123A",
-			IntendedImage: &bpb.SoftwareImage{
-				Name:          "Default Image",
-				Version:       "1.0",
-				Url:           "https://path/to/image",
-				OsImageHash:   "ABCDEF",
-				HashAlgorithm: "SHA256",
-			},
-			BootPasswordHash: "ABCD123",
-			ServerTrustCert:  encodedServerTrustCert,
-			BootConfig: &bpb.BootConfig{
-				VendorConfig: []byte(""),
-				OcConfig:     []byte(""),
-			},
-			Credentials: &bpb.Credentials{},
-			Authz: &apb.UploadRequest{
-				Version:   "v0.1694813669807611349",
-				CreatedOn: 1694813669807,
-				Policy:    "{\"name\":\"default\",\"request\":{\"paths\":[\"*\"]},\"source\":{\"principals\":[\"cafyauto\"]}}",
-			},
-		},
-		wantErr: false,
-	}, {
-		desc: "Successful bootstrap, no chassis serial but valid controller card",
-		input: &bpb.ControlCard{
-			SerialNumber: "123A",
-			PartNumber:   "123A",
-		},
-		chassisSerial:       "",
-		chassisManufacturer: "Cisco",
-		want: &bpb.BootstrapDataResponse{
-			SerialNum: "123A",
-			IntendedImage: &bpb.SoftwareImage{
-				Name:          "Default Image",
-				Version:       "1.0",
-				Url:           "https://path/to/image",
-				OsImageHash:   "ABCDEF",
-				HashAlgorithm: "SHA256",
-			},
-			BootPasswordHash: "ABCD123",
-			ServerTrustCert:  encodedServerTrustCert,
-			BootConfig: &bpb.BootConfig{
-				VendorConfig: []byte(""),
-				OcConfig:     []byte(""),
-			},
-			Credentials: &bpb.Credentials{},
-			Authz: &apb.UploadRequest{
-				Version:   "v0.1694813669807611349",
-				CreatedOn: 1694813669807,
-				Policy:    "{\"name\":\"default\",\"request\":{\"paths\":[\"*\"]},\"source\":{\"principals\":[\"cafyauto\"]}}",
-			},
-		},
-		wantErr: false,
-	}, {
-		desc: "Unsuccessful bootstrap, no chassis serial, valid controller card, not matching manufacturer",
-		input: &bpb.ControlCard{
-			SerialNumber: "123A",
-			PartNumber:   "123A",
-		},
-		chassisSerial:       "",
-		chassisManufacturer: "",
-		wantErr:             true,
 	},
 	}
 
@@ -549,13 +485,12 @@ func TestGetBootstrapData(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			// TODO(https://github.com/openconfig/bootz/issues/105): Populate bpb.Chassis once epb.Chassis has been de-duplicated.
-			got, err := em.GetBootstrapData(ctx, &service.Chassis{}, &service.EntityLookup{SerialNumber: test.chassisSerial, Manufacturer: test.chassisManufacturer}, test.input)
+			got, err := em.GetBootstrapData(ctx, test.chassis, test.controlCardSerial)
 			if (err != nil) != test.wantErr {
-				t.Errorf("GetBootstrapData(%v) err = %v, want %v", test.input, err, test.wantErr)
+				t.Errorf("GetBootstrapData(%v) err = %v, want %v", test.chassis, err, test.wantErr)
 			}
-			if !proto.Equal(got, test.want) {
-				t.Errorf("GetBootstrapData(%v) \n got: %v, \n want: %v", test.input, got, test.want)
+			if diff := cmp.Diff(got, test.want, protocmp.Transform()); diff != "" {
+				t.Errorf("GetBootstrapData(%v) diff = %v", test.chassis, diff)
 			}
 		})
 	}

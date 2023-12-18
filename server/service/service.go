@@ -30,6 +30,7 @@ import (
 
 	log "github.com/golang/glog"
 	bpb "github.com/openconfig/bootz/proto/bootz"
+	apb "github.com/openconfig/gnsi/authz"
 )
 
 // OVList is a mapping of control card serial number to ownership voucher.
@@ -92,6 +93,11 @@ type Chassis struct {
 	Serial string
 	// Describes the control cards that exist in this chassis.
 	ControlCards []*ControlCard
+	// The below fields are normally unset and are primarily used for
+	// cases where this data should be hardcoded e.g. for testing.
+	BootConfig             *bpb.BootConfig
+	Authz                  *apb.UploadRequest
+	BootloaderPasswordHash string
 }
 
 // Describes a control card that exists in a resolved Chassis.
@@ -141,7 +147,7 @@ func buildEntityLookup(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
 	ResolveChassis(context.Context, *EntityLookup, string) (*Chassis, error)
-	GetBootstrapData(context.Context, *Chassis, *EntityLookup, *bpb.ControlCard) (*bpb.BootstrapDataResponse, error)
+	GetBootstrapData(context.Context, *Chassis, string) (*bpb.BootstrapDataResponse, error)
 	SetStatus(context.Context, *bpb.ReportStatusRequest) error
 	Sign(context.Context, *bpb.GetBootstrapDataResponse, *EntityLookup, string) error
 }
@@ -195,7 +201,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("=============================================================================")
 	var responses []*bpb.BootstrapDataResponse
 	for _, v := range chassisDesc.GetControlCards() {
-		bootdata, err := s.em.GetBootstrapData(ctx, chassis, lookup, v)
+		bootdata, err := s.em.GetBootstrapData(ctx, chassis, v.GetSerialNumber())
 		if err != nil {
 			errs.Add(err)
 			log.Infof("Error occurred while retrieving data for Serial Number %v", v.SerialNumber)
@@ -203,7 +209,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		responses = append(responses, bootdata)
 	}
 	if fixedChasis {
-		bootdata, err := s.em.GetBootstrapData(ctx, chassis, lookup, nil)
+		bootdata, err := s.em.GetBootstrapData(ctx, chassis, chassisDesc.GetSerialNumber())
 		if err != nil {
 			errs.Add(err)
 			log.Infof("Error occurred while retrieving data for fixed chassis with serail number %v", lookup.SerialNumber)
