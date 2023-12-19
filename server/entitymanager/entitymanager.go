@@ -38,6 +38,8 @@ import (
 	apb "github.com/openconfig/gnsi/authz"
 )
 
+const defaultRealm = "prod"
+
 // InMemoryEntityManager provides a simple in memory handler
 // for Entities.
 type InMemoryEntityManager struct {
@@ -55,12 +57,29 @@ type InMemoryEntityManager struct {
 
 // ResolveChassis returns an entity based on the provided lookup.
 // If a control card serial is provided, it also looks up chassis' by its control cards.
-func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *service.EntityLookup, ccSerial string) (*bpb.Chassis, error) {
+func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *service.EntityLookup, ccSerial string) (*service.Chassis, error) {
 	chassis, err := m.lookupChassis(lookup, ccSerial)
 	if err != nil {
 		return nil, err
 	}
-	return &bpb.Chassis{BootMode: chassis.BootMode}, nil
+	cards := make([]*service.ControlCard, len(chassis.GetControllerCards()))
+	for i, controlCard := range chassis.GetControllerCards() {
+		cards[i] = &service.ControlCard{
+			PartNumber:   controlCard.PartNumber,
+			Manufacturer: chassis.GetManufacturer(),
+			Serial:       controlCard.GetSerialNumber(),
+		}
+	}
+	return &service.Chassis{
+		Hostname:      chassis.GetName(),
+		BootMode:      chassis.GetBootMode(),
+		SoftwareImage: chassis.GetSoftwareImage(),
+		Realm:         defaultRealm,
+		Manufacturer:  chassis.GetManufacturer(),
+		PartNumber:    chassis.GetPartNumber(),
+		Serial:        chassis.GetSerialNumber(),
+		ControlCards:  cards,
+	}, nil
 }
 
 func (m *InMemoryEntityManager) lookupChassis(lookup *service.EntityLookup, ccSerial string) (*epb.Chassis, error) {
@@ -155,7 +174,7 @@ func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
 }
 
 // GetBootstrapData fetches and returns the bootstrap data response from the server.
-func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, ch *bpb.Chassis, lookup *service.EntityLookup, controllerCard *bpb.ControlCard) (*bpb.BootstrapDataResponse, error) {
+func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, ch *service.Chassis, lookup *service.EntityLookup, controllerCard *bpb.ControlCard) (*bpb.BootstrapDataResponse, error) {
 	serial := lookup.SerialNumber
 	if controllerCard != nil {
 		serial = controllerCard.GetSerialNumber()
@@ -165,10 +184,6 @@ func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, ch *bpb.Ch
 		return nil, err
 	}
 	log.Infof("Control card located in inventory")
-	// TODO: for now add status for the controller card. We may need to move all runtime info to bootz service.
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.controlCardStatuses[serial] = bpb.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
 	bootCfg, err := populateBootConfig(chassis.GetConfig().GetBootConfig())
 	if err != nil {
 		return nil, err
@@ -203,7 +218,8 @@ func (m *InMemoryEntityManager) SetStatus(ctx context.Context, req *bpb.ReportSt
 	for _, c := range req.GetStates() {
 		previousStatus, ok := m.controlCardStatuses[c.GetSerialNumber()]
 		if !ok {
-			return status.Errorf(codes.NotFound, "control card %v not found in inventory", c.GetSerialNumber())
+			previousStatus = bpb.ControlCardState_CONTROL_CARD_STATUS_UNSPECIFIED
+			m.controlCardStatuses[c.GetSerialNumber()] = previousStatus
 		}
 		log.Infof("control card %v changed status from %v to %v", c.GetSerialNumber(), previousStatus, c.GetStatus())
 		m.controlCardStatuses[c.GetSerialNumber()] = c.GetStatus()
