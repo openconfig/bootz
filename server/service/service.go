@@ -75,7 +75,7 @@ type EntityLookup struct {
 	Modular bool
 }
 
-// Describes a Chassis that has been resolved from an organization's inventory.
+// Chassis describes a chassis that has been resolved from an organization's inventory.
 type Chassis struct {
 	// The intended hostname of the chassis.
 	Hostname string
@@ -100,7 +100,7 @@ type Chassis struct {
 	BootloaderPasswordHash string
 }
 
-// Describes a control card that exists in a resolved Chassis.
+// ControlCard describes a control card that exists in a resolved Chassis.
 type ControlCard struct {
 	Manufacturer string
 	PartNumber   string
