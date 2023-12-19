@@ -226,11 +226,37 @@ func TestResolveChassis(t *testing.T) {
 			Manufacturer: "Cisco",
 		},
 		want: &service.Chassis{
+			Hostname:     "test",
 			Manufacturer: "Cisco",
 			Realm:        "prod",
 			Serial:       "123",
-			BootMode:     bpb.BootMode_BOOT_MODE_SECURE,
-			ControlCards: []*service.ControlCard{},
+			BootMode:     bpb.BootMode_BOOT_MODE_INSECURE,
+			SoftwareImage: &bpb.SoftwareImage{
+				HashAlgorithm: "SHA256",
+				Name:          "Default Image",
+				OsImageHash:   "e9c0f8b575cbfcb42ab3b78ecc87efa3b011d9a5d10b09fa4e96f240bf6a82f5",
+				Url:           "https://path/to/image",
+				Version:       "1.0",
+			},
+			ControlCards: []*service.ControlCard{
+				{
+					Manufacturer: "Cisco",
+					PartNumber:   "123A",
+					Serial:       "123A",
+				},
+				{
+					Manufacturer: "Cisco",
+					PartNumber:   "123B",
+					Serial:       "123B",
+				},
+			},
+			BootConfig: &bpb.BootConfig{},
+			Authz: &apb.UploadRequest{
+				CreatedOn: 1694813669807,
+				Policy:    `{"name":"default","request":{"paths":["*"]},"source":{"principals":["cafyauto"]}}`,
+				Version:   "v0.1694813669807611349",
+			},
+			BootloaderPasswordHash: "ABCD123",
 		},
 	}, {
 		desc: "Chassis Not Found",
@@ -242,8 +268,10 @@ func TestResolveChassis(t *testing.T) {
 		wantErr: true,
 	},
 	}
-	em, _ := New("", nil)
-	em.AddChassis(bpb.BootMode_BOOT_MODE_SECURE, "Cisco", "123")
+	em, err := New("../../testdata/inventory.prototxt", nil)
+	if err != nil {
+		t.Fatalf("failed to create entity manager: %v", err)
+	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
