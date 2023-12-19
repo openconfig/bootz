@@ -77,7 +77,8 @@ message ChassisDescriptor {
 message ControlCard {
   string part_number = 1;
   string serial_number = 2;
-  int32 slot = 3;
+  int32 slot = 3 [deprecated = true];
+  string slot_id = 4;
 }
 
 // ControlCardState indicates if the bootstrap process has
