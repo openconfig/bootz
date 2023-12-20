@@ -149,7 +149,7 @@ type EntityManager interface {
 	ResolveChassis(context.Context, *EntityLookup, string) (*Chassis, error)
 	GetBootstrapData(context.Context, *Chassis, string) (*bpb.BootstrapDataResponse, error)
 	SetStatus(context.Context, *bpb.ReportStatusRequest) error
-	Sign(context.Context, *bpb.GetBootstrapDataResponse, *EntityLookup, string) error
+	Sign(context.Context, *bpb.GetBootstrapDataResponse, *Chassis, string) error
 }
 
 // Service represents the server and entity manager.
@@ -247,7 +247,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		log.Infof("=============================================================================")
 		log.Infof("====================== Signing the response with nonce ======================")
 		log.Infof("=============================================================================")
-		if err := s.em.Sign(ctx, resp, lookup, req.GetControlCardState().GetSerialNumber()); err != nil {
+		if err := s.em.Sign(ctx, resp, chassis, req.GetControlCardState().GetSerialNumber()); err != nil {
 			return nil, err
 		}
 		log.Infof("Signed with nonce")
