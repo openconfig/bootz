@@ -70,15 +70,26 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *serv
 			Serial:       controlCard.GetSerialNumber(),
 		}
 	}
+	bootCfg, err := populateBootConfig(chassis.GetConfig().GetBootConfig())
+	if err != nil {
+		return nil, err
+	}
+	authzConf, err := m.populateAuthzConfig(chassis)
+	if err != nil {
+		return nil, err
+	}
 	return &service.Chassis{
-		Hostname:      chassis.GetName(),
-		BootMode:      chassis.GetBootMode(),
-		SoftwareImage: chassis.GetSoftwareImage(),
-		Realm:         defaultRealm,
-		Manufacturer:  chassis.GetManufacturer(),
-		PartNumber:    chassis.GetPartNumber(),
-		Serial:        chassis.GetSerialNumber(),
-		ControlCards:  cards,
+		Hostname:               chassis.GetName(),
+		BootMode:               chassis.GetBootMode(),
+		SoftwareImage:          chassis.GetSoftwareImage(),
+		Realm:                  defaultRealm,
+		Manufacturer:           chassis.GetManufacturer(),
+		PartNumber:             chassis.GetPartNumber(),
+		Serial:                 chassis.GetSerialNumber(),
+		ControlCards:           cards,
+		BootConfig:             bootCfg,
+		Authz:                  authzConf,
+		BootloaderPasswordHash: chassis.GetBootloaderPasswordHash(),
 	}, nil
 }
 
@@ -174,35 +185,17 @@ func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
 }
 
 // GetBootstrapData fetches and returns the bootstrap data response from the server.
-func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, ch *service.Chassis, lookup *service.EntityLookup, controllerCard *bpb.ControlCard) (*bpb.BootstrapDataResponse, error) {
-	serial := lookup.SerialNumber
-	if controllerCard != nil {
-		serial = controllerCard.GetSerialNumber()
-	}
-	chassis, err := m.lookupChassis(lookup, controllerCard.GetSerialNumber())
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("Control card located in inventory")
-	bootCfg, err := populateBootConfig(chassis.GetConfig().GetBootConfig())
-	if err != nil {
-		return nil, err
-	}
-	authzConf, err := m.populateAuthzConfig(chassis)
-	if err != nil {
-		return nil, err
-	}
-
+func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, chassis *service.Chassis, serial string) (*bpb.BootstrapDataResponse, error) {
 	// TODO: Populate gnsi config
 	return &bpb.BootstrapDataResponse{
 		SerialNum:        serial,
-		IntendedImage:    chassis.GetSoftwareImage(),
+		IntendedImage:    chassis.SoftwareImage,
 		BootPasswordHash: chassis.BootloaderPasswordHash,
 		ServerTrustCert:  base64.StdEncoding.EncodeToString(m.secArtifacts.TrustAnchor.Raw),
-		BootConfig:       bootCfg,
+		BootConfig:       chassis.BootConfig,
 		Credentials:      &bpb.Credentials{},
 		// TODO: Populate pathz, authz and certificates.
-		Authz: authzConf,
+		Authz: chassis.Authz,
 	}, nil
 }
 
