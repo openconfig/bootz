@@ -221,7 +221,7 @@ func (m *InMemoryEntityManager) SetStatus(ctx context.Context, req *bpb.ReportSt
 }
 
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
-func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrapDataResponse, chassis *service.EntityLookup, controllerCard string) error {
+func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrapDataResponse, chassis *service.Chassis, controllerCard string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// Check if security artifacts are provided for signing.

@@ -294,16 +294,23 @@ func TestSign(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
 		desc    string
-		chassis service.EntityLookup
+		chassis service.Chassis
 		serial  string
 		resp    *bpb.GetBootstrapDataResponse
 		wantOC  bool
 		wantErr bool
 	}{{
 		desc: "Success",
-		chassis: service.EntityLookup{
+		chassis: service.Chassis{
 			Manufacturer: "Cisco",
-			SerialNumber: "123",
+			Serial:       "123",
+			ControlCards: []*service.ControlCard{
+				{
+					Serial:       "123A",
+					Manufacturer: "Cisco",
+					PartNumber:   "123A",
+				},
+			},
 		},
 		serial: "123A",
 		resp: &bpb.GetBootstrapDataResponse{
