@@ -20,6 +20,7 @@ The server is being implemented in 3 stages:
 
 ## High Level Design
 Refer to README for API flow.
+
 ![alt text](https://github.com/openconfig/bootz/blob/main/design_images/sequence_diagram.png)
 
 At a high level, the Bootz server is a gRPC server that exposes two RPCs:
