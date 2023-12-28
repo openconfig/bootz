@@ -234,9 +234,7 @@ boot option to the device for an endpoint (URL) from which the boot package can
 be retrieved. The package returned by the endpoint consists of a binary encoded
 protocol buffer containing all data for being able to complete the boot process.
 In this context, “complete the boot process” implies the device reaching a fully
-manageable state - with the relevant gRPC services running, security
-operations(enrollment, attestation, production credentials installed) are
-completed.
+manageable state - with the relevant gRPC services running.
 
 Upon receiving the bootz protocol buffer, the device is responsible for
 unmarshalling the bootz message and distributing to the relevant system
