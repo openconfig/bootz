@@ -245,7 +245,8 @@ components, etc.
 The bootz payload will be encrypted via the TLS session underlying the gRPC
 service.
 
-After loading all the provided data on first boot the device is still not in a
+Depends on the security requirement for the deployment environment, after loading
+all the provided data on first boot the device might still not be in a
 trusted state, however it should have enough g\* services initialized to a state
 where the device can be interrogated from a trusted system to enroll the TPM and
 validate specific TPM values to attest the device. Once attested, the systems
