@@ -378,6 +378,59 @@ the ownership voucher and ownership certificate.
     we have validated the identity and integrity of the device and its
     software components. It is ready to serve traffic.
 
+### A Note on How To Secure The First gNSI.Certz Connection After Successful Attestation
+
+In some deployment environment, an user might prefer to install production CA
+issued cert ONLY if the device has passed the attestation. iDevID cert is a good
+choice for securing the very first gNSI.Certz connection that installs the
+production issued cert. However, what's a simple and vendor neutral way to tell
+the device to use iDevID cert credentials for the first gNSI.Certz connection?
+
+The idea is that if
+[a SSL profile](https://github.com/openconfig/gnsi/blob/d5abc2e8fa51d7b57b49511655b71422638ce8cf/certz/certz.proto#L291-L292)
+includes a cert (e.g. iDevID) but not a private key, the device should check if
+there is any private key available on the device (e.g. private key in the TPM)
+matches the provided cert. If no existing private key is available for the SSL
+profile, the configs should be rejected. Applying the idea, the user journey
+would be as the following:
+
+1.  Upon establishing the Bootz gRPC connection, bootstrap server extracts the
+    received iDevID cert (along with chained intermediate CA certs if there is
+    any).
+
+2.  In the `BootstrapDataResponse` from the bootstrap server to the device:
+
+    *   In the `BootstrapDataResponse.boot_config`, bootstrap server specifies
+        that all gRPC servers should use a SSL profile id, say `mtls_profile`.
+        This can be done either with OpenConfig `oc-sys-grpc:certificate-id` (or
+        some vendor specific config if the OpenConfig path is not supported).
+    *   In the `BootstrapDataResponse.certificates`, bootstrap server populates
+        `entities.trust_bundle` and `entities.certificate_chain` (iDevID with
+        corresponding intermediate CA certs). Because
+        [`ssl_profile_id`](https://github.com/openconfig/gnsi/blob/d5abc2e8fa51d7b57b49511655b71422638ce8cf/certz/certz.proto#L291-L292)
+        is not set (not supported in the current version of Bootz),
+        [by default](https://github.com/openconfig/gnsi/blob/d5abc2e8fa51d7b57b49511655b71422638ce8cf/certz/certz.proto#L289-L290)
+        the entity applies to the SSL profile used by the gRPC server of gNSI,
+        which is the SSL profile `mtls_profile`.
+
+3.  Device consumes `BootstrapDataResponse`, and observes that the SSL profile
+    `mtls_profile` has a cert (iDevID cert) but not a private key. Therefore, it
+    will check if there is any private key available on the device for the cert,
+    and it should find the corresponding private key stored in the TPM. Now, the
+    device knows that it should use the iDevID cert credentials for the upcoming
+    gNSI.Certz connection.
+
+4.  After the Bootz workflow finishes, enrollment (Enrollz) and attestation
+    (Attestz) are carried against the device.
+
+5.  After successful enrollment and attestation, a gNSI.Cert client connects to
+    the device to rotate away from the IDevID cert (e.g. with a set of prod CA
+    issued cert credentials). The connection is secured by mTLS, with cert from
+    the device being the iDevID cert.
+
+6.  Going forward, all gRPC services will be secured by the production CA issued
+    cert.
+
 ### A Note on Modular Devices
 
 Many commercial modular form-factor devices start copying data from the active
