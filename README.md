@@ -170,8 +170,6 @@ process below.
 
 Figure 1: Proposed configuration namespaces and clients.
 
-![image](design_images/config-mgmt.svg)
-
 The proposed operational model for devices is shown in Figure 1 above.
 
 * Security credentials (authorization, accounting, authentication) are
