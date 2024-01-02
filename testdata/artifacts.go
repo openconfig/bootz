@@ -49,12 +49,13 @@ type OwnershipVoucher struct {
 
 // Inner defines the Ownership Voucher format. See https://www.rfc-editor.org/rfc/rfc8366.html.
 type Inner struct {
-	CreatedOn                  string `json:"created-on" xml:"created-on"`
-	ExpiresOn                  string `json:"expires-on" xml:"expires-on"`
-	SerialNumber               string `json:"serial-number" xml:"serial-number"`
-	Assertion                  string `json:"assertion" xml:"assertion"`
-	PinnedDomainCert           []byte `json:"pinned-domain-cert" xml:"pinned-domain-cert"`
-	DomainCertRevocationChecks bool   `json:"domain-cert-revocation-checks" xml:"domain-cert-revocation-checks"`
+	XMLName                    xml.Name `xml:"voucher"`
+	CreatedOn                  string   `json:"created-on" xml:"created-on"`
+	ExpiresOn                  string   `json:"expires-on" xml:"expires-on"`
+	SerialNumber               string   `json:"serial-number" xml:"serial-number"`
+	Assertion                  string   `json:"assertion" xml:"assertion"`
+	PinnedDomainCert           []byte   `json:"pinned-domain-cert" xml:"pinned-domain-cert"`
+	DomainCertRevocationChecks bool     `json:"domain-cert-revocation-checks" xml:"domain-cert-revocation-checks"`
 }
 
 // NewCertificateAuthority creates a new self-signed CA for the chosen organization.
