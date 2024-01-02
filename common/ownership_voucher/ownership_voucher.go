@@ -18,6 +18,7 @@ package ownershipvoucher
 import (
 	"crypto/x509"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 
 	"go.mozilla.org/pkcs7"
@@ -36,9 +37,12 @@ func Unmarshal(in []byte, certPool *x509.CertPool) (*artifacts.OwnershipVoucher,
 		return nil, fmt.Errorf("unable to parse into pkcs7 format: %v", err)
 	}
 	ov := artifacts.OwnershipVoucher{}
-	err = json.Unmarshal(p7.Content, &ov)
-	if err != nil {
-		return nil, fmt.Errorf("failed unmarshalling ownership voucher: %v", err)
+	jsonErr := json.Unmarshal(p7.Content, &ov)
+	if jsonErr != nil {
+		xmlErr := xml.Unmarshal(p7.Content, &ov.OV)
+		if xmlErr != nil {
+			return nil, fmt.Errorf("failed unmarshalling ownership voucher in json or xml format: json err: %v, xml err: %v", jsonErr, xmlErr)
+		}
 	}
 	if certPool != nil {
 		if err = p7.VerifyWithChain(certPool); err != nil {

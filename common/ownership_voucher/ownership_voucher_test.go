@@ -27,7 +27,7 @@ var (
 )
 
 // Tests that a new OV can be created and it can be unpacked and verified.
-func TestEndToEnd(t *testing.T) {
+func TestEndToEndJSON(t *testing.T) {
 	pdc, _, err := artifacts.NewCertificateAuthority("Pinned Domain Cert", "Google", "localhost")
 	if err != nil {
 		t.Fatalf("unable to generate PDC: %v", err)
@@ -37,7 +37,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("unable to generate Vendor CA: %v", err)
 	}
 
-	ov, err := artifacts.NewOwnershipVoucher(wantSerial, pdc, vendorca, vendorcaPrivateKey)
+	ov, err := artifacts.NewOwnershipVoucher("json", wantSerial, pdc, vendorca, vendorcaPrivateKey)
 	if err != nil {
 		t.Errorf("New err = %v, want nil", err)
 	}
@@ -53,6 +53,35 @@ func TestEndToEnd(t *testing.T) {
 	if !bytes.Equal(got.OV.PinnedDomainCert, pdc.Raw) {
 		t.Errorf("got PDC = %v, want %v", got.OV.PinnedDomainCert, pdc.Raw)
 	}
+	if gotSerial := got.OV.SerialNumber; gotSerial != wantSerial {
+		t.Errorf("got serial = %v, want %v", gotSerial, wantSerial)
+	}
+}
+
+func TestEndToEndXML(t *testing.T) {
+	pdc, _, err := artifacts.NewCertificateAuthority("Pinned Domain Cert", "Google", "localhost")
+	if err != nil {
+		t.Fatalf("unable to generate PDC: %v", err)
+	}
+	vendorca, vendorcaPrivateKey, err := artifacts.NewCertificateAuthority("Cisco Certificate Authority", "Cisco", "localhost")
+	if err != nil {
+		t.Fatalf("unable to generate Vendor CA: %v", err)
+	}
+
+	ov, err := artifacts.NewOwnershipVoucher("xml", wantSerial, pdc, vendorca, vendorcaPrivateKey)
+	if err != nil {
+		t.Errorf("New err = %v, want nil", err)
+	}
+
+	vendorCAPool := x509.NewCertPool()
+	vendorCAPool.AddCert(vendorca)
+
+	got, err := Unmarshal(ov, vendorCAPool)
+	if err != nil {
+		t.Errorf("VerifyAndUnmarshal err = %v, want nil", err)
+	}
+	// Don't check the PDC here as XML encoding doesn't nicely encode it in base64 as json does.
+	// All we really care about is the serial number anyway.
 	if gotSerial := got.OV.SerialNumber; gotSerial != wantSerial {
 		t.Errorf("got serial = %v, want %v", gotSerial, wantSerial)
 	}
