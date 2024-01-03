@@ -202,6 +202,10 @@ The proposed operational model for devices is shown in Figure 1 above.
     namespace, also in the `/system` or `/interfaces` hierarchies within the
     dynamic configuration.
 
+CLI(via SSH or Console) as an API should have access to all the 3 name spaces
+above. It provides a low dependency method to recover the device in case
+of bugs/failures/emergencies.
+
 To support this approach, this document proposes a `Bootz` service, which is the
 mechanism by which the “boot” namespace is interacted with. **`Bootz` is
 proposed to replace the existing zero-touch-provisioning implementations.**
