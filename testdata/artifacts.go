@@ -25,6 +25,8 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"encoding/xml"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -42,17 +44,18 @@ const (
 
 // OwnershipVoucher wraps Inner.
 type OwnershipVoucher struct {
-	OV Inner `json:"ietf-voucher:voucher"`
+	OV Inner `json:"ietf-voucher:voucher" xml:"voucher"`
 }
 
 // Inner defines the Ownership Voucher format. See https://www.rfc-editor.org/rfc/rfc8366.html.
 type Inner struct {
-	CreatedOn                  string `json:"created-on"`
-	ExpiresOn                  string `json:"expires-on"`
-	SerialNumber               string `json:"serial-number"`
-	Assertion                  string `json:"assertion"`
-	PinnedDomainCert           []byte `json:"pinned-domain-cert"`
-	DomainCertRevocationChecks bool   `json:"domain-cert-revocation-checks"`
+	XMLName                    xml.Name `xml:"voucher"`
+	CreatedOn                  string   `json:"created-on" xml:"created-on"`
+	ExpiresOn                  string   `json:"expires-on" xml:"expires-on"`
+	SerialNumber               string   `json:"serial-number" xml:"serial-number"`
+	Assertion                  string   `json:"assertion" xml:"assertion"`
+	PinnedDomainCert           []byte   `json:"pinned-domain-cert" xml:"pinned-domain-cert"`
+	DomainCertRevocationChecks bool     `json:"domain-cert-revocation-checks" xml:"domain-cert-revocation-checks"`
 }
 
 // NewCertificateAuthority creates a new self-signed CA for the chosen organization.
@@ -155,7 +158,7 @@ func TLSCertificate(cert *x509.Certificate, privateKey *rsa.PrivateKey) (*tls.Ce
 }
 
 // NewOwnershipVoucher generates an Ownership Voucher which is signed by the vendor's CA.
-func NewOwnershipVoucher(serial string, pdc, vendorCACert *x509.Certificate, vendorCAPriv crypto.PrivateKey) ([]byte, error) {
+func NewOwnershipVoucher(encoding string, serial string, pdc, vendorCACert *x509.Certificate, vendorCAPriv crypto.PrivateKey) ([]byte, error) {
 	currentTime := time.Now()
 	ov := OwnershipVoucher{
 		OV: Inner{
@@ -166,9 +169,21 @@ func NewOwnershipVoucher(serial string, pdc, vendorCACert *x509.Certificate, ven
 		},
 	}
 
-	ovBytes, err := json.Marshal(ov)
-	if err != nil {
-		return nil, err
+	var ovBytes []byte
+	var err error
+	switch encoding {
+	case "json":
+		ovBytes, err = json.Marshal(ov)
+		if err != nil {
+			return nil, err
+		}
+	case "xml":
+		ovBytes, err = xml.Marshal(ov.OV)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unsupported encoding: %v", encoding)
 	}
 
 	signedMessage, err := pkcs7.NewSignedData(ovBytes)
@@ -206,7 +221,7 @@ func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, ven
 	}
 	ovs := service.OVList{}
 	for _, serial := range controlCardSerials {
-		ov, err := NewOwnershipVoucher(serial, pdc, vendorCA, vendorCAPrivateKey)
+		ov, err := NewOwnershipVoucher("json", serial, pdc, vendorCA, vendorCAPrivateKey)
 		if err != nil {
 			return nil, err
 		}
