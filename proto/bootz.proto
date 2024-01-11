@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package bootz.proto;
+package bootz;
 
 import "google/protobuf/struct.proto";
 
