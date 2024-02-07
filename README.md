@@ -261,6 +261,7 @@ can install production configuration and certificates into the device.
 
 ### Boot Procedure
 
+
 #### **API flow**
 
 1. DHCP Discovery of Bootstrap Server
@@ -423,10 +424,28 @@ configuration.
 11. Active control card now verifies the card and brings the card into
     production state and sync's configuration and other files.
 
-### Open Questions
+### Certificate deployment options
 
-1. Should TpmEnrollment and Attest methods be signed with owner's certificate?
-2. Do we intend to use TpmEnrollment to rotate oIAK (and oDevID) also?
+#### Bootz only
+
+![Alt text](design_images/bootz.png "Certs delivered as part of Bootz")
+
+In the Bootz only workflow certificates are delivered by the bootz server in
+the initial bootz data payload. After reboot the device will use the provided
+security profile and certificates provided in the bootz message.
+
+#### Bootz with Certz rotation
+
+![Alt text](design_images/bootz_certz.png "Certs delivered via Certz")
+
+In this workflow the device will boot from bootz but will use it's iDevID cert
+for initial services. Once rebooted, the device can be reached via Certz using the iDevID cert.
+
+#### Bootz with Enrollz and Attestz
+
+![Alt text](design_images/bootz_enrollz.png "Certs delivered via Certz after Enrollz")
+
+This is the preferred workflow for security considerations.  This workflow utilizes Enrollz and Attestz to provide enrollment then measured boot to validate the state of device before providing any "production" certificates.
 
 ### Protobuf Payload for Bootstrap
 
