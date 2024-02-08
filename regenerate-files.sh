@@ -17,6 +17,9 @@ copy_generated() {
   done
 }
 
+# Don't upgrade bazel version until repo supports  7.0 syntax
+export USE_BAZEL_VERSION=6.4.0
+
 bazel build //proto:all
 bazel build //server/entitymanager/proto:all
 # first arg is the package name, second arg is namespace for the package, and thrid is the location where the generated code will be saved. 
