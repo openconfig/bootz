@@ -165,8 +165,8 @@ def go_dependencies():
     go_repository(
         name = "com_github_openconfig_gnsi",
         importpath = "github.com/openconfig/gnsi",
-        sum = "h1:JIC6+uVg39jLx3K39g/n6+J7b+c8FKU8TgwFAxmON+A=",
-        version = "v1.2.1",
+        sum = "h1:P6MjCnLZuINIivGLbp4No1HarZt7456wuJRNbSQyGu0=",
+        version = "v1.2.5",
     )
 
     go_repository(

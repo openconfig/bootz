@@ -24,6 +24,7 @@ use_new_compilers()
 proto_library(
     name = "bootz_proto",
     srcs = ["bootz.proto"],
+    import_prefix = "github.com/openconfig/bootz",
     deps = [
         "@com_github_openconfig_gnsi//authz:authz_proto",
         "@com_github_openconfig_gnsi//certz:certz_proto",

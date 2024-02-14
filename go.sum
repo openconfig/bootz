@@ -191,8 +191,8 @@ github.com/openconfig/gnmi v0.0.0-20220617175856-41246b1b3507 h1:tv9HygDMXnoGyWu
 github.com/openconfig/gnmi v0.0.0-20220617175856-41246b1b3507/go.mod h1:ycJVRtLs20E2c1WD+9oacgxbrBFwQygd8/uaOuGMlfc=
 github.com/openconfig/gnoi v0.0.0-20220809151450-6bddacd72ef8 h1:f16l9DWXmpWcBG+76o5kv3A98SU9YdGu/zp2IvUnZoM=
 github.com/openconfig/gnoi v0.0.0-20220809151450-6bddacd72ef8/go.mod h1:ZMRwQ7maVNSOjie3Jn67fW5WY7UDrFSiYSlV/GxthQs=
-github.com/openconfig/gnsi v1.2.3 h1:Y/fBMQOn5xqdo9xuT7AK2YHSRejx/ws4sDOMBCHQG6w=
-github.com/openconfig/gnsi v1.2.3/go.mod h1:QikTHkm468uc2rq/kVhETfyZ6FPeM+zitubrHBbB0HE=
+github.com/openconfig/gnsi v1.2.5 h1:P6MjCnLZuINIivGLbp4No1HarZt7456wuJRNbSQyGu0=
+github.com/openconfig/gnsi v1.2.5/go.mod h1:jzPF4rVWPHhIG0F3t910Hh2VqqTbSfv18shbgE4AXhw=
 github.com/pelletier/go-toml/v2 v2.0.9 h1:uH2qQXheeefCCkuBBSLi7jCiSmj3VRh2+Goq2N7Xxu0=
 github.com/pelletier/go-toml/v2 v2.0.9/go.mod h1:tJU2Z3ZkXwnxa4DPO899bsyIoywizdUvyaeZurnPPDc=
 github.com/pierrec/lz4/v4 v4.1.14/go.mod h1:gZWDp/Ze/IJXGXf23ltt2EXimqmTUXEy0GFuRQyBid4=

@@ -10,6 +10,7 @@ use_new_compilers()
 proto_library(
     name = "entity_proto",
     srcs = ["entity.proto"],
+    import_prefix = "github.com/openconfig/bootz",
     deps = [
         "@local_repo_root//proto:bootz_proto",
         "@com_github_openconfig_gnsi//authz:authz_proto",
