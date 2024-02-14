@@ -15,12 +15,12 @@
 syntax = "proto3";
 
 package entity;
-import "google/protobuf/struct.proto";
 
+import "github.com/openconfig/bootz/proto/bootz.proto";
 import "github.com/openconfig/gnsi/authz/authz.proto";
 import "github.com/openconfig/gnsi/certz/certz.proto";
 import "github.com/openconfig/gnsi/pathz/pathz.proto";
-import "proto/bootz.proto";
+import "google/protobuf/struct.proto";
 
 
 
