@@ -238,9 +238,7 @@ boot option to the device for an endpoint (URL) from which the boot package can
 be retrieved. The package returned by the endpoint consists of a binary encoded
 protocol buffer containing all data for being able to complete the boot process.
 In this context, “complete the boot process” implies the device reaching a fully
-manageable state - with the relevant gRPC services running, security
-operations(enrollment, attestation, production credentials installed) are
-completed.
+manageable state - with the relevant gRPC services running.
 
 Upon receiving the bootz protocol buffer, the device is responsible for
 unmarshalling the bootz message and distributing to the relevant system
@@ -251,7 +249,8 @@ components, etc.
 The bootz payload will be encrypted via the TLS session underlying the gRPC
 service.
 
-After loading all the provided data on first boot the device is still not in a
+Depends on the security requirement for the deployment environment, after loading
+all the provided data on first boot the device might still not be in a
 trusted state, however it should have enough g\* services initialized to a state
 where the device can be interrogated from a trusted system to enroll the TPM and
 validate specific TPM values to attest the device. Once attested, the systems
