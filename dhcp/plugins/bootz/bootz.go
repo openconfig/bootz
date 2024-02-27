@@ -16,6 +16,7 @@
 package bootz
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net/url"
 
@@ -44,33 +45,60 @@ var (
 	ztpV6Opt dhcpv6.Option
 )
 
-func parseArgs(args ...string) (*url.URL, error) {
-	if len(args) != 1 {
-		return nil, fmt.Errorf("exactly one argument must be passed to BootZ plugin, got %d", len(args))
+func encodeBootstrapServerList(urls []string) []byte {
+	// From RFC 8572 section 8.3:
+	//
+	// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-...-+-+-+-+-+-+-+
+	// |       uri-length              |          URI                  |
+	// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-...-+-+-+-+-+-+-+
+	//
+	// * uri-length: 2 octets long; specifies the length of the URI data.
+	// * URI: URI of the SZTP bootstrap server.
+	b := []byte{}
+	for _, u := range urls {
+		b = binary.BigEndian.AppendUint16(b, uint16(len(u)))
+		b = append(b, []byte(u)...)
 	}
-	return url.Parse(args[0])
+	return b
+}
+
+// Verifies that the passed Bootz servers are valid URLs and returns them as a list of strings.
+func parseArgs(args ...string) ([]string, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("at least one argument must be passed to BootZ plugin, got %d", len(args))
+	}
+	urls := make([]string, len(args))
+	for i, arg := range args {
+		u, err := url.Parse(arg)
+		if err != nil {
+			return nil, err
+		}
+		urls[i] = u.String()
+	}
+	return urls, nil
 }
 
 func setup4(args ...string) (handler.Handler4, error) {
-	url, err := parseArgs(args...)
+	urls, err := parseArgs(args...)
 	if err != nil {
 		return nil, err
 	}
+
 	ztpV4Opt = &dhcpv4.Option{
 		Code:  dhcpv4.GenericOptionCode(OPTION_V4_SZTP_REDIRECT),
-		Value: dhcpv4.String(url.String()),
+		Value: dhcpv4.String(string(encodeBootstrapServerList(urls))),
 	}
 	return handler4, nil
 }
 
 func setup6(args ...string) (handler.Handler6, error) {
-	url, err := parseArgs(args...)
+	urls, err := parseArgs(args...)
 	if err != nil {
 		return nil, err
 	}
 	ztpV6Opt = &dhcpv6.OptionGeneric{
 		OptionCode: dhcpv6.OptionCode(OPTION_V6_SZTP_REDIRECT),
-		OptionData: []byte(url.String()),
+		OptionData: encodeBootstrapServerList(urls),
 	}
 	return handler6, nil
 }

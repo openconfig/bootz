@@ -40,8 +40,8 @@ const confTemplate = `
 server6:
    plugins:
      - server_id: LL {{ .IntfMacAddr }}
-     {{ if .BootzURL }}
-     - bootz: {{ .BootzURL }}
+     {{ if .BootzURLs }}
+     - bootz: {{ .BootzURLs }}
      {{ end }}
      {{ if .DNSv6 }}
      - DNS: {{ .DNSv6 }}
@@ -53,8 +53,8 @@ server4:
   plugins:
     - lease_time: 3600s
     - server_id: {{ .IntfIPAddr }}
-    {{ if .BootzURL }}
-    - bootz: {{ .BootzURL }}
+    {{ if .BootzURLs }}
+    - bootz: {{ .BootzURLs }}
     {{ end }}
     {{ if .DNSv4 }}
     - DNS: {{ .DNSv4 }}
@@ -77,7 +77,7 @@ type Config struct {
 	Interface  string
 	DNS        []string
 	AddressMap map[string]*Entry
-	BootzURL   string
+	BootzURLs  []string
 }
 
 // Entry represents a dhcp record.
@@ -158,7 +158,7 @@ func generateConfigFile(conf *Config) (string, error) {
 
 	intf, err := net.InterfaceByName(conf.Interface)
 	if err != nil {
-		return "", fmt.Errorf("unknown interface %v", *intf)
+		return "", fmt.Errorf("unknown interface %v: %v", conf.Interface, err)
 	}
 
 	IPv4Addr := getIPv4Address(intf)
@@ -191,7 +191,7 @@ func generateConfigFile(conf *Config) (string, error) {
 		DNSv6       string
 		IPv4Leases  string
 		IPv6Leases  string
-		BootzURL    string
+		BootzURLs   string
 	}{
 		IntfIPAddr:  IPv4Addr.String(),
 		IntfMacAddr: intf.HardwareAddr.String(),
@@ -199,7 +199,7 @@ func generateConfigFile(conf *Config) (string, error) {
 		DNSv6:       strings.Join(DNSv6, " "),
 		IPv4Leases:  strings.Join(v4Records, " "),
 		IPv6Leases:  strings.Join(v6Records, " "),
-		BootzURL:    conf.BootzURL,
+		BootzURLs:   strings.Join(conf.BootzURLs, " "),
 	}); err != nil {
 		return "", fmt.Errorf("error generating configuration template: %v", err)
 	}
