@@ -29,7 +29,7 @@ var (
 	intf    = flag.String("i", "eth7", "Network interface to use for dhcp server.")
 	records = flag.String("records", "4c:5d:3c:ef:de:60,5.78.26.27/16,5.78.0.1;FOX2506P2QT,5::10/64", "List of dhcp records separated by a semi-colon.")
 	dns     = flag.String("dns", "5.38.4.124", "List of dns servers separated by a semi-colon.")
-	bootz   = flag.String("bootz_url", "bootz://dev-mgbl-lnx6.cisco.com:50052/grpc", "Bootz server URL.")
+	bootz   = flag.String("bootz_urls", "bootz://dev-mgbl-lnx6.cisco.com:50052/grpc;bootz://dev-mgbl-lnx2.cisco.com:50052/grpc", "List of Bootz server URLs separated by a semi-colon.")
 )
 
 func main() {
@@ -57,7 +57,7 @@ func main() {
 		Interface:  *intf,
 		DNS:        strings.Split(*dns, ";"),
 		AddressMap: addressMap,
-		BootzURL:   *bootz,
+		BootzURLs:  strings.Split(*bootz, ";"),
 	}
 
 	go func() {
