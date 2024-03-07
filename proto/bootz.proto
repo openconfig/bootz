@@ -131,7 +131,21 @@ message BootstrapDataResponse {
   Credentials credentials = 6;
   gnsi.pathz.v1.UploadRequest pathz = 7;
   gnsi.authz.v1.UploadRequest authz = 8;
-  gnsi.certz.v1.UploadRequest certificates = 9;
+  gnsi.certz.v1.UploadRequest certificates = 9 [deprecated=true];
+  CertzProfiles certz_profiles = 10;
+}
+
+// CertzArtifacts contains the Certz profiles and entities to create.
+// The profiles cannot contain duplicate id's and must never contain
+// the id `system_default_profile`.
+message CertzProfiles {
+  repeated CertzProfile profiles = 1;
+}
+
+// CertzArtifact is the profile ID and Certz entities for the profile.
+message CertzProfile {
+  string ssl_profile_id = 1;
+  gnsi.certz.v1.UploadRequest certz = 2; 
 }
 
 // Container message that is signed by server.
