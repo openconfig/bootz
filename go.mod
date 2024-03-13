@@ -12,7 +12,7 @@ require (
 	github.com/openconfig/gnsi v1.2.5
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352
 	google.golang.org/grpc v1.56.3
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
