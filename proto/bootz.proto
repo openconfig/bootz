@@ -135,14 +135,14 @@ message BootstrapDataResponse {
   CertzProfiles certz_profiles = 10;
 }
 
-// CertzArtifacts contains the Certz profiles and entities to create.
+// CertzProfiles contains the Certz profiles and entities to create.
 // The profiles cannot contain duplicate id's and must never contain
 // the id `system_default_profile`.
 message CertzProfiles {
   repeated CertzProfile profiles = 1;
 }
 
-// CertzArtifact is the profile ID and Certz entities for the profile.
+// CertzProfile is the profile ID and Certz entities for the profile.
 message CertzProfile {
   string ssl_profile_id = 1;
   gnsi.certz.v1.UploadRequest certz = 2; 
