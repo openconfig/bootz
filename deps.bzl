@@ -148,25 +148,21 @@ def go_dependencies():
         ],
         build_file_generation = "on",
         importpath = "github.com/openconfig/gnmi",
-        sum = "h1:tv9HygDMXnoGyWuLmNCodMV2+PK6+uT/ndAxDVzsUUQ=",
-        version = "v0.0.0-20220617175856-41246b1b3507",
+        sum = "h1:kQEZ/9ek3Vp2Y5IVuV2L/ba8/77TgjdXg505QXvYmg8=",
+        version = "v0.10.0",
     )
     go_repository(
         name = "com_github_openconfig_gnoi",
-        build_directives = [
-            "gazelle:proto_import_prefix github.com/openconfig/gnoi",
-        ],
-        build_file_generation = "on",
         importpath = "github.com/openconfig/gnoi",
-        sum = "h1:f16l9DWXmpWcBG+76o5kv3A98SU9YdGu/zp2IvUnZoM=",
-        version = "v0.0.0-20220809151450-6bddacd72ef8",
+        sum = "h1:jbYXRMNmmvA8ZFv2FBLrYoxA1MFSui4tEui+8LAWyVc=",
+        version = "v0.4.0",
     )
 
     go_repository(
         name = "com_github_openconfig_gnsi",
         importpath = "github.com/openconfig/gnsi",
-        sum = "h1:P6MjCnLZuINIivGLbp4No1HarZt7456wuJRNbSQyGu0=",
-        version = "v1.2.5",
+        sum = "h1:V6jxHwBGqu0xUvVNFIeY27kAZ/VOEuETehz6ugCgo+s=",
+        version = "v1.4.3",
     )
 
     go_repository(
