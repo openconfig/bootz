@@ -8,10 +8,10 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/h-fam/errdiff v1.0.2
 	github.com/insomniacslk/dhcp v0.0.0-20230908212754-65c27093e38a
-	github.com/openconfig/gnmi v0.0.0-20220617175856-41246b1b3507
-	github.com/openconfig/gnsi v1.2.5
+	github.com/openconfig/gnmi v0.10.0
+	github.com/openconfig/gnsi v1.4.3
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352
-	google.golang.org/grpc v1.56.3
+	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.33.0
 )
 
@@ -28,7 +28,7 @@ require (
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
-	github.com/openconfig/gnoi v0.0.0-20220809151450-6bddacd72ef8 // indirect
+	github.com/openconfig/gnoi v0.4.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.9 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5 // indirect
@@ -40,12 +40,12 @@ require (
 	github.com/spf13/viper v1.16.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	github.com/u-root/uio v0.0.0-20230305220412-3e8cd9d6bf63 // indirect
-	golang.org/x/crypto v0.17.0 // indirect
-	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
-	golang.org/x/term v0.15.0 // indirect
+	golang.org/x/crypto v0.21.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/term v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
-	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
