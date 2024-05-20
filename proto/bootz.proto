@@ -203,10 +203,10 @@ message SoftwareImage {
   // An HTTP location from where the OS file can be downloaded.
   string url = 3;
   // Hash of the OS image. The device must verify that the hash of the
-  // downloaded OS image matches this. The format of this field is a `hex-string`,
-  // identified in RFC6991 as "A hexadecimal string with octets represented as 
-  // hex digits separated by colons. The canonical representation uses
-  // lowercase characters."
+  // downloaded OS image matches this. The format of this field is a 
+  // `hex-string`, identified in RFC6991 as "A hexadecimal string with 
+  // octets represented as hex digits separated by colons.
+  // The canonical representation uses lowercase characters."
   string os_image_hash = 4;
   // The identity of the hash algorithm used. These hash identiities are 
   // defined in sZTP RFC 8572. There is currenty only one hash algorithm
