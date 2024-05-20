@@ -207,6 +207,7 @@ message SoftwareImage {
   // `hex-string`, identified in RFC6991 as "A hexadecimal string with 
   // octets represented as hex digits separated by colons.
   // The canonical representation uses lowercase characters."
+  // e.g.: "d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5"
   string os_image_hash = 4;
   // The identity of the hash algorithm used. These hash identiities are 
   // defined in sZTP RFC 8572. There is currenty only one hash algorithm
