@@ -65,8 +65,8 @@ func TestNew(t *testing.T) {
 			Name:          "Default Image",
 			Version:       "1.0",
 			Url:           "https://path/to/image",
-			OsImageHash:   "e9c0f8b575cbfcb42ab3b78ecc87efa3b011d9a5d10b09fa4e96f240bf6a82f5",
-			HashAlgorithm: "SHA256",
+			OsImageHash:   "e9:c0:f8:b5:75:cb:fc:b4:2a:b3:b7:8e:cc:87:ef:a3:b0:11:d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5",
+			HashAlgorithm: "ietf-sztp-conveyed-info:sha-256",
 		},
 		ControllerCards: []*epb.ControlCard{
 			{
@@ -232,9 +232,9 @@ func TestResolveChassis(t *testing.T) {
 			Serial:       "123",
 			BootMode:     bpb.BootMode_BOOT_MODE_INSECURE,
 			SoftwareImage: &bpb.SoftwareImage{
-				HashAlgorithm: "SHA256",
+				HashAlgorithm: "ietf-sztp-conveyed-info:sha-256",
 				Name:          "Default Image",
-				OsImageHash:   "e9c0f8b575cbfcb42ab3b78ecc87efa3b011d9a5d10b09fa4e96f240bf6a82f5",
+				OsImageHash:   "e9:c0:f8:b5:75:cb:fc:b4:2a:b3:b7:8e:cc:87:ef:a3:b0:11:d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5",
 				Url:           "https://path/to/image",
 				Version:       "1.0",
 			},
@@ -441,8 +441,8 @@ func TestGetBootstrapData(t *testing.T) {
 			Name:          "Default Image",
 			Version:       "1.0",
 			Url:           "https://path/to/image",
-			OsImageHash:   "ABCDEF",
-			HashAlgorithm: "SHA256",
+			OsImageHash:   "e9:c0:f8:b5:75:cb:fc:b4:2a:b3:b7:8e:cc:87:ef:a3:b0:11:d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5",
+			HashAlgorithm: "ietf-sztp-conveyed-info:sha-256",
 		},
 		ControllerCards: []*epb.ControlCard{
 			{
@@ -472,8 +472,8 @@ func TestGetBootstrapData(t *testing.T) {
 				Name:          "Default Image",
 				Version:       "1.0",
 				Url:           "https://path/to/image",
-				OsImageHash:   "ABCDEF",
-				HashAlgorithm: "SHA256",
+				OsImageHash:   "e9:c0:f8:b5:75:cb:fc:b4:2a:b3:b7:8e:cc:87:ef:a3:b0:11:d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5",
+				HashAlgorithm: "ietf-sztp-conveyed-info:sha-256",
 			},
 			BootloaderPasswordHash: "ABCD123",
 			BootConfig: &bpb.BootConfig{
@@ -492,8 +492,8 @@ func TestGetBootstrapData(t *testing.T) {
 				Name:          "Default Image",
 				Version:       "1.0",
 				Url:           "https://path/to/image",
-				OsImageHash:   "ABCDEF",
-				HashAlgorithm: "SHA256",
+				OsImageHash:   "e9:c0:f8:b5:75:cb:fc:b4:2a:b3:b7:8e:cc:87:ef:a3:b0:11:d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5",
+				HashAlgorithm: "ietf-sztp-conveyed-info:sha-256",
 			},
 			BootPasswordHash: "ABCD123",
 			ServerTrustCert:  encodedServerTrustCert,
