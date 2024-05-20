@@ -190,14 +190,28 @@ message GetBootstrapDataResponse {
   bytes serialized_bootstrap_data = 104;
 }
 
+// Fields required by the device to be able to
+// download and verify an image.
+// The format of this message is identical to the `boot-image` data 
+// model outlined in the sZTP RFC:
+// https://datatracker.ietf.org/doc/html/rfc8572#section-6.1
 message SoftwareImage {
+  // The name of the operating system software the device should be running.
   string name = 1;
+  // The version of the operating system software the device should be running.
   string version = 2;
   // An HTTP location from where the OS file can be downloaded.
   string url = 3;
   // Hash of the OS image. The device must verify that the hash of the
-  // downloaded OS image matches this.
+  // downloaded OS image matches this. The format of this field is a `hex-string`,
+  // identified in RFC6991 as "A hexadecimal string with octets represented as 
+  // hex digits separated by colons. The canonical representation uses
+  // lowercase characters."
   string os_image_hash = 4;
+  // The identity of the hash algorithm used. These hash identiities are 
+  // defined in sZTP RFC 8572. There is currenty only one hash algorithm
+  // defined in this spec:
+  // `ietf-sztp-conveyed-info:sha-256` for the SHA 256 algorithm.
   string hash_algorithm = 5;
 }
 
