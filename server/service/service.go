@@ -98,6 +98,8 @@ type Chassis struct {
 	BootConfig             *bpb.BootConfig
 	Authz                  *apb.UploadRequest
 	BootloaderPasswordHash string
+	// The name of the fabric this chassis belongs to.
+	FabricName string
 }
 
 // ControlCard describes a control card that exists in a resolved Chassis.
