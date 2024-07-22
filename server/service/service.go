@@ -102,6 +102,7 @@ type Chassis struct {
 	FabricName string
 	// Indicates whether enrollment will be skipped later in the install process.
 	// Some parts of boot config may be different depending on the value of this flag.
+	// TODO(b/354602807): Clean up this flag when not required anymore.
 	SkipEnrollment bool
 }
 
