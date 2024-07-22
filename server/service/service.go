@@ -100,6 +100,9 @@ type Chassis struct {
 	BootloaderPasswordHash string
 	// The name of the fabric this chassis belongs to.
 	FabricName string
+	// Indicates whether enrollment will be skipped later in the install process.
+	// Some parts of boot config may be different depending on the value of this flag.
+	SkipEnrollment bool
 }
 
 // ControlCard describes a control card that exists in a resolved Chassis.
