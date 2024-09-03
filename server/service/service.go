@@ -271,8 +271,8 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Received ReportStatus(%+v) request from %v", req, peerAddr)
-	
+	log.Infof("Received ReportStatus request(%+v) from %v", req, peerAddr)
+
 	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
 }
 
