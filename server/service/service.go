@@ -266,13 +266,11 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 	log.Infof("=============================================================================")
 	log.Infof("========================== Status report received ===========================")
 	log.Infof("=============================================================================")
-
 	peerAddr, err := peerAddressFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	log.Infof("Received ReportStatus request(%+v) from %v", req, peerAddr)
-
 	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
 }
 
