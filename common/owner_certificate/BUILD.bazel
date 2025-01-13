@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "owner_certificate",
+    srcs = ["owner_certificate.go"],
+    importpath = "github.com/openconfig/bootz/common/owner_certificate",
+    visibility = ["//visibility:public"],
+    deps = ["@org_mozilla_go_pkcs7//:pkcs7"],
+)
+
+go_test(
+    name = "owner_certificate_test",
+    srcs = ["owner_certificate_test.go"],
+    embed = [":owner_certificate"],
+    deps = ["//testdata:testdata_lib"],
+)

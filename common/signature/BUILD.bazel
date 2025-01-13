@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "signature",
+    srcs = ["signature.go"],
+    importpath = "github.com/openconfig/bootz/common/signature",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "signature_test",
+    srcs = ["signature_test.go"],
+    embed = [":signature"],
+    deps = ["//testdata:testdata_lib"],
+)
