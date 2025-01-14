@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "ownership_voucher",
+    srcs = ["ownership_voucher.go"],
+    importpath = "github.com/openconfig/bootz/common/ownership_voucher",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//testdata:testdata_lib",
+        "@org_mozilla_go_pkcs7//:pkcs7",
+    ],
+)
+
+go_test(
+    name = "ownership_voucher_test",
+    srcs = ["ownership_voucher_test.go"],
+    embed = [":ownership_voucher"],
+    deps = ["//testdata:testdata_lib"],
+)
