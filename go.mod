@@ -4,8 +4,8 @@ go 1.21
 
 require (
 	github.com/coredhcp/coredhcp v0.0.0-20230808195049-3e32ddb5ac86
-	github.com/golang/glog v1.1.2
-	github.com/google/go-cmp v0.5.9
+	github.com/golang/glog v1.2.4
+	github.com/google/go-cmp v0.6.0
 	github.com/h-fam/errdiff v1.0.2
 	github.com/insomniacslk/dhcp v0.0.0-20230908212754-65c27093e38a
 	github.com/openconfig/gnmi v0.10.0
