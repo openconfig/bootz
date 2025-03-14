@@ -69,11 +69,12 @@ message GetBootstrapDataRequest {
       // Additional it will be used to validate the nonce_signed.
       // The format is a base64 encoding of an x509 DER certificate.
       string idevid_cert = 1;
+      // One of the key types must be set for non-iDevID based systems.
       // The public keys will be used to encrypt the nonce and validate
       // that the keys match the data in OVGS. The decrypted
       // nonce will be returned to validate the device identity.
-      string ek_pub = 2;
-      string ppk_pub = 3;
+      bool ek_pub = 2;
+      bool ppk_pub = 3;
     }
   } 
   
@@ -89,7 +90,9 @@ message GetBootstrapDataRequest {
 
   // Identity will contain information used to validate the identity
   // of the device.
-  // For systems which support iDevID that will be the preferred 
+  // For systems which support iDevID that will be the preferred method.
+  // If identity is set one of the types must be set or an error is
+  // returned.
   Identity identity = 1003;
 } 
 
