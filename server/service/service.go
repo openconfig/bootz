@@ -104,6 +104,8 @@ type Chassis struct {
 	// Some parts of boot config may be different depending on the value of this flag.
 	// TODO(b/354602807): Clean up this flag when not required anymore.
 	SkipEnrollment bool
+	// The network domain this chassis belongs to.
+	Domain string
 }
 
 // ControlCard describes a control card that exists in a resolved Chassis.

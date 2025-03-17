@@ -43,11 +43,41 @@ service Bootstrap {
   // out-of-service state. The device should validate the server's identity
   // against the server_trust_cert it obtained in GetBootstrappingDataResponse.
   rpc ReportStatus(ReportStatusRequest) returns (EmptyResponse) {}
+
+  // BootstrapStream provides the streaming implementation of the Bootz
+  // service. This flow allows for both server and client validation via
+  // nonces and certficate validation. This allows the service to start with
+  // non owner signed certificates and build trust relationship.
+  // This bypasses the need to require the iDevID cert to be sent as part of
+  // the initial gRPC TLS handshake.
+  // The workflow should follow:
+  //    BootstrapStreamRequest.bootstrap_request
+  //    BootstrapStreamResponse.(nonce | nonce_encrypted)
+  //    BootstrapStreamRequest.(nonce_signed | nonce)
+  //    BootstrapStreamResponse.boostrap_response
+  //
+  rpc BootstrapStream(stream BootstrapStreamRequest)
+      returns (stream BootstrapStreamResponse) {}
 }
 
 // Initial request from device to the bootz-server. Contains a detailed
 // description of the chassis and its constituent control cards.
 message GetBootstrapDataRequest {
+  message Identity {
+    oneof type {
+      // idevid_cert will be validated via OVGS and the vendor CA bundle.
+      // Additional it will be used to validate the nonce_signed.
+      // The format is a base64 encoding of an x509 DER certificate.
+      string idevid_cert = 1;
+      // One of the key types must be set for non-iDevID based systems.
+      // The public keys will be used to encrypt the nonce and validate
+      // that the keys match the data in OVGS. The decrypted
+      // nonce will be returned to validate the device identity.
+      bool ek_pub = 2;
+      bool ppk_pub = 3;
+    }
+  } 
+  
   ChassisDescriptor chassis_descriptor = 1;
   // Describes the current state of the active control card making the
   // bootstrap request. For fixed form factor devices, the active control
@@ -57,6 +87,56 @@ message GetBootstrapDataRequest {
   // Not settting this field indicates that the device is configured not to
   // check for ownership voucher.
   string nonce = 1001;
+
+  // Identity will contain information used to validate the identity
+  // of the device.
+  // For systems which support iDevID that will be the preferred method.
+  // If identity is set one of the types must be set or an error is
+  // returned.
+  Identity identity = 1003;
+} 
+
+// BootstrapStreamRequest is used to both build send chassis information
+// as well as build a trust relationship if the iDevID cert is not used
+// during TLS setup.
+message BootstrapStreamRequest {
+  message Response {
+    oneof type {
+      // Nonce to be signed with IAK from the device for iDevID based systems.
+      bytes nonce_signed = 1;
+      // For non-iDevID systems the encrypted_nonce will be decrypted via:
+      //   TPM 1.2: EK
+      //   TPM 2.0: PPK
+      string nonce = 2;
+    }
+  } 
+    
+  oneof type {
+    GetBootstrapDataRequest bootstrap_request = 1;
+    Response response = 2;
+  }
+} 
+
+// BootstrapStreamReponse will be returned based on the request from the
+// client. The challenge wil be based on the data provided in the initial
+// GetBootstrapDataRequest based on the identity message.
+message BootstrapStreamResponse {
+  message Challenge {
+    oneof type {
+      // nonce will be returned for iDevID based system for signing by IAK.
+      string nonce = 1;
+      // nonce_encrytped will be returned for non-iDevID based systems.
+      // The public key used to encrypt the data will be based on:
+      //   TPM 1.2: EK
+      //   TPM 2.0: PPK
+      bytes nonce_encrypted = 2; 
+    } 
+  } 
+  
+  oneof type {
+    Challenge challenge = 1;
+    GetBootstrapDataResponse bootstrap_response = 2;
+  }
 }
 
 // Structured message containing the chassis details, and listing its component

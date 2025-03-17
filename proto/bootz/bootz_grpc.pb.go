@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	Bootstrap_GetBootstrapData_FullMethodName = "/bootz.Bootstrap/GetBootstrapData"
 	Bootstrap_ReportStatus_FullMethodName     = "/bootz.Bootstrap/ReportStatus"
+	Bootstrap_BootstrapStream_FullMethodName  = "/bootz.Bootstrap/BootstrapStream"
 )
 
 // BootstrapClient is the client API for Bootstrap service.
@@ -29,6 +30,7 @@ const (
 type BootstrapClient interface {
 	GetBootstrapData(ctx context.Context, in *GetBootstrapDataRequest, opts ...grpc.CallOption) (*GetBootstrapDataResponse, error)
 	ReportStatus(ctx context.Context, in *ReportStatusRequest, opts ...grpc.CallOption) (*EmptyResponse, error)
+	BootstrapStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[BootstrapStreamRequest, BootstrapStreamResponse], error)
 }
 
 type bootstrapClient struct {
@@ -59,12 +61,26 @@ func (c *bootstrapClient) ReportStatus(ctx context.Context, in *ReportStatusRequ
 	return out, nil
 }
 
+func (c *bootstrapClient) BootstrapStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[BootstrapStreamRequest, BootstrapStreamResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Bootstrap_ServiceDesc.Streams[0], Bootstrap_BootstrapStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[BootstrapStreamRequest, BootstrapStreamResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Bootstrap_BootstrapStreamClient = grpc.BidiStreamingClient[BootstrapStreamRequest, BootstrapStreamResponse]
+
 // BootstrapServer is the server API for Bootstrap service.
 // All implementations should embed UnimplementedBootstrapServer
 // for forward compatibility.
 type BootstrapServer interface {
 	GetBootstrapData(context.Context, *GetBootstrapDataRequest) (*GetBootstrapDataResponse, error)
 	ReportStatus(context.Context, *ReportStatusRequest) (*EmptyResponse, error)
+	BootstrapStream(grpc.BidiStreamingServer[BootstrapStreamRequest, BootstrapStreamResponse]) error
 }
 
 // UnimplementedBootstrapServer should be embedded to have
@@ -79,6 +95,9 @@ func (UnimplementedBootstrapServer) GetBootstrapData(context.Context, *GetBootst
 }
 func (UnimplementedBootstrapServer) ReportStatus(context.Context, *ReportStatusRequest) (*EmptyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReportStatus not implemented")
+}
+func (UnimplementedBootstrapServer) BootstrapStream(grpc.BidiStreamingServer[BootstrapStreamRequest, BootstrapStreamResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method BootstrapStream not implemented")
 }
 func (UnimplementedBootstrapServer) testEmbeddedByValue() {}
 
@@ -136,6 +155,13 @@ func _Bootstrap_ReportStatus_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Bootstrap_BootstrapStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(BootstrapServer).BootstrapStream(&grpc.GenericServerStream[BootstrapStreamRequest, BootstrapStreamResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Bootstrap_BootstrapStreamServer = grpc.BidiStreamingServer[BootstrapStreamRequest, BootstrapStreamResponse]
+
 // Bootstrap_ServiceDesc is the grpc.ServiceDesc for Bootstrap service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +178,13 @@ var Bootstrap_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Bootstrap_ReportStatus_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "BootstrapStream",
+			Handler:       _Bootstrap_BootstrapStream_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "github.com/openconfig/bootz/proto/bootz.proto",
 }
