@@ -1,5 +1,5 @@
 name: "bazel build"
-  
+
 on:
   push:
     branches: [ main ]
@@ -24,7 +24,7 @@ jobs:
           restore-keys: |
             bazel-${{ runner.os }}-build-
       - name: Setup Bazel
-        uses: bazelbuild/setup-bazelisk@v3 
+        uses: bazelbuild/setup-bazelisk@v3
       - name: Build
         run: bazel build //...
       - name: Test
