@@ -46,7 +46,7 @@ service Bootstrap {
 
   // BootstrapStream provides the streaming implementation of the Bootz
   // service. This flow allows for both server and client validation via
-  // nonces and certficate validation. This allows the service to start with
+  // nonces and certificate validation. This allows the service to start with
   // non owner signed certificates and build trust relationship.
   // This bypasses the need to require the iDevID cert to be sent as part of
   // the initial gRPC TLS handshake.
@@ -54,7 +54,7 @@ service Bootstrap {
   //    BootstrapStreamRequest.bootstrap_request
   //    BootstrapStreamResponse.(nonce | nonce_encrypted)
   //    BootstrapStreamRequest.(nonce_signed | nonce)
-  //    BootstrapStreamResponse.boostrap_response
+  //    BootstrapStreamResponse.bootstrap_response
   //
   rpc BootstrapStream(stream BootstrapStreamRequest)
       returns (stream BootstrapStreamResponse) {}
@@ -117,7 +117,7 @@ message BootstrapStreamRequest {
   }
 } 
 
-// BootstrapStreamReponse will be returned based on the request from the
+// BootstrapStreamResponse will be returned based on the request from the
 // client. The challenge wil be based on the data provided in the initial
 // GetBootstrapDataRequest based on the identity message.
 message BootstrapStreamResponse {
