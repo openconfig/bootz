@@ -1,22 +1,19 @@
+load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
-load("@rules_proto//proto:defs.bzl", "proto_library")
-load("//:common.bzl", "use_new_compilers")
 
 package(default_visibility = ["//visibility:public"])
-
-use_new_compilers()
 
 proto_library(
     name = "entity_proto",
     srcs = ["entity.proto"],
     import_prefix = "github.com/openconfig/bootz",
     deps = [
-        "@local_repo_root//proto:bootz_proto",
-        "@com_github_openconfig_gnsi//authz:authz_proto",
-        "@com_github_openconfig_gnsi//certz:certz_proto",
-        "@com_github_openconfig_gnsi//pathz:pathz_proto",
+        "//proto:bootz_proto",
         "@com_google_protobuf//:struct_proto",
+        "@openconfig_gnsi//authz:authz_proto",
+        "@openconfig_gnsi//certz:certz_proto",
+        "@openconfig_gnsi//pathz:pathz_proto",
     ],
 )
 
@@ -26,14 +23,13 @@ proto_library(
 
 go_proto_library(
     name = "entity_go_proto",
-    compilers = ["@io_bazel_rules_go//proto:go_grpc"],
     importpath = "github.com/openconfig/bootz/server/entitymanager/proto/entity",
     proto = ":entity_proto",
     deps = [
-        "@local_repo_root//proto:bootz_go_proto",
-        "@com_github_openconfig_gnsi//authz:authz_go_proto",
-        "@com_github_openconfig_gnsi//certz:certz_go_proto",
-        "@com_github_openconfig_gnsi//pathz:pathz_go_proto",
+        "//proto:bootz",
+        "@openconfig_gnsi//authz:authz_go_proto",
+        "@openconfig_gnsi//certz:certz_go_proto",
+        "@openconfig_gnsi//pathz:pathz_go_proto",
     ],
 )
 
@@ -41,4 +37,10 @@ go_library(
     name = "entity",
     embed = [":entity_go_proto"],
     importpath = "github.com/openconfig/server/entitymanager/proto/entity",
+)
+
+go_library(
+    name = "proto",
+    embed = [":entity_go_proto"],
+    importpath = "github.com/openconfig/bootz/server/entitymanager/proto/entity",
 )
