@@ -34,6 +34,8 @@ service Bootstrap {
   // This RPC returns the data required to put the device in a known state
   // (i.e. OS, bootloader password, etc) and applies an initial device
   // configuration.
+  // If the device cannot be validated a gRPC error with status INVALID_ARGUMENT
+  // should be returned.
   rpc GetBootstrapData(GetBootstrapDataRequest)
       returns (GetBootstrapDataResponse) {}
 
@@ -55,7 +57,8 @@ service Bootstrap {
   //    BootstrapStreamResponse.(nonce | nonce_encrypted)
   //    BootstrapStreamRequest.(nonce_signed | nonce)
   //    BootstrapStreamResponse.bootstrap_response
-  //
+  // If the device cannot be validated, a gRPC error with status
+  // INVALID_ARGUMENT should be returned by the server.
   rpc BootstrapStream(stream BootstrapStreamRequest)
       returns (stream BootstrapStreamResponse) {}
 }
