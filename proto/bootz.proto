@@ -104,9 +104,8 @@ message BootstrapStreamRequest {
     oneof type {
       // Nonce to be signed with IAK from the device for iDevID based systems.
       bytes nonce_signed = 1;
-      // For non-iDevID systems the encrypted_nonce will be decrypted via:
-      //   TPM 1.2: EK
-      //   TPM 2.0: PPK
+      // For non-iDevID systems the encrypted_nonce will be decrypted via the
+      // private key in TPM whose public key was provided via OVGS.
       string nonce = 2;
     }
   } 
@@ -125,10 +124,9 @@ message BootstrapStreamResponse {
     oneof type {
       // nonce will be returned for iDevID based system for signing by IAK.
       string nonce = 1;
-      // nonce_encrytped will be returned for non-iDevID based systems.
-      // The public key used to encrypt the data will be based on:
-      //   TPM 1.2: EK
-      //   TPM 2.0: PPK
+      // nonce_encrypted will be returned for non-iDevID based systems.
+      // The public key used to encrypt the data will be based on the 
+      // public key provided by OVGS. This maybe EK or PPK.
       bytes nonce_encrypted = 2; 
     } 
   } 
