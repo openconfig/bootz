@@ -175,11 +175,11 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		return nil, err
 	}
 	log.Infof("Received GetBootstrapData request(%+v) from %v", req, peerAddr)
-	fixedChasis := true
+	fixedChassis := true
 	ccSerial := ""
 	chassisDesc := req.GetChassisDescriptor()
 	if len(chassisDesc.GetControlCards()) >= 1 {
-		fixedChasis = false
+		fixedChassis = false
 		ccSerial = chassisDesc.GetControlCards()[0].GetSerialNumber()
 	}
 	log.Infof("Requesting for %v chassis %v", chassisDesc.GetManufacturer(), chassisDesc.GetSerialNumber())
@@ -216,7 +216,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		}
 		responses = append(responses, bootdata)
 	}
-	if fixedChasis {
+	if fixedChassis {
 		bootdata, err := s.em.GetBootstrapData(ctx, chassis, chassisDesc.GetSerialNumber())
 		if err != nil {
 			errs.Add(err)
