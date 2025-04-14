@@ -105,7 +105,7 @@ message BootstrapStreamRequest {
       // Nonce to be signed with IAK from the device for iDevID based systems.
       bytes nonce_signed = 1;
       // For non-iDevID systems the encrypted_nonce will be decrypted via the
-      // private key in TPM whose public key was provided via OVGS.
+      // private key of the TPM whose public key was provided via OVGS.
       string nonce = 2;
     }
   } 
