@@ -261,8 +261,6 @@ can install production configuration and certificates into the device.
 
 ### Boot Procedure (v2)
 
-#### **API flow**
-
 1. DHCP Discovery of Bootstrap Server
     1. Device sends DHCP messages, containing the mac-address of the active
         control card. The DHCP server has been configured with all possible
@@ -388,8 +386,6 @@ the ownership voucher and ownership certificate.
 
 ### Bootz Procedure (BootstrapStream)
 
-#### **API flow**
-
 1. DHCP Discovery of Bootstrap Server
     1. Device sends DHCP messages, containing the mac-address of the active
         control card. The DHCP server has been configured with all possible
@@ -430,7 +426,7 @@ the ownership voucher and ownership certificate.
     2. For TPM2.0 with iDevID
        1. The iDevID cert will be validated and the S/N will
            will be used to validate the device.
-       2. The Challenge will be returned 
+       2. The Challenge will be returned.
     3. For non-iDevID systems
        1. The GetBootstrapDataRequest.chassis_descriptor data will be used to
            validate the S/N.
@@ -442,7 +438,7 @@ the ownership voucher and ownership certificate.
         in fact the device expected.
     2. For all other systems the returned value will be the unencryted nonce.
     3. If the challenge response is valid the server will send the bootstrap
-        data
+        data.
     4. If the challenge failes an error will be returned and the device must
         start over at step 1.
 5. BootstrapStreamResponse.bootstrap_response
