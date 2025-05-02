@@ -259,7 +259,7 @@ can install production configuration and certificates into the device.
 
 ## Detailed Design
 
-### Boot Procedure
+### Boot Procedure (v2)
 
 #### **API flow**
 
@@ -385,6 +385,84 @@ the ownership voucher and ownership certificate.
     1. At this point, the device an initial configuration, user accounts, and
         we have validated the identity and integrity of the device and its
         software components. It is ready to serve traffic.
+
+### Bootz Procedure (BootstrapStream)
+
+#### **API flow**
+
+1. DHCP Discovery of Bootstrap Server
+    1. Device sends DHCP messages, containing the mac-address of the active
+        control card. The DHCP server has been configured with all possible
+        mac-addresses of the device, and responds with the static IP address of
+        the bootstrap server.
+    2. DHCP server also assigns an IP address and a gateway to the device.
+    3. The DHCP response option code should be OPTION_V4_SZTP_REDIRECT(143) or
+        OPTION_V6_SZTP_REDIRECT(136).
+    4. The format of the DHCP message (other than response option code) follows
+        [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
+        1. The URI will be in the format of bootz://&lt;host or ip>:&lt;port>
+2. Bootstrapping Service
+    1. Device initiates a gRPC connection to the bootz-server whose address was
+        obtained from the DHCP server.
+    2. The TLS connection may use any certificate it has available. This can
+        be a self-signed certificate as the cert is only used to encrypt the
+        connection.
+    4. The responses from the bootz-server are signed by ownership-certificate.
+        The device validates the ownership-voucher, which authenticates the
+        ownership-certificate. The device verifies the signature of the message
+        body before accepting the message.
+    5. If the signature could not be verified, the bootstrap process starts
+        from Step 1.
+2. BootstrapStreamRequest.bootstrap_request
+    1. The bootz BootstrapStream is initiated by the device sending a
+        GetBootstrappingData message to the bootz-server in the first message
+        of the stream.
+    3. The device describes itself, by listing out all available control cards,
+        and their states.
+    4. For a full device install, the state of all control cards is
+        NOT\_INITIALIZED.
+    5. For installing hot-swapped modules (RMA), the primary control card sets
+        its state to INITIALIZED, and that of the swapped module to
+        NOT\_INITIALIZED.
+3. BootstrapStreamResponse.challenge
+    1. The server will provide a challenge depending on the data fetched from
+        OVGS server based on the GetBootstrapDataRequest.identity.
+    2. For TPM2.0 with iDevID
+       1. The iDevID cert will be validated and the S/N will
+           will be used to validate the device.
+       2. The Challenge will be returned 
+    3. For non-iDevID systems
+       1. The GetBootstrapDataRequest.chassis_descriptor data will be used to
+           validate the S/N.
+       2. This will then be validated by lookup in OVGS and then used the keys
+           returned to encrypt the challenge.
+4. BootstrapStreamRequest.response
+    1. The response message will contain the nonce signed via IAK for
+        TPM 2.0 system with iDevID. This will validate that the device is
+        in fact the device expected.
+    2. For all other systems the returned value will be the unencryted nonce.
+    3. If the challenge response is valid the server will send the bootstrap
+        data
+    4. If the challenge failes an error will be returned and the device must
+        start over at step 1.
+5. BootstrapStreamResponse.bootstrap_response
+    1. The server responds with the intent for the device's baseline state.
+        This includes the OS version and boot password hash, and an initial
+        device configuration. This would include initial gNSI artifacts
+        such as:
+        certz,pathz,authz,credentialz artifacts to allow the device to progress
+        to enrollment and attestation or even bring the device fully into a
+        production state.
+    2. The proto allows us to return multiple sets of configurations, one per
+        control card. However, in practice, we will apply the same configuration
+        to both cards.
+    3. For RMA, the server will return only one state - for the RMA'd module.
+    4. The device/modules should download the OS image, verify its hash and
+        install the OS.
+        1. A reboot may be performed, if required.
+    5. The device will then apply the configuration
+        1. A reboot may be performed, if required.
+
 
 ### A Note on Modular Devices
 
