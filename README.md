@@ -396,7 +396,7 @@ the ownership voucher and ownership certificate.
         OPTION_V6_SZTP_REDIRECT(136).
     4. The format of the DHCP message (other than response option code) follows
         [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
-        1. The URI will be in the format of bootz://&lt;host or ip>:&lt;port>
+        1. The URI will be in the format of bootz://<host or ip>:<port>
 2. Bootstrapping Service
     1. Device initiates a gRPC connection to the bootz-server whose address was
         obtained from the DHCP server.
@@ -416,10 +416,10 @@ the ownership voucher and ownership certificate.
     3. The device describes itself, by listing out all available control cards,
         and their states.
     4. For a full device install, the state of all control cards is
-        NOT\_INITIALIZED.
+        `NOT_INITIALIZED`.
     5. For installing hot-swapped modules (RMA), the primary control card sets
-        its state to INITIALIZED, and that of the swapped module to
-        NOT\_INITIALIZED.
+        its state to `INITIALIZED`, and that of the swapped module to
+        `NOT_INITIALIZED`.
 3. BootstrapStreamResponse.challenge
     1. The server will provide a challenge depending on the data fetched from
         OVGS server based on the GetBootstrapDataRequest.identity.
