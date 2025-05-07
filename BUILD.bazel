@@ -18,13 +18,13 @@ load("@bazel_gazelle//:def.bzl", "gazelle")
 # gazelle:proto_import_prefix github.com/openconfig/bootz
 # gazelle:prefix github.com/openconfig/bootz
 # gazelle:resolve go github.com/openconfig/bootz/proto/bootz //proto:bootz
-# gazelle:resolve proto go github.com/openconfig/gnsi/authz/authz.proto @openconfig_gnsi//authz:authz_go_proto
+# gazelle:resolve proto go github.com/openconfig/gnsi/authz/authz.proto @openconfig_gnsi//authz:authz
 # gazelle:resolve proto github.com/openconfig/gnsi/authz/authz.proto @openconfig_gnsi//authz:authz_proto
-# gazelle:resolve proto go github.com/openconfig/gnsi/certz/certz.proto @openconfig_gnsi//certz:certz_go_proto
+# gazelle:resolve proto go github.com/openconfig/gnsi/certz/certz.proto @openconfig_gnsi//certz:certz
 # gazelle:resolve proto github.com/openconfig/gnsi/certz/certz.proto @openconfig_gnsi//certz:certz_proto
-# gazelle:resolve proto go github.com/openconfig/gnsi/credentialz/credentialz.proto @openconfig_gnsi//credentialz:credentialz_go_proto
+# gazelle:resolve proto go github.com/openconfig/gnsi/credentialz/credentialz.proto @openconfig_gnsi//credentialz:credentialz
 # gazelle:resolve proto github.com/openconfig/gnsi/credentialz/credentialz.proto @openconfig_gnsi//credentialz:credentialz_proto
-# gazelle:resolve proto go github.com/openconfig/gnsi/pathz/pathz.proto @openconfig_gnsi//pathz:pathz_go_proto
+# gazelle:resolve proto go github.com/openconfig/gnsi/pathz/pathz.proto @openconfig_gnsi//pathz:pathz
 # gazelle:resolve proto github.com/openconfig/gnsi/pathz/pathz.proto @openconfig_gnsi//pathz:pathz_proto
 gazelle(name = "gazelle")
 
