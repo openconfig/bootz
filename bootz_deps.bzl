@@ -85,9 +85,9 @@ def bootz_deps():
     if not native.existing_rule("openconfig_gnmi"):
         http_archive(
             name = "openconfig_gnmi",
-            sha256 = "5930b29b7f0b5aeec4502d5b2b1b82bb97c218b2752422cfe9a0462e39aa8370",
-            strip_prefix = "gnmi-66ccc5027ea9b69376978a6eeb079ba5907249b7",
-            url = "https://github.com/bstoll/gnmi/archive/66ccc5027ea9b69376978a6eeb079ba5907249b7.zip",
+            sha256 = "813f8a52dfa06dd1b9a2c775b26c42d36a05595dfa6fb0a85dbaead46b5c43a3",
+            strip_prefix = "gnmi-0.14.1",
+            url = "https://github.com/openconfig/gnmi/archive/refs/tags/v0.14.1.tar.gz",
         )
     if not native.existing_rule("openconfig_gnsi"):
         http_archive(
