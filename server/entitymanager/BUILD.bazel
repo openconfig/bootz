@@ -26,7 +26,7 @@ go_library(
         "//server/entitymanager/proto",
         "//server/service",
         "@com_github_golang_glog//:glog",
-        "@openconfig_gnsi//authz:authz_go_proto",
+        "@openconfig_gnsi//authz",
         "@org_golang_google_grpc//codes",
         "@org_golang_google_grpc//status",
         "@org_golang_google_protobuf//encoding/prototext",

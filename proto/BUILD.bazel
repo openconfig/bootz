@@ -44,10 +44,10 @@ go_proto_library(
     importpath = "github.com/openconfig/bootz/proto/bootz",
     proto = ":bootz_proto",
     deps = [
-        "@openconfig_gnsi//authz:authz_go_proto",
-        "@openconfig_gnsi//certz:certz_go_proto",
-        "@openconfig_gnsi//credentialz:credentialz_go_proto",
-        "@openconfig_gnsi//pathz:pathz_go_proto",
+        "@openconfig_gnsi//authz",
+        "@openconfig_gnsi//certz",
+        "@openconfig_gnsi//credentialz",
+        "@openconfig_gnsi//pathz",
     ],
 )
 
