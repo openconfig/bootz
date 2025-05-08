@@ -100,7 +100,7 @@ message GNSIConfig {
   // path to credz policy file
   string credentials_file = 7;
 
-  //  gnsi credentail config
+  // gnsi credential config
   bootz.Credentials credentials = 8;
 
 }

@@ -439,7 +439,7 @@ the ownership voucher and ownership certificate.
     2. For all other systems the returned value will be the unencryted nonce.
     3. If the challenge response is valid the server will send the bootstrap
         data.
-    4. If the challenge failes an error will be returned and the device must
+    4. If the challenge fails an error will be returned and the device must
         start over at step 1.
 5. BootstrapStreamResponse.bootstrap_response
     1. The server responds with the intent for the device's baseline state.
@@ -490,12 +490,12 @@ configuration.
     upgrade.
 7. The chassis will update gNMI with component in inserted but not enrolled
     state.
-8. Kick of workflow for initialiation of new control card a. Inventory system
+8. Kick of workflow for initialization of new control card a. Inventory system
     detects unenrolled control card kicks off workflow to the
     enrollment/attestion system. b. Active control card send bootz request to
     bootserver containing serial number of new card and will get back bootz
     artifacts.
-9. Planet service makes call to enrollement API and provides proper OV for the
+9. Planet service makes call to enrollment API and provides proper OV for the
     control card.
 10. Planet service makes call to attestation API to verify attestation values.
 11. Active control card now verifies the card and brings the card into
