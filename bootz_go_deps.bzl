@@ -529,16 +529,10 @@ def bootz_go_deps():
         version = "v0.14.1",
     )
     go_repository(
-        name = "com_github_openconfig_gnoi",
-        importpath = "github.com/openconfig/gnoi",
-        sum = "h1:jbYXRMNmmvA8ZFv2FBLrYoxA1MFSui4tEui+8LAWyVc=",
-        version = "v0.4.0",
-    )
-    go_repository(
         name = "com_github_openconfig_gnsi",
         importpath = "github.com/openconfig/gnsi",
-        sum = "h1:V6jxHwBGqu0xUvVNFIeY27kAZ/VOEuETehz6ugCgo+s=",
-        version = "v1.4.3",
+        sum = "h1:DokjN2rvzrP9/sMexBtigq6XkeKO8cPzzQmF8HQcVLQ=",
+        version = "v1.9.0",
     )
     go_repository(
         name = "com_github_openconfig_goyang",

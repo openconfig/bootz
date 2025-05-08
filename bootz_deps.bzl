@@ -92,7 +92,7 @@ def bootz_deps():
     if not native.existing_rule("openconfig_gnsi"):
         http_archive(
             name = "openconfig_gnsi",
-            sha256 = "39da8bf449b8dff5450e3f17af88c76570861a28a68a699b6ef8e388e54aa3f9",
-            strip_prefix = "gnsi-f539df1da13097b8df43aa470c04514857947e7e",
-            url = "https://github.com/openconfig/gnsi/archive/f539df1da13097b8df43aa470c04514857947e7e.zip",
+            sha256 = "df4c69885b14bb5c69a90dc4f9c0cfb78a6638a6404a79d70553d14fe350404a",
+            strip_prefix = "gnsi-1.9.0",
+            url = "https://github.com/openconfig/gnsi/archive/refs/tags/v1.9.0.tar.gz",
         )

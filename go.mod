@@ -9,7 +9,7 @@ require (
 	github.com/h-fam/errdiff v1.0.2
 	github.com/insomniacslk/dhcp v0.0.0-20230908212754-65c27093e38a
 	github.com/openconfig/gnmi v0.14.1
-	github.com/openconfig/gnsi v1.4.3
+	github.com/openconfig/gnsi v1.9.0
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352
 	google.golang.org/grpc v1.69.4
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1
@@ -28,7 +28,6 @@ require (
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
-	github.com/openconfig/gnoi v0.4.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.9 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5 // indirect
