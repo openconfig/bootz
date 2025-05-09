@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "main_lib",
+    srcs = ["dhcp.go"],
+    importpath = "github.com/openconfig/bootz/dhcp/main",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//dhcp",
+        "@com_github_golang_glog//:glog",
+    ],
+)
+
+go_binary(
+    name = "main",
+    embed = [":main_lib"],
+    visibility = ["//visibility:public"],
+)

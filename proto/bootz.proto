@@ -84,7 +84,7 @@ message GetBootstrapDataRequest {
   // card is the chassis itself.
   ControlCardState control_card_state = 2;
   // A nonce that the bootstrap server should use when signing the response.
-  // Not settting this field indicates that the device is configured not to
+  // Not setting this field indicates that the device is configured not to
   // check for ownership voucher.
   string nonce = 1001;
 
@@ -117,7 +117,7 @@ message BootstrapStreamRequest {
 } 
 
 // BootstrapStreamResponse will be returned based on the request from the
-// client. The challenge wil be based on the data provided in the initial
+// client. The challenge will be based on the data provided in the initial
 // GetBootstrapDataRequest based on the identity message.
 message BootstrapStreamResponse {
   message Challenge {
@@ -288,7 +288,7 @@ message SoftwareImage {
   // e.g.: "d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5"
   string os_image_hash = 4;
   // The identity of the hash algorithm used. These hash identiities are 
-  // defined in sZTP RFC 8572. There is currenty only one hash algorithm
+  // defined in sZTP RFC 8572. There is currently only one hash algorithm
   // defined in this spec:
   // `ietf-sztp-conveyed-info:sha-256` for the SHA 256 algorithm.
   string hash_algorithm = 5;
