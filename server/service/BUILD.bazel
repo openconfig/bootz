@@ -22,8 +22,8 @@ go_library(
     deps = [
         "//proto:bootz",
         "@com_github_golang_glog//:glog",
-        "@openconfig_gnsi//authz",
         "@openconfig_gnmi//errlist",
+        "@openconfig_gnsi//authz",
         "@org_golang_google_grpc//codes",
         "@org_golang_google_grpc//peer",
         "@org_golang_google_grpc//status",
