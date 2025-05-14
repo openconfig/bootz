@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "dhcp",
+    srcs = ["dhcp.go"],
+    importpath = "github.com/openconfig/bootz/dhcp",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//dhcp/plugins/bootz",
+        "//dhcp/plugins/slease",
+        "@com_github_coredhcp_coredhcp//config",
+        "@com_github_coredhcp_coredhcp//logger",
+        "@com_github_coredhcp_coredhcp//plugins",
+        "@com_github_coredhcp_coredhcp//plugins/dns",
+        "@com_github_coredhcp_coredhcp//plugins/leasetime",
+        "@com_github_coredhcp_coredhcp//plugins/serverid",
+        "@com_github_coredhcp_coredhcp//server",
+    ],
+)

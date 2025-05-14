@@ -3,8 +3,3 @@
 #
 .vscode/
 bazel-*
-
-# Ignore Go binary files but keep the .go files.
-**/*
-!**/*.go
-!**/

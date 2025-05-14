@@ -17,17 +17,18 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
   run:
     name: Spell Check with Typos
     runs-on: ubuntu-latest
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
 
-    - name: Check spelling of Codebase
-      uses: crate-ci/typos@master
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+      - name: Check spelling of Codebase
+        uses: crate-ci/typos@0f0ccba9ed1df83948f0c15026e4f5ccfce46109 # v1.32.0
+        with:
+          config: ./.github/typos.toml

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "entitymanager",
@@ -20,9 +20,16 @@ go_library(
     importpath = "github.com/openconfig/bootz/server/entitymanager",
     visibility = ["//visibility:public"],
     deps = [
+        "//common/owner_certificate",
+        "//common/signature",
         "//proto:bootz",
+        "//server/entitymanager/proto",
         "//server/service",
+        "@com_github_golang_glog//:glog",
+        "@openconfig_gnsi//authz",
         "@org_golang_google_grpc//codes",
         "@org_golang_google_grpc//status",
+        "@org_golang_google_protobuf//encoding/prototext",
+        "@org_golang_google_protobuf//proto",
     ],
 )

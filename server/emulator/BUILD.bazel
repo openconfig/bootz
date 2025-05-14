@@ -20,12 +20,10 @@ go_library(
     importpath = "github.com/openconfig/bootz/server/emulator",
     visibility = ["//visibility:private"],
     deps = [
+        "//server:server_lib",
         "//server/entitymanager",
-        "//server/service",
-        "//proto:bootz",
-        "//testdata",
+        "//testdata:testdata_lib",
         "@com_github_golang_glog//:glog",
-        "@org_golang_google_grpc//:go_default_library",
     ],
 )
 

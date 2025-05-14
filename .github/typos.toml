@@ -1,0 +1,5 @@
+# https://github.com/crate-ci/typos/blob/master/docs/reference.md
+
+default.extend-ignore-re = [
+  "v\\d+\\.\\d+\\.\\d+-\\d{14}-[a-f0-9]{12}", # Go module pseudo-versions (vX.Y.Z-YYYYMMDDHHMMSS-abcdefabcdef)
+]
