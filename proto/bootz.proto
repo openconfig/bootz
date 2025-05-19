@@ -318,8 +318,8 @@ message BootConfig {
   // configuration such as that applied by a gnmi.Set RPC call.
   //
   // These fields MUST only be used in the context of a BootstrapDataResponse
-  // and are not valid when a `BootConfig` is updated after device initialisation,
-  // for example through `gnoi.bootconfig.SetBootConfig`.
+  // and are not valid when a `BootConfig` is updated after device
+  // initialisation, for example through `gnoi.bootconfig.SetBootConfig`.
   //
   // Native format vendor configuration.
   bytes dynamic_vendor_config = 5;
