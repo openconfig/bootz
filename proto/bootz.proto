@@ -304,10 +304,24 @@ message BootConfig {
   // Proprietary key-value parameters that are required as part of boot
   // configuration (e.g., feature flags, or vendor-specific hardware knobs).
   google.protobuf.Struct metadata = 1;
+
+  // vendor_config and oc_config specify boot configuration that is considered
+  // immutable per the specification described in github.com/openconfig/bootz.
+  // 
   // Native format vendor configuration.
   bytes vendor_config = 2;
   // JSON rendered OC configuration.
   bytes oc_config = 3;
+
+  // dynamic_vendor_config and dynamic_oc_config specify boot configuration
+  // that is required at boot time, but can be overwritten by dynamic
+  // configuration such as that applied by a gnmi.Set RPC call.
+  //
+  // Native format vendor configuration.
+  bytes dynamic_vendor_config = 5;
+  // JSON rendered OC configuration.
+  bytes dynamic_oc_config = 6;
+
   // Bootloader key-value parameters that are required as part of boot
   // configuration.
   google.protobuf.Struct bootloader_config = 4;
