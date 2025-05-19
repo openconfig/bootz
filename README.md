@@ -169,6 +169,8 @@ We propose to follow the “multiple namespaces for configuration” approach
 described above, whereby separate configuration stores, per the diagram and
 process below.
 
+![#configuration-mgmt](docs/img/config-mgmt.png)
+
 Figure 1: Proposed configuration namespaces and clients.
 
 The proposed operational model for devices is shown in Figure 1 above.
