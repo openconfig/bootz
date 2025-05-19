@@ -169,7 +169,7 @@ We propose to follow the “multiple namespaces for configuration” approach
 described above, whereby separate configuration stores, per the diagram and
 process below.
 
-![#ygot](docs/img/config-mgmt.png)
+![#configuration-mgmt](docs/img/config-mgmt.png)
 
 Figure 1: Proposed configuration namespaces and clients.
 
