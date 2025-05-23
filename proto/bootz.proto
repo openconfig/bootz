@@ -305,6 +305,17 @@ message BootConfig {
   // configuration (e.g., feature flags, or vendor-specific hardware knobs).
   google.protobuf.Struct metadata = 1;
 
+  // Fields to store the configuration that is expected of a device at boot
+  // time. In all cases, the configuration used on the system is computed based
+  // on the union of vendor_config + oc_config + dynamic_vendor_config +
+  // dynamic_oc_config. The union should be performed according to the same
+  // rules as `union_replace` in gNMI.
+  //
+  // Note, the dynamic_* fields MUST only be considered in the context of a
+  // `BootstrapDataResponse` and are NOT valid when a `BootConfig` is updated
+  // after device bootstrapping/initialisation -- for example, through
+  // `gnoi.bootconfig.SetBootConfig`.
+  // 
   // vendor_config and oc_config specify boot configuration that is considered
   // immutable per the specification described in github.com/openconfig/bootz.
   // 
@@ -317,9 +328,8 @@ message BootConfig {
   // that is required at boot time, but can be overwritten by dynamic
   // configuration such as that applied by a gnmi.Set RPC call.
   //
-  // These fields MUST only be used in the context of a BootstrapDataResponse
-  // and are not valid when a `BootConfig` is updated after device
-  // initialisation, for example through `gnoi.bootconfig.SetBootConfig`.
+  // As per the above comment dynamic_vendor_config and dynamic_oc_config
+  // are ONLY valid in the context of `BootstrapDataResponse`.
   //
   // Native format vendor configuration.
   bytes dynamic_vendor_config = 5;
