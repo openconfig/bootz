@@ -314,7 +314,9 @@ message BootConfig {
   // Note, the dynamic_* fields MUST only be considered in the context of a
   // `BootstrapDataResponse` and are NOT valid when a `BootConfig` is updated
   // after device bootstrapping/initialisation -- for example, through
-  // `gnoi.bootconfig.SetBootConfig`.
+  // `gnoi.bootconfig.SetBootConfig`. In the case that these fields are
+  // populated in the `SetBootConfig` RPC, an error with the code
+  // `InvalidArgument` MUST be returned.
   // 
   // vendor_config and oc_config specify boot configuration that is considered
   // immutable per the specification described in github.com/openconfig/bootz.
