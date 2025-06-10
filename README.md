@@ -460,6 +460,20 @@ the ownership voucher and ownership certificate.
         1. A reboot may be performed, if required.
     5. The device will then apply the configuration
         1. A reboot may be performed, if required.
+6. BootstrapStreamRequest.report_status_request
+    1. The device sends a ReportStatusRequest message to the bootz-server.
+    2. If bootstrapping is successful, the device should report all control cards as `CONTROL_CARD_STATUS_INITIALIZED` and `BOOTSTRAP_STATUS_SUCCESS`.
+    3. If bootstrapping is not successful, the device *may* report status as `BOOTSTRAP_STATUS_FAILURE` and then should restart the process from step 1.
+    4. If the device terminated the previous stream (due to a reboot or to apply a configuration)
+        1. The server responds with a BootstrapStreamResponse.challenge to re-authenticate with the device (see step 7).
+    5. If the device *did not* terminate the previous stream
+        1. the server responds with a ReportStatusResponse (See step 9)
+7. BootstrapStreamResponse.challenge
+   1. The same challenge protocol as described in step 3 is performed.
+8. BootstrapStreamRequest.response
+   1. The same response protocol as described in step 4 is performed.
+9. BootstrapStreamResponse.report_status_response
+   1. The server responds with an empty message acknowledging the status report.
 
 
 ### A Note on Modular Devices

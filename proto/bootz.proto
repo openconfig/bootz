@@ -60,9 +60,12 @@ service Bootstrap {
       returns (stream BootstrapStreamResponse) {}
 }
 
-// Initial request from device to the bootz-server. Contains a detailed
-// description of the chassis and its constituent control cards.
-message GetBootstrapDataRequest {
+// Describes how the device will prove its identity to the Bootstrap server
+// during the BootstreapStream() RPC.
+// For systems which support iDevID that will be the preferred method.
+// If identity is set one of the types must be set or an error is
+// returned.
+message Identity {
   message Identity {
     oneof type {
       // idevid_cert will be validated via OVGS and the vendor CA bundle.
@@ -77,7 +80,11 @@ message GetBootstrapDataRequest {
       bool ppk_pub = 3;
     }
   } 
-  
+}
+
+// Initial request from device to the bootz-server. Contains a detailed
+// description of the chassis and its constituent control cards.
+message GetBootstrapDataRequest {
   ChassisDescriptor chassis_descriptor = 1;
   // Describes the current state of the active control card making the
   // bootstrap request. For fixed form factor devices, the active control
@@ -113,6 +120,7 @@ message BootstrapStreamRequest {
   oneof type {
     GetBootstrapDataRequest bootstrap_request = 1;
     Response response = 2;
+    ReportStatusRequest report_status_request = 3;
   }
 } 
 
@@ -134,6 +142,7 @@ message BootstrapStreamResponse {
   oneof type {
     Challenge challenge = 1;
     GetBootstrapDataResponse bootstrap_response = 2;
+    EmptyResponse report_status_response = 3;
   }
 }
 
@@ -359,6 +368,12 @@ message ReportStatusRequest {
   // For a fixed form factor chassis, this should contain a single 
   // state matching the chassis serial number.
   repeated ControlCardState states = 3;
+  // Identity will contain information used to validate the identity
+  // of the device.
+  // For systems which support iDevID that will be the preferred method.
+  // If identity is set one of the types must be set or an error is
+  // returned.
+  Identity identity = 4;
 }
 
 // Used in  RPC methods that are not expected to return a response.
