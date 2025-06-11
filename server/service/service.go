@@ -98,14 +98,6 @@ type Chassis struct {
 	BootConfig             *bpb.BootConfig
 	Authz                  *apb.UploadRequest
 	BootloaderPasswordHash string
-	// The name of the fabric this chassis belongs to.
-	FabricName string
-	// Indicates whether enrollment will be skipped later in the install process.
-	// Some parts of boot config may be different depending on the value of this flag.
-	// TODO(b/354602807): Clean up this flag when not required anymore.
-	SkipEnrollment bool
-	// The network domain this chassis belongs to.
-	Domain string
 }
 
 // ControlCard describes a control card that exists in a resolved Chassis.
