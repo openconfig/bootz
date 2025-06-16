@@ -34,6 +34,7 @@ service Bootstrap {
   // This RPC returns the data required to put the device in a known state
   // (i.e. OS, bootloader password, etc) and applies an initial device
   // configuration.
+  // The device must use its IDevID certificate in the gRPC TLS handshake.
   rpc GetBootstrapData(GetBootstrapDataRequest)
       returns (GetBootstrapDataResponse) {}
 
@@ -42,6 +43,7 @@ service Bootstrap {
   // a SUCCESS is reported, otherwise it will retry or put the device in an
   // out-of-service state. The device should validate the server's identity
   // against the server_trust_cert it obtained in GetBootstrappingDataResponse.
+  // The device must use its IDevID certificate in the gRPC TLS handshake.
   rpc ReportStatus(ReportStatusRequest) returns (EmptyResponse) {}
 
   // BootstrapStream provides the streaming implementation of the Bootz
