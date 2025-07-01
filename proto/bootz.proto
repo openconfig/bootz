@@ -34,7 +34,6 @@ service Bootstrap {
   // This RPC returns the data required to put the device in a known state
   // (i.e. OS, bootloader password, etc) and applies an initial device
   // configuration.
-  // The device must use its IDevID certificate in the gRPC TLS handshake.
   rpc GetBootstrapData(GetBootstrapDataRequest)
       returns (GetBootstrapDataResponse) {}
 
@@ -43,7 +42,6 @@ service Bootstrap {
   // a SUCCESS is reported, otherwise it will retry or put the device in an
   // out-of-service state. The device should validate the server's identity
   // against the server_trust_cert it obtained in GetBootstrappingDataResponse.
-  // The device must use its IDevID certificate in the gRPC TLS handshake.
   rpc ReportStatus(ReportStatusRequest) returns (EmptyResponse) {}
 
   // BootstrapStream provides the streaming implementation of the Bootz
@@ -77,8 +75,14 @@ message Identity {
     // The public keys will be used to encrypt the nonce and validate
     // that the keys match the data in OVGS. The decrypted
     // nonce will be returned to validate the device identity.
+
+    // TPM 1.2
     bool ek_pub = 2;
+
+    // TPM 2.0 PPK
     bool ppk_pub = 3;
+
+    bytes ppk_csr = 4;
   }
 }
 
@@ -111,16 +115,24 @@ message BootstrapStreamRequest {
     oneof type {
       // Nonce to be signed with IAK from the device for iDevID based systems.
       bytes nonce_signed = 1;
-      // For non-iDevID systems the encrypted_nonce will be decrypted via the
-      // private key of the TPM whose public key was provided via OVGS.
+      // For non-iDevID systems the encrypted_nonce will be decrypted via:
+      // TPM 2.0: PPK
+      // TPM 1.2: EK
       string nonce = 2;
     }
   } 
     
+  message EKIdentityRequest {
+    // TPM 1.2 EK Public Request
+    bytes ek_pub = 1;
+    bytes identity_request = 2;
+  }
+
   oneof type {
     GetBootstrapDataRequest bootstrap_request = 1;
     Response response = 2;
     ReportStatusRequest report_status_request = 3;
+    EKIdentityRequest ek_identity_request = 4;
   }
 } 
 
@@ -136,13 +148,22 @@ message BootstrapStreamResponse {
       // The public key used to encrypt the data will be based on the 
       // public key provided by OVGS. This maybe EK or PPK.
       bytes nonce_encrypted = 2; 
+      // TPM 1.2 EK CA public cert
+      bytes ca_pub = 3;
     } 
   } 
   
+  message EKIdentityResponse {
+    // TPM 1.2 challenge
+    bytes asym = 1;
+    bytes sym = 2;
+  }
+
   oneof type {
     Challenge challenge = 1;
     GetBootstrapDataResponse bootstrap_response = 2;
     EmptyResponse report_status_response = 3;
+    EKIdentityResponse ek_identity_response = 4;
   }
 }
 
