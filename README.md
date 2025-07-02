@@ -402,9 +402,7 @@ the ownership voucher and ownership certificate.
 2. Bootstrapping Service
     1. Device initiates a gRPC connection to the bootz-server whose address was
         obtained from the DHCP server.
-    2. The TLS connection may use any certificate it has available. This can
-        be a self-signed certificate as the cert is only used to encrypt the
-        connection.
+    2. The device **must not** present a client certificate in the TLS handshake.
     4. The responses from the bootz-server are signed by ownership-certificate.
         The device validates the ownership-voucher, which authenticates the
         ownership-certificate. The device verifies the signature of the message
