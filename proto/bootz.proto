@@ -34,6 +34,7 @@ service Bootstrap {
   // This RPC returns the data required to put the device in a known state
   // (i.e. OS, bootloader password, etc) and applies an initial device
   // configuration.
+  // The device must use its IDevID certificate in the gRPC TLS handshake.
   rpc GetBootstrapData(GetBootstrapDataRequest)
       returns (GetBootstrapDataResponse) {}
 
@@ -42,6 +43,7 @@ service Bootstrap {
   // a SUCCESS is reported, otherwise it will retry or put the device in an
   // out-of-service state. The device should validate the server's identity
   // against the server_trust_cert it obtained in GetBootstrappingDataResponse.
+  // The device must use its IDevID certificate in the gRPC TLS handshake.
   rpc ReportStatus(ReportStatusRequest) returns (EmptyResponse) {}
 
   // BootstrapStream provides the streaming implementation of the Bootz
@@ -115,7 +117,7 @@ message BootstrapStreamRequest {
     oneof type {
       // Nonce to be signed with IAK from the device for iDevID based systems.
       bytes nonce_signed = 1;
-      // For non-iDevID systems the encrypted_nonce will be decrypted via:
+      // For non-iDevID systems the encrypted nonce will be decrypted via:
       // TPM 2.0: PPK
       // TPM 1.2: EK
       string nonce = 2;
@@ -125,6 +127,10 @@ message BootstrapStreamRequest {
   message EKIdentityRequest {
     // TPM 1.2 EK Public Request
     bytes ek_pub = 1;
+    // 'prgbTCPAIdentityReq' argument of Tspi_TPM_CollateIdentityRequest
+    // defined in TCG Software Stack (TSS) Specification Version 1.2 Level 1
+    // section 4.3.4.6.3 whose definition is in TCPA version 1.1b Section
+    // 4.30.2 - TCPA_IDENTITY_REQ
     bytes identity_request = 2;
   }
 
@@ -155,8 +161,8 @@ message BootstrapStreamResponse {
   
   message EKIdentityResponse {
     // TPM 1.2 challenge
-    bytes asym = 1;
-    bytes sym = 2;
+    bytes asymetric = 1;
+    bytes symetric = 2;
   }
 
   oneof type {
