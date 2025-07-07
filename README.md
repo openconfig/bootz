@@ -439,9 +439,9 @@ the ownership voucher and ownership certificate.
        3. For devices which have an TPM 1.2, the server sends its certificate
            authority's public key so that the device can send a CSR-like
            request securely.
-4.  EkIdentityRequest - Applicable only for devices having TPM 1.2
+4. EkIdentityRequest - Applicable only for devices having TPM 1.2
     1. The device sends the EK public key and an Identity request to the server.
-5.  EkIdentityResponse - Applicable only for devices having TPM 1.2
+5. EkIdentityResponse - Applicable only for devices having TPM 1.2
     1. The server extracts the modulus, exponent from the EK public key
         and sends an challenge which can be responded only by the intended
         TPM.
@@ -480,11 +480,11 @@ the ownership voucher and ownership certificate.
     5. If the device *did not* terminate the previous stream
         1. the server responds with a ReportStatusResponse (See step 9)
 9. BootstrapStreamResponse.challenge
-   1. The same challenge protocol as described in step 3 is performed.
+    1. The same challenge protocol as described in step 3 is performed.
 10. BootstrapStreamRequest.response
-   1. The same response protocol as described in step 4 is performed.
+     1. The same response protocol as described in step 4 is performed.
 11. BootstrapStreamResponse.report_status_response
-   1. The server responds with an empty message acknowledging the status report.
+     1. The server responds with an empty message acknowledging the status report.
 
 
 ### A Note on Modular Devices
