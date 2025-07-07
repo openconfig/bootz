@@ -161,8 +161,8 @@ message BootstrapStreamResponse {
   
   message EKIdentityResponse {
     // TPM 1.2 challenge
-    bytes asymetric = 1;
-    bytes symetric = 2;
+    bytes asymmetric = 1;
+    bytes symmetric = 2;
   }
 
   oneof type {
