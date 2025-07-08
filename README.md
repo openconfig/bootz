@@ -420,6 +420,8 @@ the ownership voucher and ownership certificate.
     5. For installing hot-swapped modules (RMA), the primary control card sets
         its state to `INITIALIZED`, and that of the swapped module to
         `NOT_INITIALIZED`.
+    6. The device sets Identity.ek_pub=true in the bootstrap_request if it has
+        a TPM 1.2.
 3. BootstrapStreamResponse.challenge
     1. The server will provide a challenge depending on the data fetched from
         OVGS server based on the GetBootstrapDataRequest.identity.
@@ -432,7 +434,16 @@ the ownership voucher and ownership certificate.
            validate the S/N.
        2. This will then be validated by lookup in OVGS and then used the keys
            returned to encrypt the challenge.
-4. BootstrapStreamRequest.response
+       3. For devices which have an TPM 1.2, the server sends its certificate
+           authority's public key so that the device can send a CSR-like
+           request securely.
+4. EkIdentityRequest - Applicable only for devices having TPM 1.2
+    1. The device sends the EK public key and an Identity request to the server.
+5. EkIdentityResponse - Applicable only for devices having TPM 1.2
+    1. The server extracts the modulus, exponent from the EK public key
+        and sends an challenge which can be responded only by the intended
+        TPM.
+6. BootstrapStreamRequest.response
     1. The response message will contain the nonce signed via IAK for
         TPM 2.0 system with iDevID. This will validate that the device is
         in fact the device expected.
@@ -441,7 +452,7 @@ the ownership voucher and ownership certificate.
         data.
     4. If the challenge fails an error will be returned and the device must
         start over at step 1.
-5. BootstrapStreamResponse.bootstrap_response
+7. BootstrapStreamResponse.bootstrap_response
     1. The server responds with the intent for the device's baseline state.
         This includes the OS version and boot password hash, and an initial
         device configuration. This would include initial gNSI artifacts
@@ -458,7 +469,7 @@ the ownership voucher and ownership certificate.
         1. A reboot may be performed, if required.
     5. The device will then apply the configuration
         1. A reboot may be performed, if required.
-6. BootstrapStreamRequest.report_status_request
+8. BootstrapStreamRequest.report_status_request
     1. The device sends a ReportStatusRequest message to the bootz-server.
     2. If bootstrapping is successful, the device should report all control cards as `CONTROL_CARD_STATUS_INITIALIZED` and `BOOTSTRAP_STATUS_SUCCESS`.
     3. If bootstrapping is not successful, the device *may* report status as `BOOTSTRAP_STATUS_FAILURE` and then should restart the process from step 1.
@@ -466,12 +477,12 @@ the ownership voucher and ownership certificate.
         1. The server responds with a BootstrapStreamResponse.challenge to re-authenticate with the device (see step 7).
     5. If the device *did not* terminate the previous stream
         1. the server responds with a ReportStatusResponse (See step 9)
-7. BootstrapStreamResponse.challenge
-   1. The same challenge protocol as described in step 3 is performed.
-8. BootstrapStreamRequest.response
-   1. The same response protocol as described in step 4 is performed.
-9. BootstrapStreamResponse.report_status_response
-   1. The server responds with an empty message acknowledging the status report.
+9. BootstrapStreamResponse.challenge
+    1. The same challenge protocol as described in step 3 is performed.
+10. BootstrapStreamRequest.response
+     1. The same response protocol as described in step 4 is performed.
+11. BootstrapStreamResponse.report_status_response
+     1. The server responds with an empty message acknowledging the status report.
 
 
 ### A Note on Modular Devices
