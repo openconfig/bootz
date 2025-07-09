@@ -20,6 +20,7 @@ import (
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
+	"io"
 	"net"
 
 	"github.com/openconfig/gnmi/errlist"
@@ -266,6 +267,33 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 	}
 	log.Infof("Received ReportStatus request(%+v) from %v", req, peerAddr)
 	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
+}
+
+func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF { // Client is done.  Success.
+			return nil // The RPC library will call stream.CloseSend for us.
+		}
+		if err != nil {
+			return err // The RPC library will call stream.Abort(err) for us.
+		}
+		switch req := in.Type.(type) {
+		case *bpb.BootstrapStreamRequest_BootstrapRequest:
+			// TODO: process request
+		case *bpb.BootstrapStreamRequest_Response_:
+			// TODO: process response
+		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
+			// TODO: process request
+		default:
+			return status.Errorf(codes.InvalidArgument, "bootstrapstreamrequest is of unexpected type %T", req)
+		}
+		resp := &bpb.BootstrapStreamResponse{}
+		err = stream.Send(resp)
+		if err != nil {
+			return err
+		}
+	}
 }
 
 // SetDeviceConfiguration is a public API for allowing the device configuration to be set for each device the
