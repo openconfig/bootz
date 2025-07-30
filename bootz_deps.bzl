@@ -51,9 +51,9 @@ def bootz_deps():
     if not native.existing_rule("com_google_protobuf"):
         http_archive(
             name = "com_google_protobuf",
-            url = "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v29.3.zip",
-            strip_prefix = "protobuf-29.3",
-            sha256 = "85803e01f347141e16a2f770213a496f808fff9f0138c7c0e0c9dfa708b0da92",
+            url = "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v31.1.zip",
+            strip_prefix = "protobuf-31.1",
+            sha256 = "fc6289aa4450bdb70626aceaaebebdd7d3d4725c288a9cbb138a26defe5d9987",
             repo_mapping = {
                 "@proto_bazel_features": "@bazel_features",
             },
