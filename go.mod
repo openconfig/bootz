@@ -7,7 +7,7 @@ require (
 	github.com/golang/glog v1.2.4
 	github.com/google/go-cmp v0.6.0
 	github.com/h-fam/errdiff v1.0.2
-	github.com/insomniacslk/dhcp v0.0.0-20241203100832-a481575ed0ef
+	github.com/insomniacslk/dhcp v0.0.0-20250417080101-5f8cf70e8c5f
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnsi v1.9.0
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352

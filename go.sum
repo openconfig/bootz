@@ -153,6 +153,8 @@ github.com/insomniacslk/dhcp v0.0.0-20230908212754-65c27093e38a h1:S33o3djA1nPRd
 github.com/insomniacslk/dhcp v0.0.0-20230908212754-65c27093e38a/go.mod h1:zmdm3sTSDP3vOOX3CEWRkkRHtKr1DxBx+J1OQFoDQQs=
 github.com/insomniacslk/dhcp v0.0.0-20241203100832-a481575ed0ef h1:NzQKDfd5ZOPnuZYf9MnRee8x2qecsVqzsnaLjEZiBko=
 github.com/insomniacslk/dhcp v0.0.0-20241203100832-a481575ed0ef/go.mod h1:KclMyHxX06VrVr0DJmeFSUb1ankt7xTfoOA35pCkoic=
+github.com/insomniacslk/dhcp v0.0.0-20250417080101-5f8cf70e8c5f h1:dd33oobuIv9PcBVqvbEiCXEbNTomOHyj3WFuC5YiPRU=
+github.com/insomniacslk/dhcp v0.0.0-20250417080101-5f8cf70e8c5f/go.mod h1:zhFlBeJssZ1YBCMZ5Lzu1pX4vhftDvU10WUVb1uXKtM=
 github.com/josharian/native v1.0.1-0.20221213033349-c1e37c09b531/go.mod h1:7X/raswPFr05uY3HiLlYeyQntB6OO7E/d2Cu7qoaN2w=
 github.com/josharian/native v1.1.0 h1:uuaP0hAbW7Y4l0ZRQ6C9zfb7Mg1mbFKry/xzDAfmtLA=
 github.com/josharian/native v1.1.0/go.mod h1:7X/raswPFr05uY3HiLlYeyQntB6OO7E/d2Cu7qoaN2w=
