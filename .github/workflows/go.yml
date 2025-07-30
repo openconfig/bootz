@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Set up Go ${{ matrix.go }}
-        uses: actions/setup-go@v4.1.0
+        uses: actions/setup-go@v4.2.1
         with:
           go-version: ${{ matrix.go }}
       - name: Build
@@ -39,7 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Set up Go
-        uses: actions/setup-go@v4.1.0
+        uses: actions/setup-go@v4.2.1
         with:
           go-version: '1.x'
       - name: Run Coverage
@@ -62,7 +62,7 @@ jobs:
         run: |
           go get -u honnef.co/go/tools/cmd/staticcheck
       - name: Check out code
-        uses: actions/setup-go@v4.1.0
+        uses: actions/setup-go@v4.2.1
       - name: get dependencies
         run: |
           go get -v -t -d ./...
