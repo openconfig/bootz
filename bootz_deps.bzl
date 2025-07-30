@@ -37,9 +37,9 @@ def bootz_deps():
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
-            url = "https://github.com/grpc/grpc/archive/refs/tags/v1.69.0.tar.gz",
-            strip_prefix = "grpc-1.69.0",
-            sha256 = "cd256d91781911d46a57506978b3979bfee45d5086a1b6668a3ae19c5e77f8dc",
+            url = "https://github.com/grpc/grpc/archive/refs/tags/v1.74.0.tar.gz",
+            strip_prefix = "grpc-1.74.0",
+            sha256 = "dd6a2fa311ba8441bbefd2764c55b99136ff10f7ea42954be96006a2723d33fc",
         )
     if not native.existing_rule("com_google_googleapis"):
         http_archive(
