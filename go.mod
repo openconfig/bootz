@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	github.com/coredhcp/coredhcp v0.0.0-20250729125302-4593bd5854a0
-	github.com/golang/glog v1.2.4
+	github.com/golang/glog v1.2.5
 	github.com/google/go-cmp v0.6.0
 	github.com/h-fam/errdiff v1.0.2
 	github.com/insomniacslk/dhcp v0.0.0-20241203100832-a481575ed0ef
