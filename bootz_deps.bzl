@@ -44,9 +44,9 @@ def bootz_deps():
     if not native.existing_rule("com_google_googleapis"):
         http_archive(
             name = "com_google_googleapis",
-            sha256 = "99802ed8bade01395ccecb704a8d6175a43b9382571165663802ad857b290637",
-            strip_prefix = "googleapis-472278b29c8cf9adde8945d88383e8e4d8137feb",
-            urls = ["https://github.com/googleapis/googleapis/archive/472278b29c8cf9adde8945d88383e8e4d8137feb.tar.gz"],
+            sha256 = "1066f4804e469ed61404cbb9b8d15ecfcbba8b978287739ed42d8f4dd6cb92a6",
+            strip_prefix = "googleapis-f6801ce4e1df0541abb8d1e996cb36363c41fb8d",
+            urls = ["https://github.com/googleapis/googleapis/archive/f6801ce4e1df0541abb8d1e996cb36363c41fb8d.tar.gz"],
         )
     if not native.existing_rule("com_google_protobuf"):
         http_archive(
