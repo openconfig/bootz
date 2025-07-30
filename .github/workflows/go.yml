@@ -27,9 +27,9 @@ jobs:
       matrix:
         go: ["1.22", "1.x"]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up Go ${{ matrix.go }}
-        uses: actions/setup-go@v4.2.1
+        uses: actions/setup-go@v5.5.0
         with:
           go-version: ${{ matrix.go }}
       - name: Build
@@ -37,9 +37,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up Go
-        uses: actions/setup-go@v4.2.1
+        uses: actions/setup-go@v5.5.0
         with:
           go-version: '1.x'
       - name: Run Coverage
@@ -52,9 +52,9 @@ jobs:
     name: Static Analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: '1.x'
         id: go
@@ -62,7 +62,7 @@ jobs:
         run: |
           go get -u honnef.co/go/tools/cmd/staticcheck
       - name: Check out code
-        uses: actions/setup-go@v4.2.1
+        uses: actions/setup-go@v5.5.0
       - name: get dependencies
         run: |
           go get -v -t -d ./...
