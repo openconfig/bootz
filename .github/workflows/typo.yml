@@ -29,6 +29,6 @@ jobs:
         with:
           fetch-depth: 0
       - name: Check spelling of Codebase
-        uses: crate-ci/typos@392b78fe18a52790c53f42456e46124f77346842 # v1.34.0
+        uses: crate-ci/typos@c800866e89196d05f89da828ff4475a412014efd # v1.35.0
         with:
           config: ./.github/typos.toml
