@@ -3,3 +3,6 @@
 default.extend-ignore-re = [
   "v\\d+\\.\\d+\\.\\d+-\\d{14}-[a-f0-9]{12}", # Go module pseudo-versions (vX.Y.Z-YYYYMMDDHHMMSS-abcdefabcdef)
 ]
+
+[files]
+extend-exclude = ["testdata/cisco.cfg"]
