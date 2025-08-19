@@ -50,6 +50,7 @@ jobs:
       - name: Run Coverage
         run: go test -v -coverprofile=profile.cov ./...
       - name: Send coverage
+        continue-on-error: true
         uses: shogo82148/actions-goveralls@v1
         with:
           path-to-profile: profile.cov
