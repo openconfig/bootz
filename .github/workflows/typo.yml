@@ -18,11 +18,14 @@ on:
     branches: [main]
   pull_request:
 
+permissions: {}
+
 jobs:
   run:
     name: Spell Check with Typos
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
