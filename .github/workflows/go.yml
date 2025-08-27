@@ -31,6 +31,8 @@ jobs:
         go: ["1.22", "1.x"]
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - name: Set up Go ${{ matrix.go }}
         uses: actions/setup-go@v5.5.0
         with:
@@ -43,6 +45,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - name: Set up Go
         uses: actions/setup-go@v5.5.0
         with:
@@ -61,6 +65,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - name: Install Go
         uses: actions/setup-go@v5
         with:
