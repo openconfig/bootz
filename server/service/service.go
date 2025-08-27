@@ -16,8 +16,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"io"
@@ -25,6 +29,7 @@ import (
 
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -32,6 +37,7 @@ import (
 	log "github.com/golang/glog"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	apb "github.com/openconfig/gnsi/authz"
+	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 )
 
 // OVList is a mapping of control card serial number to ownership voucher.
@@ -269,29 +275,204 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
 }
 
+// Function to check if a valid client cert was presented
+func hasClientCert(ctx context.Context) bool {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return false
+	}
+	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok {
+		return false
+	}
+	return len(tlsInfo.State.PeerCertificates) > 0
+}
+
+// verifyNonceSignature verifies the signature over the nonce.
+func verifyNonceSignature(pubKey crypto.PublicKey, nonce, signature []byte) error {
+	rsaPubKey, ok := pubKey.(*rsa.PublicKey)
+	if !ok {
+		return log.Errorf("public key is not RSA")
+	}
+	hash := sha256.Sum256(nonce)
+	err := rsa.VerifyPSS(rsaPubKey, crypto.SHA256, hash[:], signature, &rsa.PSSOptions{
+		SaltLength: rsa.PSSSaltLengthAuto,
+		Hash:       crypto.SHA256,
+	})
+	if err != nil {
+		return log.Errorf("signature verification failed: %w", err)
+	}
+	return nil
+}
+
+const (
+	stateInitial = iota
+	stateNonceSent
+	stateAttested
+)
+
 func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
+	ctx := stream.Context()
+	clientHasCert := hasClientCert(ctx)
+
+	var deviceID string
+	var chassis *epb.Chassis
+	var activeControlCard string
+	currentState := stateInitial
+
+	if clientHasCert {
+		p, _ := peer.FromContext(ctx)
+		tlsInfo := p.AuthInfo.(credentials.TLSInfo)
+		clientCert := tlsInfo.State.PeerCertificates[0]
+		deviceID = clientCert.Subject.SerialNumber
+		if deviceID == "" {
+			deviceID = clientCert.Subject.CommonName
+		}
+		if deviceID == "" {
+			return status.Errorf(codes.Unauthenticated, "client certificate missing unique identifier")
+		}
+		log.Infof("Stream opened by device with IDevID: %s", deviceID)
+	} else {
+		log.Info("Stream opened by device without client certificate")
+	}
+
 	for {
 		in, err := stream.Recv()
-		if err == io.EOF { // Client is done.  Success.
-			return nil // The RPC library will call stream.CloseSend for us.
+		if err == io.EOF { // Client is done.
+			log.Infof("Stream closed by client: %s", deviceID)
+			s.nonces.Delete(deviceID) // Clean up session
+			return nil
 		}
 		if err != nil {
-			return err // The RPC library will call stream.Abort(err) for us.
+			log.Errorf("Stream error for device %s: %v", deviceID, err)
+			s.nonces.Delete(deviceID) // Clean up session
+			return err
 		}
+
 		switch req := in.Type.(type) {
 		case *bpb.BootstrapStreamRequest_BootstrapRequest:
-			// TODO: process request
+			if currentState != stateInitial {
+				return status.Errorf(codes.FailedPrecondition, "received BootstrapRequest in unexpected state: %v", currentState)
+			}
+			bootstrapReq := req.BootstrapRequest
+			identity := bootstrapReq.GetIdentity()
+
+			if clientHasCert {
+				// --- TPM 2.0 with IDevID Flow ---
+				log.Infof("Processing BootstrapRequest from IDevID device: %s", deviceID)
+
+				lu, err := buildEntityLookup(ctx, bootstrapReq)
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to build entity lookup: %v", err)
+				}
+				activeControlCard = bootstrapReq.GetControlCardState().GetSerialNumber()
+				chassis, err = s.em.ResolveChassis(ctx, lu, activeControlCard)
+				if err != nil {
+					return status.Errorf(codes.NotFound, "failed to resolve chassis %v: %v", deviceID, err)
+				}
+				log.Infof("Resolved device: %s, Chassis: %s, Active CC: %s", deviceID, chassis.Hostname, activeControlCard)
+
+				nonce := make([]byte, 32)
+				if _, err := rand.Read(nonce); err != nil {
+					return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
+				}
+				s.nonces.Store(deviceID, nonce)
+
+				challengeResp := &bpb.BootstrapStreamResponse{
+					Type: &bpb.BootstrapStreamResponse_Challenge{
+						Challenge: &bpb.ChallengeResponse{
+							Type: &bpb.ChallengeResponse_Nonce{
+								Nonce: nonce,
+							},
+						},
+					},
+				}
+				if err := stream.Send(challengeResp); err != nil {
+					s.nonces.Delete(deviceID)
+					return status.Errorf(codes.Internal, "failed to send nonce challenge: %v", err)
+				}
+				log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
+				currentState = stateNonceSent
+			} else {
+				// --- Non-IDevID Flows ---
+				if identity != nil && identity.GetEkPub() && identity.GetPpkPub() {
+					return status.Errorf(codes.Unimplemented, "TPM 2.0 without IDevID not fully implemented")
+				} else if identity != nil && identity.GetEkPub() {
+					return status.Errorf(codes.Unimplemented, "TPM 1.2 without IDevID not fully implemented")
+				} else {
+					return status.Errorf(codes.Unauthenticated, "client must provide IDevID or specify a non-IDevID flow")
+				}
+			}
+
 		case *bpb.BootstrapStreamRequest_Response_:
-			// TODO: process response
+			if !clientHasCert {
+				return status.Errorf(codes.FailedPrecondition, "received Response from non-IDevID client")
+			}
+			if currentState != stateNonceSent {
+				return status.Errorf(codes.FailedPrecondition, "received Response in unexpected state: %v", currentState)
+			}
+			log.Infof("Received Response from IDevID device: %s", deviceID)
+
+			signedNonce := req.Response.GetNonceSigned()
+			if len(signedNonce) == 0 {
+				return status.Errorf(codes.InvalidArgument, "nonce_signed is empty")
+			}
+
+			storedNonce, ok := s.nonces.Load(deviceID)
+			if !ok {
+				return status.Errorf(codes.FailedPrecondition, "no nonce found for device %s", deviceID)
+			}
+			s.nonces.Delete(deviceID)
+
+			p, _ := peer.FromContext(ctx)
+			clientCert := p.AuthInfo.(credentials.TLSInfo).State.PeerCertificates[0]
+
+			if err := verifyNonceSignature(clientCert.PublicKey, storedNonce.([]byte), signedNonce); err != nil {
+				return status.Errorf(codes.Unauthenticated, "nonce signature verification failed for %s: %v", deviceID, err)
+			}
+			log.Infof("Nonce signature verification successful for %s", deviceID)
+			currentState = stateAttested
+
+			bsData, err := s.em.GetBootstrapData(ctx, chassis, activeControlCard)
+			if err != nil {
+				return status.Errorf(codes.Internal, "failed to get bootstrap data for %s: %v", deviceID, err)
+			}
+			if err := s.em.Sign(ctx, bsData, chassis, activeControlCard); err != nil {
+				return status.Errorf(codes.Internal, "failed to sign bootstrap data for %s: %v", deviceID, err)
+			}
+
+			bootstrapDataResp := &bpb.BootstrapStreamResponse{
+				Type: &bpb.BootstrapStreamResponse_BootstrapResponse{
+					BootstrapResponse: bsData,
+				},
+			}
+			if err := stream.Send(bootstrapDataResp); err != nil {
+				return status.Errorf(codes.Internal, "failed to send bootstrap data response to %s: %v", deviceID, err)
+			}
+			log.Infof("Sent signed GetBootstrapDataResponse to %s", deviceID)
+
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
-			// TODO: process request
+			if !clientHasCert {
+				return status.Errorf(codes.FailedPrecondition, "received status report from non-IDevID client")
+			}
+			if currentState != stateAttested {
+				return status.Errorf(codes.FailedPrecondition, "received ReportStatusRequest in unexpected state: %v", currentState)
+			}
+			log.Infof("Received ReportStatusRequest: %v from %s", req.ReportStatusRequest.GetStatus(), deviceID)
+			if err := s.em.SetStatus(ctx, req.ReportStatusRequest); err != nil {
+				log.Errorf("Failed to set status for %s: %v", deviceID, err)
+			}
+			err := stream.Send(&bpb.BootstrapStreamResponse{
+				Type: &bpb.BootstrapStreamResponse_ReportStatusResponse{
+					ReportStatusResponse: &bpb.EmptyResponse{},
+				},
+			})
+			if err != nil {
+				return err
+			}
+
 		default:
-			return status.Errorf(codes.InvalidArgument, "bootstrapstreamrequest is of unexpected type %T", req)
-		}
-		resp := &bpb.BootstrapStreamResponse{}
-		err = stream.Send(resp)
-		if err != nil {
-			return err
+			return status.Errorf(codes.InvalidArgument, "BootstrapStreamRequest is of unexpected type %T", req)
 		}
 	}
 }
