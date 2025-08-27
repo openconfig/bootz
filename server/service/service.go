@@ -16,15 +16,22 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io"
 	"net"
+	"sync" // Needed for session nonce storage
 
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -33,6 +40,7 @@ import (
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	apb "github.com/openconfig/gnsi/authz"
 )
+
 
 // OVList is a mapping of control card serial number to ownership voucher.
 type OVList map[string][]byte
@@ -157,6 +165,7 @@ type EntityManager interface {
 type Service struct {
 	bpb.UnimplementedBootstrapServer
 	em EntityManager
+	nonces sync.Map // Simple map for nonce storage
 }
 
 func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*bpb.GetBootstrapDataResponse, error) {
@@ -269,7 +278,34 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
 }
 
+// Function to check if a valid client cert was presented
+func hasClientCert(ctx context.Context) bool {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return false
+	}
+	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok {
+		return false
+	}
+	return len(tlsInfo.State.PeerCertificates) > 0
+}
+
+const (
+	stateInitial = iota
+	stateNonceSent
+	stateAttested
+)
+
 func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
+	ctx := stream.Context()
+	clientHasCert := hasClientCert(ctx)
+
+	var deviceID string
+	var chassis *entitymanager.Chassis
+	var activeControlCard string
+	currentState := stateInitial
+	
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF { // Client is done.  Success.
@@ -280,7 +316,56 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 		}
 		switch req := in.Type.(type) {
 		case *bpb.BootstrapStreamRequest_BootstrapRequest:
-			// TODO: process request
+			if currentState != stateInitial {
+				return status.Errorf(codes.FailedPrecondition, "received BootstrapRequest in unexpected state: %v", currentState)
+			}
+			bootstrapReq := req.BootstrapRequest
+			identity := bootstrapReq.GetIdentity()
+
+			if clientHasCert {
+				// --- TPM 2.0 with IDevID Flow ---
+				log.Infof("Processing BootstrapRequest from IDevID device: %s", deviceID)
+
+				lu, err := buildEntityLookup(ctx, bootstrapReq)
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to build entity lookup: %v", err)
+				}
+				activeControlCard = bootstrapReq.GetControlCardState().GetSerialNumber()
+				chassis, err = s.em.ResolveChassis(ctx, lu, activeControlCard)
+				if err != nil {
+					return status.Errorf(codes.NotFound, "failed to resolve chassis %v: %v", deviceID, err)
+				}
+				log.Infof("Resolved device: %s, Chassis: %s, Active CC: %s", deviceID, chassis.Hostname, activeControlCard)
+
+				nonce := make([]byte, 32)
+				if _, err := rand.Read(nonce); err != nil {
+					return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
+				}
+				s.nonces.Store(deviceID, nonce)
+
+				challengeResp := &bpb.BootstrapStreamResponse{
+					Type: &bpb.BootstrapStreamResponse_Challenge{
+						Challenge: &bpb.ChallengeResponse{
+							Type: &bpb.ChallengeResponse_Nonce{
+								Nonce: nonce,
+							},
+						},
+					},
+				}
+				if err := stream.Send(challengeResp); err != nil {
+					return status.Errorf(codes.Internal, "failed to send nonce challenge: %v", err)
+				}
+				log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
+				currentState = stateNonceSent
+			} else {
+				// --- Non-IDevID Flows ---
+				if identity != nil && identity.GetEkPub() {
+					// This could be TPM 1.2 or TPM 2.0 without IDevID, needs more fields to differentiate
+					return status.Errorf(codes.Unimplemented, "Non-IDevID flows not fully implemented")
+				} else {
+					return status.Errorf(codes.Unauthenticated, "client must provide IDevID or specify a non-IDevID flow in Identity")
+				}
+			}
 		case *bpb.BootstrapStreamRequest_Response_:
 			// TODO: process response
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
