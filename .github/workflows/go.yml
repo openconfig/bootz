@@ -30,9 +30,11 @@ jobs:
       matrix:
         go: ["1.22", "1.x"]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          persist-credentials: false
       - name: Set up Go ${{ matrix.go }}
-        uses: actions/setup-go@v5.5.0
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
         with:
           go-version: ${{ matrix.go }}
       - name: Build
@@ -42,16 +44,18 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          persist-credentials: false
       - name: Set up Go
-        uses: actions/setup-go@v5.5.0
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
         with:
           go-version: "1.x"
       - name: Run Coverage
         run: go test -v -coverprofile=profile.cov ./...
       - name: Send coverage
         continue-on-error: true
-        uses: shogo82148/actions-goveralls@v1
+        uses: shogo82148/actions-goveralls@25f5320d970fb565100cf1993ada29be1bb196a1 # v1
         with:
           path-to-profile: profile.cov
   static_analysis:
@@ -60,9 +64,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          persist-credentials: false
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
         with:
           go-version: "1.x"
         id: go
@@ -70,7 +76,7 @@ jobs:
         run: |
           go get -u honnef.co/go/tools/cmd/staticcheck
       - name: Check out code
-        uses: actions/setup-go@v5.5.0
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
       - name: get dependencies
         run: |
           go get -v -t -d ./...

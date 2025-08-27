@@ -31,7 +31,8 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Check spelling of Codebase
-        uses: crate-ci/typos@c800866e89196d05f89da828ff4475a412014efd # v1.35.0
+        uses: crate-ci/typos@a4c3e43aea0a9e9b9e6578d2731ebd9a27e8f6cd # v1.35.5
         with:
           config: ./.github/typos.toml
