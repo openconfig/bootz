@@ -20,10 +20,14 @@ import (
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/rand"
+    "crypto/rsa"
+    "crypto/sha256"
 	"io"
 	"net"
 
 	"github.com/openconfig/gnmi/errlist"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -269,6 +273,36 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
 }
 
+// Function to check if a valid client cert was presented
+func hasClientCert(ctx context.Context) bool {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return false
+	}
+	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok {
+		return false
+	}
+	return len(tlsInfo.State.PeerCertificates) > 0
+}
+
+// verifyNonceSignature verifies the signature over the nonce.
+func verifyNonceSignature(pubKey crypto.PublicKey, nonce, signature []byte) error {
+	rsaPubKey, ok := pubKey.(*rsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("public key is not RSA")
+	}
+	hash := sha256.Sum256(nonce)
+	err := rsa.VerifyPSS(rsaPubKey, crypto.SHA256, hash[:], signature, &rsa.PSSOptions{
+		SaltLength: rsa.PSSSaltLengthAuto,
+		Hash:       crypto.SHA256,
+	})
+	if err != nil {
+		return fmt.Errorf("signature verification failed: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
 	for {
 		in, err := stream.Recv()
@@ -280,9 +314,104 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 		}
 		switch req := in.Type.(type) {
 		case *bpb.BootstrapStreamRequest_BootstrapRequest:
-			// TODO: process request
+
+			identity := req.BootstrapRequest.GetIdentity()
+
+			if clientHasCert {
+				// Scenario: TPM 2.0 with IDevID - Device already authenticated by TLS.
+				log.Infof("Received BootstrapRequest from device with IDevID")
+
+				p, _ := peer.FromContext(ctx)
+				tlsInfo := p.AuthInfo.(credentials.TLSInfo)
+				clientCert := tlsInfo.State.PeerCertificates[0]
+				// Example: Use first common name as device ID. Adjust as needed.
+				if len(clientCert.Subject.CommonNames) > 0 {
+					deviceID = clientCert.Subject.CommonNames[0]
+				} else {
+					deviceID = clientCert.Subject.SerialNumber
+				}
+
+				// Step 1: Server sends a nonce challenge
+				nonce := make([]byte, 32)
+				if _, err := rand.Read(nonce); err != nil {
+					return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
+				}
+				// TODO: Securely store this nonce, associated with the deviceID or stream.
+				sessionNonce = nonce
+
+				challengeResp := &bpb.BootstrapStreamResponse{
+					Response: &bpb.BootstrapStreamResponse_Challenge{
+						Challenge: &bpb.ChallengeResponse{
+							Type: &bpb.ChallengeResponse_Nonce{
+								Nonce: sessionNonce,
+							},
+						},
+					},
+				}
+				if err := stream.Send(challengeResp); err != nil {
+					return status.Errorf(codes.Internal, "failed to send nonce challenge: %v", err)
+				}
+				log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
+
+
+			} else if identity != nil && identity.GetEkPub() && identity.GetPpkPub() {
+				// Scenario: TPM 2.0 without IDevID
+				log.Info("Received TPM 2.0 GetBootstrapDataRequest (no IDevID)")
+				// ... (as implemented before)
+                 return status.Errorf(codes.Unimplemented, "TPM 2.0 without IDevID not fully implemented")
+
+			} else if identity != nil && identity.GetEkPub() {
+				// Scenario: TPM 1.2 without IDevID
+				log.Info("Received TPM 1.2 GetBootstrapDataRequest")
+				// ... (as implemented before)
+                 return status.Errorf(codes.Unimplemented, "TPM 1.2 without IDevID not fully implemented")
+			} else {
+				return status.Errorf(codes.InvalidArgument, "unsupported initial BootstrapRequest identity")
+			}
+
 		case *bpb.BootstrapStreamRequest_Response_:
-			// TODO: process response
+			log.Infof("Received Response from IDevID device: %s", deviceID)
+
+			signedNonce := req.Response.GetNonceSigned()
+			if len(signedNonce) == 0 {
+				return status.Errorf(codes.InvalidArgument, "nonce_signed is empty")
+			}
+			if sessionNonce == nil {
+				return status.Errorf(codes.FailedPrecondition, "no nonce was issued for this session")
+			}
+
+			p, _ := peer.FromContext(ctx)
+			clientCert := p.AuthInfo.(credentials.TLSInfo).State.PeerCertificates[0]
+			pubKey := clientCert.PublicKey
+
+			if err := verifyNonceSignature(pubKey, sessionNonce, signedNonce); err != nil {
+				return status.Errorf(codes.Unauthenticated, "nonce signature verification failed: %v", err)
+			}
+			log.Infof("Nonce signature verification successful for %s", deviceID)
+
+			// Step 3: Signature verified, fetch, sign, and send the GetBootstrapDataResponse.
+			bsData, err := s.em.GetBootstrapData(ctx, chassis, activeControlCard)
+			if err != nil {
+				return status.Errorf(codes.Internal, "failed to get bootstrap data: %v", err)
+			}
+
+			// The GetBootstrapDataResponse contains the OV, OC, and signature fields.
+			// The em.Sign method should populate these.
+			if err := s.em.Sign(ctx, bsData, chassis, activeControlCard); err != nil {
+				return status.Errorf(codes.Internal, "failed to sign bootstrap data: %v", err)
+			}
+
+			bootstrapDataResp := &bpb.BootstrapStreamResponse{
+				Type: &bpb.BootstrapStreamResponse_BootstrapResponse{
+					BootstrapResponse: bsData,
+				},
+			}
+			if err := stream.Send(bootstrapDataResp); err != nil {
+				return status.Errorf(codes.Internal, "failed to send bootstrap data response: %v", err)
+			}
+			log.Infof("Sent signed GetBootstrapDataResponse to %s", deviceID)
+
+
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
 			// TODO: process request
 		default:
