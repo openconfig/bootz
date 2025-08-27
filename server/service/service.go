@@ -27,7 +27,6 @@ import (
 	"io"
 	"net"
 
-	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -38,6 +37,7 @@ import (
 	log "github.com/golang/glog"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	apb "github.com/openconfig/gnsi/authz"
+	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 )
 
 // OVList is a mapping of control card serial number to ownership voucher.
@@ -316,7 +316,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 	clientHasCert := hasClientCert(ctx)
 
 	var deviceID string
-	var chassis *entitymanager.Chassis
+	var chassis *epb.Chassis
 	var activeControlCard string
 	currentState := stateInitial
 
