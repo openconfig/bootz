@@ -357,14 +357,12 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			} else if identity != nil && identity.GetEkPub() && identity.GetPpkPub() {
 				// Scenario: TPM 2.0 without IDevID
 				log.Info("Received TPM 2.0 GetBootstrapDataRequest (no IDevID)")
-				// ... (as implemented before)
-                 return status.Errorf(codes.Unimplemented, "TPM 2.0 without IDevID not fully implemented")
+                return status.Errorf(codes.Unimplemented, "TPM 2.0 without IDevID not fully implemented")
 
 			} else if identity != nil && identity.GetEkPub() {
 				// Scenario: TPM 1.2 without IDevID
 				log.Info("Received TPM 1.2 GetBootstrapDataRequest")
-				// ... (as implemented before)
-                 return status.Errorf(codes.Unimplemented, "TPM 1.2 without IDevID not fully implemented")
+                return status.Errorf(codes.Unimplemented, "TPM 1.2 without IDevID not fully implemented")
 			} else {
 				return status.Errorf(codes.InvalidArgument, "unsupported initial BootstrapRequest identity")
 			}
