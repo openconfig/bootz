@@ -164,9 +164,9 @@ message BootstrapStreamResponse {
   message Challenge {
     // TPM 2.0 without IDevId may be provisioned using using EK or PPK
     enum TPM20CsrRequest {
-       CSR_REQUEST_UNKNOWN = 0;
-       CSR_REQUEST_EK = 1;
-       CSR_REQUEST_PPK = 2;
+      TPM2_0_CSR_REQUEST_UNSPECIFIED = 0;
+      TPM2_0_CSR_REQUEST_EK = 1;
+      TPM2_0_CSR_REQUEST_PPK = 2;
     }
    
     oneof type {
