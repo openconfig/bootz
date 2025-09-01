@@ -26,6 +26,7 @@ go_library(
         "@openconfig_gnsi//authz",
         "@org_golang_google_grpc//codes",
         "@org_golang_google_grpc//peer",
+        "@org_golang_google_grpc//credentials",
         "@org_golang_google_grpc//status",
         "@org_golang_google_protobuf//proto",
     ],
