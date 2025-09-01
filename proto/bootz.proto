@@ -141,12 +141,12 @@ message BootstrapStreamRequest {
     // TPM 2.0 without IDevId EK CSR request
     bytes ek_csr = 1;
   }
-
+  
   message PPKCSRIdentityRequest {
     // TPM 2.0 without IDevId PPK CSR request
     bytes ppk_csr = 1;
   }
-
+  
   oneof type {
     GetBootstrapDataRequest bootstrap_request = 1;
     Response response = 2;
@@ -164,10 +164,11 @@ message BootstrapStreamResponse {
   message Challenge {
     // TPM 2.0 without IDevId may be provisioned using using EK or PPK
     enum TPM20CsrRequest {
-       EK_CSR_REQUEST = 0;
-       PPK_CSR_REQUEST = 1;
+       CSR_REQUEST_UNKNOWN = 0;
+       CSR_REQUEST_EK = 1;
+       CSR_REQUEST_PPK = 2;
     }
-
+    
     oneof type {
       // nonce will be returned for iDevID based system for signing by IAK.
       string nonce = 1;
