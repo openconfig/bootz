@@ -84,7 +84,10 @@ message Identity {
     // TPM 2.0 PPK
     bool ppk_pub = 3;
 
-    bytes ppk_csr = 4;
+    bytes ppk_csr = 4 [deprecated = true];
+    
+    // TPM 2.0 without IDevId, device supports both EK and PPK
+    bool ek_ppk_pub = 5;
   }
 }
 
@@ -134,11 +137,23 @@ message BootstrapStreamRequest {
     bytes identity_request = 2;
   }
 
+  message EKCSRIdentityRequest {
+    // TPM 2.0 without IDevId EK CSR request
+    bytes ek_csr = 1;
+  }
+ 
+  message PPKCSRIdentityRequest {
+    // TPM 2.0 without IDevId PPK CSR request
+    bytes ppk_csr = 1;
+  }
+ 
   oneof type {
     GetBootstrapDataRequest bootstrap_request = 1;
     Response response = 2;
     ReportStatusRequest report_status_request = 3;
     EKIdentityRequest ek_identity_request = 4;
+    EKCSRIdentityRequest ek_csr_identity_request = 5;
+    PPKCSRIdentityRequest ppk_csr_identity_request = 6;
   }
 } 
 
@@ -147,6 +162,13 @@ message BootstrapStreamRequest {
 // GetBootstrapDataRequest based on the identity message.
 message BootstrapStreamResponse {
   message Challenge {
+    // TPM 2.0 without IDevId may be provisioned using using EK or PPK
+    enum TPM20CsrRequest {
+      TPM2_0_CSR_REQUEST_UNSPECIFIED = 0;
+      TPM2_0_CSR_REQUEST_EK = 1;
+      TPM2_0_CSR_REQUEST_PPK = 2;
+    }
+   
     oneof type {
       // nonce will be returned for iDevID based system for signing by IAK.
       string nonce = 1;
@@ -156,6 +178,9 @@ message BootstrapStreamResponse {
       bytes nonce_encrypted = 2; 
       // TPM 1.2 EK CA public cert
       bytes ca_pub = 3;
+
+      // TPM 2.0 without IDevId
+      TPM20CsrRequest tpm20_csr_request = 4;
     } 
   } 
   
