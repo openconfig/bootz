@@ -25,11 +25,9 @@ import (
 	"encoding/base64"
 	"io"
 	"net"
-	"sync"
 
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -162,8 +160,6 @@ type EntityManager interface {
 type Service struct {
 	bpb.UnimplementedBootstrapServer
 	em EntityManager
-	// Session cache for nonces or other state for non-IDevID flows
-	sessions sync.Map // map[string]*streamSession
 }
 
 type streamSession struct {
@@ -300,130 +296,12 @@ const (
 	stateAttested
 )
 
-// Function to check if a client cert was presented
-func hasClientCert(ctx context.Context) bool {
-	p, ok := peer.FromContext(ctx)
-	if !ok {
-		return false
-	}
-	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
-	if !ok {
-		return false
-	}
-	return len(tlsInfo.State.PeerCertificates) > 0
-}
-
 func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
 	ctx := stream.Context()
 
-	if hasClientCert(ctx) {
-		return status.Errorf(codes.FailedPrecondition, "BootstrapStream is not for clients presenting client certificates in TLS; use GetBootstrapData/ReportStatus RPCs instead")
-	}
-
 	var deviceID string
 	session := &streamSession{currentState: stateInitial}
-	var err error
 
-	// --- Initial Message ---
-	in, err := stream.Recv()
-	if err == io.EOF {
-		return nil
-	}
-	if err != nil {
-		log.Errorf("Error receiving initial message: %v", err)
-		return err
-	}
-
-	reqType, ok := in.Type.(*bpb.BootstrapStreamRequest_BootstrapRequest)
-	if !ok {
-		return status.Errorf(codes.InvalidArgument, "first message must be BootstrapRequest, got %T", in.Type)
-	}
-	bootstrapReq := reqType.BootstrapRequest
-	identity := bootstrapReq.GetIdentity()
-	log.Infof("Received initial BootstrapRequest: %+v", bootstrapReq)
-
-	if identity == nil {
-		return status.Errorf(codes.InvalidArgument, "identity field is missing in BootstrapRequest")
-	}
-
-	// Resolve Chassis based on descriptor
-	lu, err := buildEntityLookup(ctx, bootstrapReq)
-	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
-	}
-	chassis, err := s.em.ResolveChassis(ctx, lu, bootstrapReq.GetControlCardState().GetSerialNumber())
-	if err != nil {
-		return status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
-	}
-	session.chassis = chassis
-	session.activeControlCard = bootstrapReq.GetControlCardState().GetSerialNumber()
-	// Use hardware serial number as the device ID for the session
-	deviceID = lu.SerialNumber
-	if deviceID == "" {
-		deviceID = chassis.Serial
-	}
-	if deviceID == "" {
-		return status.Errorf(codes.InvalidArgument, "unable to determine device unique identifier")
-	}
-	s.sessions.Store(deviceID, session)
-	defer s.sessions.Delete(deviceID)
-	log.Infof("Resolved device: %s, Chassis: %s, Active CC: %s", deviceID, session.chassis.Hostname, session.activeControlCard)
-
-	// --- Flow Determination based on Identity field ---
-	switch idType := identity.Type.(type) {
-	case *bpb.Identity_IdevidCert:
-		// --- TPM 2.0 with IDevID Flow in BootstrapStream ---
-		log.Infof("Detected IDevID flow for %s", deviceID)
-		certDERR, err := base64.StdEncoding.DecodeString(idType.IdevidCert)
-		if err != nil {
-			return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
-		}
-		cert, err := x509.ParseCertificate(certDERR)
-		if err != nil {
-			return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
-		}
-		// TODO: Validate this cert against Vendor CAs & check against Entity Manager.
-		// e.g., s.em.ValidateIDevID(ctx, cert, chassis)
-		session.idevidCert = cert
-		log.Infof("Successfully parsed IDevID cert for %s", cert.Subject.CommonName)
-
-		nonceBytes := make([]byte, 32)
-		if _, err := rand.Read(nonceBytes); err != nil {
-			return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
-		}
-		s.sessions.Store(deviceID, nonceBytes)
-		nonceStr := base64.StdEncoding.EncodeToString(nonceBytes)
-
-		challengeResp := &bpb.BootstrapStreamResponse{
-			Type: &bpb.BootstrapStreamResponse_Challenge_{
-				Challenge: &bpb.BootstrapStreamResponse_Challenge{
-					Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
-						Nonce: nonceStr,
-					},
-				},
-			},
-		}
-		if err := stream.Send(challengeResp); err != nil {
-			return err
-		}
-		session.currentState = stateTPM20NonceSent
-		log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
-
-	case *bpb.Identity_EkPub:
-		if identity.GetPpkPub() {
-			// --- TPM 2.0 without IDevID Flow ---
-			log.Infof("Detected TPM 2.0 without IDevID flow for %s", deviceID)
-			return status.Errorf(codes.Unimplemented, "TPM 2.0 without IDevID flow not fully implemented")
-		} else {
-			// --- TPM 1.2 Flow ---
-			log.Infof("Detected TPM 1.2 flow for %s", deviceID)
-			return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not implemented")
-		}
-	default:
-		return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
-	}
-
-	// --- Subsequent Message Loop ---
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
@@ -431,16 +309,90 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			return nil
 		}
 		if err != nil {
+			log.Errorf("Error receiving message: %v", err)
 			return err
 		}
 
-		// currentSessionI, ok := s.sessions.Load(deviceID)
-		// if !ok {
-		// 	return status.Errorf(codes.FailedPrecondition, "no session for device %s", deviceID)
-		// }
-		//currentSession := currentSessionI.(*streamSession)
-
 		switch req := in.Type.(type) {
+		case *bpb.BootstrapStreamRequest_BootstrapRequest:
+			if session.currentState != stateInitial {
+				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest can only be sent as the first message.")
+			}
+			bootstrapReq := req.BootstrapRequest
+			identity := bootstrapReq.GetIdentity()
+			log.Infof("Received initial BootstrapRequest: %+v", bootstrapReq)
+
+			if identity == nil {
+				return status.Errorf(codes.InvalidArgument, "identity field is missing in BootstrapRequest")
+			}
+
+			lu, err := buildEntityLookup(ctx, bootstrapReq)
+			if err != nil {
+				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
+			}
+			chassis, err := s.em.ResolveChassis(ctx, lu, bootstrapReq.GetControlCardState().GetSerialNumber())
+			if err != nil {
+				return status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
+			}
+			session.chassis = chassis
+			session.activeControlCard = bootstrapReq.GetControlCardState().GetSerialNumber()
+
+			// Set deviceID for logging and potential future use in the session.
+			if lu.SerialNumber != "" {
+				deviceID = lu.SerialNumber
+			} else {
+				deviceID = chassis.Serial
+			}
+			if deviceID == "" {
+				return status.Errorf(codes.InvalidArgument, "unable to determine device unique identifier")
+			}
+			log.Infof("Resolved device: %s, Chassis: %s, Active CC: %s", deviceID, session.chassis.Hostname, session.activeControlCard)
+
+			switch idType := identity.Type.(type) {
+			case *bpb.Identity_IdevidCert:
+				log.Infof("Detected IDevID flow for %s", deviceID)
+				certDERR, err := base64.StdEncoding.DecodeString(idType.IdevidCert)
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
+				}
+				cert, err := x509.ParseCertificate(certDERR)
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
+				}
+
+				// TODO: Validate this cert against Vendor CAs & check against Entity Manager.
+				// e.g., s.em.ValidateIDevID(ctx, cert, chassis)
+				session.idevidCert = cert
+				log.Infof("Successfully parsed IDevID cert for %s", cert.Subject.CommonName)
+
+				nonceBytes := make([]byte, 32)
+				if _, err := rand.Read(nonceBytes); err != nil {
+					return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
+				}
+				session.nonce = nonceBytes
+				nonceStr := base64.StdEncoding.EncodeToString(nonceBytes)
+
+				challengeResp := &bpb.BootstrapStreamResponse{
+					Type: &bpb.BootstrapStreamResponse_Challenge_{
+						Challenge: &bpb.BootstrapStreamResponse_Challenge{
+							Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
+								Nonce: nonceStr,
+							},
+						},
+					},
+				}
+				if err := stream.Send(challengeResp); err != nil {
+					return err
+				}
+				session.currentState = stateTPM20NonceSent
+				log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
+
+			case *bpb.Identity_EkPub:
+				return status.Errorf(codes.Unimplemented, "TPM 2.0 without IDevID flow not fully implemented")
+			default:
+				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
+			}
+
 		case *bpb.BootstrapStreamRequest_Response_:
 			// TODO: process response
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
