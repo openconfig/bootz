@@ -15,11 +15,24 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
+	"io"
+	"math/big"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
@@ -152,6 +165,229 @@ func TestBuildEntityLookup(t *testing.T) {
 			}
 			if diff := cmp.Diff(got, tc.want); diff != "" {
 				t.Errorf("buildEntityLookup diff = %v", diff)
+			}
+		})
+	}
+}
+
+// Mock EntityManager for testing purposes.
+type mockEntityManager struct {
+	resolveChassisResp   *Chassis
+	resolveChassisErr    error
+	getBootstrapDataResp *bpb.BootstrapDataResponse
+	getBootstrapDataErr  error
+	setStatusErr         error
+	signErr              error
+}
+
+func (m *mockEntityManager) ResolveChassis(context.Context, *EntityLookup, string) (*Chassis, error) {
+	return m.resolveChassisResp, m.resolveChassisErr
+}
+func (m *mockEntityManager) GetBootstrapData(context.Context, *Chassis, string) (*bpb.BootstrapDataResponse, error) {
+	return m.getBootstrapDataResp, m.getBootstrapDataErr
+}
+func (m *mockEntityManager) SetStatus(context.Context, *bpb.ReportStatusRequest) error {
+	return m.setStatusErr
+}
+func (m *mockEntityManager) Sign(context.Context, *bpb.GetBootstrapDataResponse, *Chassis, string) error {
+	return m.signErr
+}
+
+// Helper function to create a dummy X509 certificate
+func createTestCertificate(t *testing.T, commonName string, serialNumber string) []byte {
+	t.Helper()
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Failed to generate RSA key: %v", err)
+	}
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			CommonName:   commonName,
+			SerialNumber: serialNumber,
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(time.Hour * 24),
+		KeyUsage:  x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatalf("Failed to create certificate: %v", err)
+	}
+	return derBytes
+}
+
+func startTestServer(t *testing.T, srv *grpc.Server) string {
+	t.Helper()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	go srv.Serve(lis)
+	t.Cleanup(srv.Stop)
+	return lis.Addr().String()
+}
+
+func createTestClient(t *testing.T, addr string, tlsClientCreds credentials.TransportCredentials) *grpc.ClientConn {
+	t.Helper()
+	opts := []grpc.DialOption{}
+	if tlsClientCreds != nil {
+		opts = append(opts, grpc.WithTransportCredentials(tlsClientCreds))
+	} else {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+	conn, err := grpc.Dial(addr, opts...)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	return conn
+}
+
+// Dummy TLS config for tests
+func testClientTLSConfig(t *testing.T) credentials.TransportCredentials {
+	t.Helper()
+	// In a real test, you'd use a cert signed by a CA the server trusts.
+	// For simplicity, using insecure here, as the server logic *rejects* client certs.
+	return insecure.NewCredentials()
+}
+
+func TestBootstrapStream(t *testing.T) {
+	goodCert := base64.StdEncoding.EncodeToString(createTestCertificate(t, "test-device", "test-serial-123"))
+	tests := []struct {
+		name               string
+		em                 *mockEntityManager
+		initialReq         *bpb.BootstrapStreamRequest
+		clientPresentsCert bool
+		wantErrCode        codes.Code
+		wantRespType       string // "Challenge", "BootstrapResponse", etc.
+		checkNonce         bool
+	}{
+		{
+			name: "IDevID Flow Success - Initial Challenge",
+			em: &mockEntityManager{
+				resolveChassisResp: &Chassis{Serial: "test-serial-123"},
+			},
+			clientPresentsCert: false,
+			initialReq: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+					BootstrapRequest: &bpb.GetBootstrapDataRequest{
+						ChassisDescriptor: &bpb.ChassisDescriptor{Manufacturer: "Cisco", SerialNumber: "test-serial-123", PartNumber: "FIXED-PN-123"},
+						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
+						Identity: &bpb.Identity{
+							Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert},
+						},
+					},
+				},
+			},
+			wantRespType: "Challenge",
+			checkNonce:   true,
+		},
+		{
+			name: "IDevID Flow Failure - Invalid Base64 Cert",
+			em:   &mockEntityManager{},
+			initialReq: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+					BootstrapRequest: &bpb.GetBootstrapDataRequest{
+						Identity: &bpb.Identity{
+							Type: &bpb.Identity_IdevidCert{IdevidCert: "invalid base64"},
+						},
+					},
+				},
+			},
+			wantErrCode: codes.InvalidArgument,
+		},
+		{
+			name: "IDevID Flow Failure - Chassis Not Found",
+			em: &mockEntityManager{
+				resolveChassisErr: status.Errorf(codes.NotFound, "not found"),
+			},
+			initialReq: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+					BootstrapRequest: &bpb.GetBootstrapDataRequest{
+						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "unknown-serial"},
+						ControlCardState:  &bpb.ControlCardState{SerialNumber: "unknown-serial"},
+						Identity: &bpb.Identity{
+							Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert},
+						},
+					},
+				},
+			},
+			wantErrCode: codes.InvalidArgument,
+		},
+		{
+			name: "Missing Identity - Invalid Argument",
+			em:   &mockEntityManager{},
+			initialReq: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+					BootstrapRequest: &bpb.GetBootstrapDataRequest{},
+				},
+			},
+			wantErrCode: codes.InvalidArgument,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			s := New(test.em)
+			srv := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
+			bpb.RegisterBootstrapServer(srv, s)
+			addr := startTestServer(t, srv)
+			conn := createTestClient(t, addr, nil) // No client cert
+			cli := bpb.NewBootstrapClient(conn)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			stream, err := cli.BootstrapStream(ctx)
+			if err != nil {
+				t.Fatalf("BootstrapStream() failed: %v", err)
+			}
+
+			if err := stream.Send(test.initialReq); err != nil {
+				t.Fatalf("stream.Send(%v) failed: %v", test.initialReq, err)
+			}
+			// Signal that the client is done sending
+			stream.CloseSend()
+
+			// Expect to receive a response or an error
+			resp, err := stream.Recv()
+
+			if test.wantErrCode != codes.OK {
+				if err == nil {
+					t.Errorf("stream.Recv() got response %v, want error code %v", resp, test.wantErrCode)
+					return
+				}
+				if stat, ok := status.FromError(err); ok {
+					if stat.Code() != test.wantErrCode {
+						t.Errorf("stream.Recv() got error code %v, want %v: %v", stat.Code(), test.wantErrCode, err)
+					}
+				} else {
+					t.Errorf("stream.Recv() got non-status error %v, want code %v", err, test.wantErrCode)
+				}
+				return
+			}
+
+			// If no error expected, check the response
+			if err != nil {
+				t.Fatalf("stream.Recv() got unexpected error %v", err)
+			}
+
+			if test.checkNonce {
+				challenge := resp.GetChallenge()
+				if challenge == nil {
+					t.Fatalf("Response missing challenge")
+				}
+				nonceStr := challenge.GetNonce()
+				if nonceStr == "" {
+					t.Errorf("Challenge missing nonce")
+				} else if _, err := base64.StdEncoding.DecodeString(nonceStr); err != nil {
+					t.Errorf("Nonce is not valid base64: %v", err)
+				}
+			}
+			// Wait for the server to close the stream
+			_, err = stream.Recv()
+			if err != io.EOF {
+				t.Errorf("Expected EOF after response, got %v", err)
 			}
 		})
 	}
