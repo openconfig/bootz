@@ -272,7 +272,7 @@ func TestBootstrapStream(t *testing.T) {
 			initialReq: &bpb.BootstrapStreamRequest{
 				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
 					BootstrapRequest: &bpb.GetBootstrapDataRequest{
-						ChassisDescriptor: &bpb.ChassisDescriptor{Manufacturer: "Cisco", SerialNumber: "test-serial-123", PartNumber: "FIXED-PN-123"},
+						ChassisDescriptor: &bpb.ChassisDescriptor{Manufacturer: "Cisco", SerialNumber: "test-serial-123", PartNumber: "FIXED-123"},
 						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
 						Identity: &bpb.Identity{
 							Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert},
