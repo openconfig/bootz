@@ -19,7 +19,6 @@ import (
 	"context"
 	"crypto"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -164,9 +163,7 @@ type Service struct {
 
 type streamSession struct {
 	currentState int
-	// Add fields to store temporary keys, nonces, etc.
-	caPrivKey *rsa.PrivateKey // For TPM 1.2
-	nonce     []byte          // For TPM 2.0 nonce challenge
+	nonce        []byte // For TPM 2.0 nonce challenge
 
 	// Store chassis info for later stages
 	chassis           *Chassis
@@ -351,11 +348,11 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			switch idType := identity.Type.(type) {
 			case *bpb.Identity_IdevidCert:
 				log.Infof("Detected IDevID flow for %s", deviceID)
-				certDERR, err := base64.StdEncoding.DecodeString(idType.IdevidCert)
+				certDER, err := base64.StdEncoding.DecodeString(idType.IdevidCert)
 				if err != nil {
 					return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
 				}
-				cert, err := x509.ParseCertificate(certDERR)
+				cert, err := x509.ParseCertificate(certDER)
 				if err != nil {
 					return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
 				}
@@ -388,7 +385,20 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
 
 			case *bpb.Identity_EkPub:
-				return status.Errorf(codes.Unimplemented, "TPM 2.0 without IDevID flow not fully implemented")
+				if !identity.GetPpkPub() {
+					// --- TPM 1.2 Flow ---
+					log.Infof("Detected TPM 1.2 flow (EK only) for %s", deviceID)
+					// TODO: logic to send the ca_pub challenge
+					return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not fully implemented")
+				} else {
+					// --- TPM 2.0 without IDevID Flow ---
+					log.Infof("Detected TPM 2.0 without IDevID flow (EK & PPK) for %s", deviceID)
+					return status.Errorf(codes.Unimplemented, "TPM 2.0 without IDevID flow not fully implemented")
+				}
+			case *bpb.Identity_PpkCsr:
+				log.Infof("Received PPK CSR in initial request for %s", deviceID)
+				return status.Errorf(codes.Unimplemented, "PPK CSR handling in initial request not implemented")
+
 			default:
 				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
 			}
