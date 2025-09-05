@@ -18,8 +18,10 @@ package service
 import (
 	"context"
 	"crypto"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"io"
 	"net"
 
@@ -159,6 +161,16 @@ type Service struct {
 	em EntityManager
 }
 
+type streamSession struct {
+	currentState int
+	nonce        []byte // For TPM 2.0 nonce challenge
+
+	// Store chassis info for later stages
+	chassis           *Chassis
+	activeControlCard string
+	idevidCert        *x509.Certificate // For IDevID flow
+}
+
 func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*bpb.GetBootstrapDataResponse, error) {
 	log.Infof("=============================================================================")
 	log.Infof("==================== Received request for bootstrap data ====================")
@@ -269,29 +281,134 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
 }
 
+const (
+	stateInitial = iota
+	// TPM 1.2 states
+	stateTPM12ChallengeSent
+	stateTPM12EKIdentitySent
+	// TPM 2.0 states
+	stateTPM20CSRRequested
+	stateTPM20NonceSent
+	// Common state
+	stateAttested
+)
+
 func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
+	ctx := stream.Context()
+
+	var deviceID string
+	session := &streamSession{currentState: stateInitial}
+
 	for {
 		in, err := stream.Recv()
-		if err == io.EOF { // Client is done.  Success.
-			return nil // The RPC library will call stream.CloseSend for us.
+		if err == io.EOF {
+			log.Infof("Stream closed by client: %s", deviceID)
+			return nil
 		}
 		if err != nil {
-			return err // The RPC library will call stream.Abort(err) for us.
+			log.Errorf("Error receiving message: %v", err)
+			return err
 		}
+
 		switch req := in.Type.(type) {
 		case *bpb.BootstrapStreamRequest_BootstrapRequest:
-			// TODO: process request
+			if session.currentState != stateInitial {
+				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest can only be sent as the first message.")
+			}
+			bootstrapReq := req.BootstrapRequest
+			identity := bootstrapReq.GetIdentity()
+			log.Infof("Received initial BootstrapRequest: %+v", bootstrapReq)
+
+			if identity == nil {
+				return status.Errorf(codes.InvalidArgument, "identity field is missing in BootstrapRequest")
+			}
+
+			lu, err := buildEntityLookup(ctx, bootstrapReq)
+			if err != nil {
+				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
+			}
+			chassis, err := s.em.ResolveChassis(ctx, lu, bootstrapReq.GetControlCardState().GetSerialNumber())
+			if err != nil {
+				return status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
+			}
+			session.chassis = chassis
+			session.activeControlCard = bootstrapReq.GetControlCardState().GetSerialNumber()
+
+			// Set deviceID for logging and potential future use in the session.
+			if lu.SerialNumber != "" {
+				deviceID = lu.SerialNumber
+			} else {
+				deviceID = chassis.Serial
+			}
+			if deviceID == "" {
+				return status.Errorf(codes.InvalidArgument, "unable to determine device unique identifier")
+			}
+			log.Infof("Resolved device: %s, Chassis: %s, Active CC: %s", deviceID, session.chassis.Hostname, session.activeControlCard)
+
+			switch idType := identity.Type.(type) {
+			case *bpb.Identity_IdevidCert:
+				log.Infof("Detected IDevID flow for %s", deviceID)
+				certDER, err := base64.StdEncoding.DecodeString(idType.IdevidCert)
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
+				}
+				cert, err := x509.ParseCertificate(certDER)
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
+				}
+
+				// TODO: Validate this cert against Vendor CAs & check against Entity Manager.
+				// e.g., s.em.ValidateIDevID(ctx, cert, chassis)
+				session.idevidCert = cert
+				log.Infof("Successfully parsed IDevID cert for %s", cert.Subject.CommonName)
+
+				nonceBytes := make([]byte, 32)
+				if _, err := rand.Read(nonceBytes); err != nil {
+					return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
+				}
+				session.nonce = nonceBytes
+				nonceStr := base64.StdEncoding.EncodeToString(nonceBytes)
+
+				challengeResp := &bpb.BootstrapStreamResponse{
+					Type: &bpb.BootstrapStreamResponse_Challenge_{
+						Challenge: &bpb.BootstrapStreamResponse_Challenge{
+							Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
+								Nonce: nonceStr,
+							},
+						},
+					},
+				}
+				if err := stream.Send(challengeResp); err != nil {
+					return err
+				}
+				session.currentState = stateTPM20NonceSent
+				log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
+
+			case *bpb.Identity_EkPub:
+				if !identity.GetPpkPub() {
+					// --- TPM 1.2 Flow ---
+					log.Infof("Detected TPM 1.2 flow (EK only) for %s", deviceID)
+					// TODO: logic to send the ca_pub challenge
+					return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not fully implemented")
+				} else {
+					// --- TPM 2.0 without IDevID Flow ---
+					log.Infof("Detected TPM 2.0 without IDevID flow (EK & PPK) for %s", deviceID)
+					return status.Errorf(codes.Unimplemented, "TPM 2.0 without IDevID flow not fully implemented")
+				}
+			case *bpb.Identity_PpkCsr:
+				log.Infof("Received PPK CSR in initial request for %s", deviceID)
+				return status.Errorf(codes.Unimplemented, "PPK CSR handling in initial request not implemented")
+
+			default:
+				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
+			}
+
 		case *bpb.BootstrapStreamRequest_Response_:
 			// TODO: process response
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
 			// TODO: process request
 		default:
-			return status.Errorf(codes.InvalidArgument, "bootstrapstreamrequest is of unexpected type %T", req)
-		}
-		resp := &bpb.BootstrapStreamResponse{}
-		err = stream.Send(resp)
-		if err != nil {
-			return err
+			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
 		}
 	}
 }
