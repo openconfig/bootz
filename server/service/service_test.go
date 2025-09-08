@@ -15,8 +15,10 @@ package service
 
 import (
 	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
@@ -33,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
@@ -194,7 +197,7 @@ func (m *mockEntityManager) Sign(context.Context, *bpb.GetBootstrapDataResponse,
 }
 
 // Helper function to create a dummy X509 certificate
-func createTestCertificate(t *testing.T, commonName string, serialNumber string) []byte {
+func createTestCertificate(t *testing.T, commonName string, serialNumber string) (*rsa.PrivateKey, []byte) {
 	t.Helper()
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -214,7 +217,7 @@ func createTestCertificate(t *testing.T, commonName string, serialNumber string)
 	if err != nil {
 		t.Fatalf("Failed to create certificate: %v", err)
 	}
-	return derBytes
+	return priv, derBytes
 }
 
 func startTestServer(t *testing.T, srv *grpc.Server) string {
@@ -253,7 +256,15 @@ func testClientTLSConfig(t *testing.T) credentials.TransportCredentials {
 }
 
 func TestBootstrapStream(t *testing.T) {
-	goodCert := base64.StdEncoding.EncodeToString(createTestCertificate(t, "test-device", "test-serial-123"))
+	devicePrivKey, goodCertDER := createTestCertificate(t, "test-device", "test-serial-123")
+	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
+	// Create a bootloader config struct for the test case.
+	bootloaderConfig, err := structpb.NewStruct(map[string]interface{}{
+		"boot_password_hash": "final-hash",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootloader config struct: %v", err)
+	}
 	tests := []struct {
 		name               string
 		em                 *mockEntityManager
@@ -262,6 +273,10 @@ func TestBootstrapStream(t *testing.T) {
 		wantErrCode        codes.Code
 		wantRespType       string // "Challenge", "BootstrapResponse", etc.
 		checkNonce         bool
+		sendResponse       bool       // If true, send a signed nonce response.
+		badSignature       bool       // If true, send a deliberately bad signature.
+		finalBootstrap     bool       // If true, expect a BootstrapDataResponse.
+		finalErrCode       codes.Code // For the second Recv()
 	}{
 		{
 			name: "IDevID Flow Success - Initial Challenge",
@@ -282,6 +297,48 @@ func TestBootstrapStream(t *testing.T) {
 			},
 			wantRespType: "Challenge",
 			checkNonce:   true,
+		},
+		{
+			name: "IDevID Flow Success - Full End-to-End",
+			em: &mockEntityManager{
+				resolveChassisResp: &Chassis{Serial: "test-serial-123"},
+				getBootstrapDataResp: &bpb.BootstrapDataResponse{BootConfig: &bpb.BootConfig{
+					BootloaderConfig: bootloaderConfig,
+				}},
+			},
+			initialReq: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+					BootstrapRequest: &bpb.GetBootstrapDataRequest{
+						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-PN-SUCCESS"},
+						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
+						Identity:          &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
+					},
+				},
+			},
+			wantRespType:   "Challenge",
+			checkNonce:     true,
+			sendResponse:   true,
+			finalBootstrap: true,
+		},
+		{
+			name: "IDevID Flow Failure - Invalid Signature",
+			em: &mockEntityManager{
+				resolveChassisResp: &Chassis{Serial: "test-serial-123"},
+			},
+			initialReq: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+					BootstrapRequest: &bpb.GetBootstrapDataRequest{
+						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-PN-SUCCESS"},
+						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
+						Identity:          &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
+					},
+				},
+			},
+			wantRespType: "Challenge",
+			checkNonce:   true,
+			sendResponse: true,
+			badSignature: true,
+			finalErrCode: codes.PermissionDenied,
 		},
 		{
 			name: "IDevID Flow Failure - Invalid Base64 Cert",
@@ -346,10 +403,8 @@ func TestBootstrapStream(t *testing.T) {
 			if err := stream.Send(test.initialReq); err != nil {
 				t.Fatalf("stream.Send(%v) failed: %v", test.initialReq, err)
 			}
-			// Signal that the client is done sending
-			stream.CloseSend()
 
-			// Expect to receive a response or an error
+			// === First Recv: Expect Challenge or Error ===
 			resp, err := stream.Recv()
 
 			if test.wantErrCode != codes.OK {
@@ -371,7 +426,7 @@ func TestBootstrapStream(t *testing.T) {
 			if err != nil {
 				t.Fatalf("stream.Recv() got unexpected error %v", err)
 			}
-
+			var nonce []byte
 			if test.checkNonce {
 				challenge := resp.GetChallenge()
 				if challenge == nil {
@@ -380,14 +435,77 @@ func TestBootstrapStream(t *testing.T) {
 				nonceStr := challenge.GetNonce()
 				if nonceStr == "" {
 					t.Errorf("Challenge missing nonce")
-				} else if _, err := base64.StdEncoding.DecodeString(nonceStr); err != nil {
-					t.Errorf("Nonce is not valid base64: %v", err)
+				}
+				nonce, err = base64.StdEncoding.DecodeString(nonceStr)
+				if err != nil {
+					t.Fatalf("Nonce is not valid base64: %v", err)
 				}
 			}
-			// Wait for the server to close the stream
+
+			if !test.sendResponse {
+				stream.CloseSend()
+				_, err = stream.Recv()
+				if err != io.EOF {
+					t.Errorf("Expected EOF after response, got %v", err)
+				}
+				return
+			}
+
+			// === Second Send: Respond with Signed Nonce ===
+			var signedNonce []byte
+			if test.badSignature {
+				signedNonce = []byte("this is not a valid signature")
+			} else {
+				hasher := sha256.New()
+				hasher.Write(nonce)
+				hashedNonce := hasher.Sum(nil)
+				signedNonce, err = rsa.SignPKCS1v15(rand.Reader, devicePrivKey, crypto.SHA256, hashedNonce)
+				if err != nil {
+					t.Fatalf("Failed to sign nonce: %v", err)
+				}
+			}
+			responseReq := &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_Response_{
+					Response: &bpb.BootstrapStreamRequest_Response{
+						Type: &bpb.BootstrapStreamRequest_Response_NonceSigned{NonceSigned: signedNonce},
+					},
+				},
+			}
+			if err := stream.Send(responseReq); err != nil {
+				t.Fatalf("stream.Send(responseReq) failed: %v", err)
+			}
+			stream.CloseSend()
+
+			// === Second Recv: Expect Bootstrap Data or Error ===
+			finalResp, err := stream.Recv()
+
+			if test.finalErrCode != codes.OK {
+				if err == nil {
+					t.Fatalf("stream.Recv() got final response %v, want error code %v", finalResp, test.finalErrCode)
+				}
+				if stat, _ := status.FromError(err); stat.Code() != test.finalErrCode {
+					t.Fatalf("stream.Recv() got final error code %v, want %v: %v", stat.Code(), test.finalErrCode, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("stream.Recv() for final response got unexpected error: %v", err)
+			}
+
+			if test.finalBootstrap {
+				bootstrapWrapper := finalResp.GetBootstrapResponse()
+				if bootstrapWrapper == nil {
+					t.Fatalf("Expected bootstrap response, but got: %v", finalResp)
+				}
+				if bootstrapWrapper.GetSerializedBootstrapData() == nil {
+					t.Error("Final response is missing the serialized bootstrap data")
+				}
+			}
+
 			_, err = stream.Recv()
 			if err != io.EOF {
-				t.Errorf("Expected EOF after response, got %v", err)
+				t.Errorf("Expected EOF after final response, got %v", err)
 			}
 		})
 	}

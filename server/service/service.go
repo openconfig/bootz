@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -404,7 +405,64 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 
 		case *bpb.BootstrapStreamRequest_Response_:
-			// TODO: process response
+			log.Infof("Received Response from %s", deviceID)
+			if session.currentState != stateTPM20NonceSent {
+				return status.Errorf(codes.FailedPrecondition, "unexpected state %v for device %s, expecting nonce response", session.currentState, deviceID)
+			}
+
+			challengeResponse := req.Response
+
+			nonceRespWrapper, ok := challengeResponse.Type.(*bpb.BootstrapStreamRequest_Response_NonceSigned)
+			if !ok {
+				return status.Errorf(codes.InvalidArgument, "expecting nonce challenge response type, got %T", challengeResponse.Type)
+			}
+			signedNonce := nonceRespWrapper.NonceSigned
+
+			// Verify the signed nonce using the public key from the device's IDevID certificate.
+			publicKey, ok := session.idevidCert.PublicKey.(*rsa.PublicKey)
+			if !ok {
+				return status.Errorf(codes.InvalidArgument, "public key from idevid_cert is not of type RSA")
+			}
+			hasher := crypto.SHA256.New()
+			hasher.Write(session.nonce)
+			hashedNonce := hasher.Sum(nil)
+
+			if err := rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, hashedNonce, signedNonce); err != nil {
+				return status.Errorf(codes.PermissionDenied, "nonce signature verification failed: %v", err)
+			}
+			log.Infof("Nonce signature verified successfully for %s", deviceID)
+			session.currentState = stateAttested
+
+			// If verification is successful, fetch and send the bootstrap data.
+			log.Infof("Fetching bootstrap data for %s", deviceID)
+			bootdata, err := s.em.GetBootstrapData(ctx, session.chassis, session.activeControlCard)
+			if err != nil {
+				return status.Errorf(codes.Internal, "failed to get bootstrap data: %v", err)
+			}
+			serializedSignedData, err := proto.Marshal(&bpb.BootstrapDataSigned{
+				Responses: []*bpb.BootstrapDataResponse{bootdata},
+			})
+			if err != nil {
+				return status.Errorf(codes.Internal, "failed to serialize bootstrap data: %v", err)
+			}
+			bootstrapRespForSigning := &bpb.GetBootstrapDataResponse{
+				SerializedBootstrapData: serializedSignedData,
+			}
+			if err := s.em.Sign(ctx, bootstrapRespForSigning, session.chassis, session.activeControlCard); err != nil {
+				return status.Errorf(codes.Internal, "failed to sign bootstrap data: %v", err)
+			}
+
+			// Send the bootstrap data to the device.
+			finalStreamResp := &bpb.BootstrapStreamResponse{
+				Type: &bpb.BootstrapStreamResponse_BootstrapResponse{
+					BootstrapResponse: bootstrapRespForSigning,
+				},
+			}
+			if err := stream.Send(finalStreamResp); err != nil {
+				return err
+			}
+			log.Infof("Successfully sent bootstrap data to %s", deviceID)
+
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
 			// TODO: process request
 		default:
