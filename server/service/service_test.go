@@ -309,7 +309,7 @@ func TestBootstrapStream(t *testing.T) {
 			initialReq: &bpb.BootstrapStreamRequest{
 				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
 					BootstrapRequest: &bpb.GetBootstrapDataRequest{
-						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-PN-SUCCESS"},
+						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-SUCCESS"},
 						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
 						Identity:          &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
 					},
@@ -328,7 +328,7 @@ func TestBootstrapStream(t *testing.T) {
 			initialReq: &bpb.BootstrapStreamRequest{
 				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
 					BootstrapRequest: &bpb.GetBootstrapDataRequest{
-						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-PN-SUCCESS"},
+						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-SUCCESS"},
 						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
 						Identity:          &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
 					},
