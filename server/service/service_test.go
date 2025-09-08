@@ -247,14 +247,6 @@ func createTestClient(t *testing.T, addr string, tlsClientCreds credentials.Tran
 	return conn
 }
 
-// Dummy TLS config for tests
-func testClientTLSConfig(t *testing.T) credentials.TransportCredentials {
-	t.Helper()
-	// In a real test, you'd use a cert signed by a CA the server trusts.
-	// For simplicity, using insecure here, as the server logic *rejects* client certs.
-	return insecure.NewCredentials()
-}
-
 func TestBootstrapStream(t *testing.T) {
 	devicePrivKey, goodCertDER := createTestCertificate(t, "test-device", "test-serial-123")
 	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
