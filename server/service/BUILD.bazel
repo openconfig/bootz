@@ -21,6 +21,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//proto:bootz",
+        "//common/signature",
         "@com_github_golang_glog//:glog",
         "@openconfig_gnmi//errlist",
         "@openconfig_gnsi//authz",

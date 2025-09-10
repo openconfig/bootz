@@ -417,10 +417,10 @@ func TestBootstrapStream(t *testing.T) {
 			// Infer the expected final outcome based on the signedNonce value.
 			if len(test.signedNonce) > 0 { // A non-empty slice implies a bad signature.
 				if err == nil {
-					t.Fatalf("stream.Recv() got final response %v, want error code %v", finalResp, codes.PermissionDenied)
+					t.Fatalf("stream.Recv() got final response %v, want error code %v", finalResp, codes.InvalidArgument)
 				}
-				if stat, _ := status.FromError(err); stat.Code() != codes.PermissionDenied {
-					t.Fatalf("stream.Recv() got final error code %v, want %v: %v", stat.Code(), codes.PermissionDenied, err)
+				if stat, _ := status.FromError(err); stat.Code() != codes.InvalidArgument {
+					t.Fatalf("stream.Recv() got final error code %v, want %v: %v", stat.Code(), codes.InvalidArgument, err)
 				}
 				return
 			}

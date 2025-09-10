@@ -19,7 +19,6 @@ import (
 	"context"
 	"crypto"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -33,6 +32,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	log "github.com/golang/glog"
+	"github.com/openconfig/bootz/common/signature"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	apb "github.com/openconfig/gnsi/authz"
 )
@@ -407,7 +407,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 		case *bpb.BootstrapStreamRequest_Response_:
 			log.Infof("Received Response from %s", deviceID)
 			if session.currentState != stateTPM20NonceSent {
-				return status.Errorf(codes.FailedPrecondition, "unexpected state %v for device %s, expecting nonce response", session.currentState, deviceID)
+				return status.Errorf(codes.InvalidArgument, "unexpected state %v for device %s, expecting nonce response", session.currentState, deviceID)
 			}
 
 			challengeResponse := req.Response
@@ -418,18 +418,14 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 			signedNonce := nonceRespWrapper.NonceSigned
 
-			// Verify the signed nonce using the public key from the device's IDevID certificate.
-			publicKey, ok := session.idevidCert.PublicKey.(*rsa.PublicKey)
-			if !ok {
-				return status.Errorf(codes.InvalidArgument, "public key from idevid_cert is not of type RSA")
-			}
-			hasher := crypto.SHA256.New()
-			hasher.Write(session.nonce)
-			hashedNonce := hasher.Sum(nil)
+			// Base64-encode the raw signed nonce before passing it to the Verify function.
+			signedNonceB64 := base64.StdEncoding.EncodeToString(signedNonce)
 
-			if err := rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, hashedNonce, signedNonce); err != nil {
-				return status.Errorf(codes.PermissionDenied, "nonce signature verification failed: %v", err)
+			// Use the existing Verify function from the signature package.
+			if err := signature.Verify(session.idevidCert, session.nonce, signedNonceB64); err != nil {
+				return status.Errorf(codes.InvalidArgument, "nonce signature verification failed: %v", err)
 			}
+
 			log.Infof("Nonce signature verified successfully for %s", deviceID)
 			session.currentState = stateAttested
 
