@@ -36,6 +36,6 @@ go_test(
     embed = [":server_lib"],
     deps = [
         "//server/entitymanager",
-        "//testdata:testdata_lib",
+        "//testdata:artifacts_gen",
     ],
 )

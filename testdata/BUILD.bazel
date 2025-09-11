@@ -20,7 +20,16 @@ go_library(
     importpath = "github.com/openconfig/bootz/testdata",
     visibility = ["//visibility:public"],
     deps = [
-        "//server/service",
         "@org_mozilla_go_pkcs7//:pkcs7",
+    ],
+)
+
+go_library(
+    name = "artifacts_gen",
+    srcs = ["artifacts_gen.go"],
+    importpath = "github.com/openconfig/bootz/testdata",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//server/service",
     ],
 )

@@ -22,7 +22,7 @@ go_library(
     deps = [
         "//server:server_lib",
         "//server/entitymanager",
-        "//testdata:testdata_lib",
+        "//testdata:artifacts_gen",
         "@com_github_golang_glog//:glog",
     ],
 )

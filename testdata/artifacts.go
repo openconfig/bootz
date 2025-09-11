@@ -30,7 +30,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/openconfig/bootz/server/service"
 	"go.mozilla.org/pkcs7"
 )
 
@@ -199,49 +198,4 @@ func NewOwnershipVoucher(encoding string, serial string, pdc, vendorCACert *x509
 	}
 
 	return signedMessage.Finish()
-}
-
-// GenerateSecurityArtifacts generates security artifacts.
-func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, vendorOrg string) (*service.SecurityArtifacts, error) {
-	pdc, pdcPrivateKey, err := NewCertificateAuthority("Pinned Domain Cert", ownerOrg, "localhost")
-	if err != nil {
-		return nil, err
-	}
-	oc, ocPrivateKey, err := NewSignedCertificate("Owner Certificate", ownerOrg, "localhost", pdc, pdcPrivateKey)
-	if err != nil {
-		return nil, err
-	}
-	vendorCA, vendorCAPrivateKey, err := NewCertificateAuthority("Vendor Certificate Authority", vendorOrg, "localhost")
-	if err != nil {
-		return nil, err
-	}
-	trustAnchor, trustAnchorPrivatekey, err := NewCertificateAuthority("Trust Anchor", ownerOrg, "localhost")
-	if err != nil {
-		return nil, err
-	}
-	ovs := service.OVList{}
-	for _, serial := range controlCardSerials {
-		ov, err := NewOwnershipVoucher("json", serial, pdc, vendorCA, vendorCAPrivateKey)
-		if err != nil {
-			return nil, err
-		}
-		ovs[serial] = ov
-	}
-	tlsTrustAnchor, err := TLSCertificate(trustAnchor, trustAnchorPrivatekey)
-	if err != nil {
-		return nil, err
-	}
-
-	return &service.SecurityArtifacts{
-		TrustAnchor:           trustAnchor,
-		TrustAnchorPrivateKey: trustAnchorPrivatekey,
-		OwnerCert:             oc,
-		OwnerCertPrivateKey:   ocPrivateKey,
-		PDC:                   pdc,
-		PDCPrivateKey:         pdcPrivateKey,
-		VendorCA:              vendorCA,
-		VendorCAPrivateKey:    vendorCAPrivateKey,
-		OV:                    ovs,
-		TLSKeypair:            tlsTrustAnchor,
-	}, nil
 }
