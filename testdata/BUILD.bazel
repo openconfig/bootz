@@ -20,7 +20,7 @@ go_library(
     importpath = "github.com/openconfig/bootz/testdata",
     visibility = ["//visibility:public"],
     deps = [
-        "//server/service",
+        "//common/types",
         "@org_mozilla_go_pkcs7//:pkcs7",
     ],
 )

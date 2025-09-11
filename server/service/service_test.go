@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
+	"github.com/openconfig/bootz/common/types"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
@@ -51,7 +52,7 @@ func TestBuildEntityLookup(t *testing.T) {
 		name    string
 		ctx     context.Context
 		req     *bpb.GetBootstrapDataRequest
-		want    *EntityLookup
+		want    *types.EntityLookup
 		wantErr bool
 	}{
 		{
@@ -67,7 +68,7 @@ func TestBuildEntityLookup(t *testing.T) {
 					SerialNumber: "1234",
 				},
 			},
-			want: &EntityLookup{
+			want: &types.EntityLookup{
 				Manufacturer: "Cisco",
 				SerialNumber: "1234",
 				PartNumber:   "ABC",
@@ -93,7 +94,7 @@ func TestBuildEntityLookup(t *testing.T) {
 					SerialNumber: "1234a",
 				},
 			},
-			want: &EntityLookup{
+			want: &types.EntityLookup{
 				Manufacturer: "Cisco",
 				SerialNumber: "1234a",
 				PartNumber:   "ABCa",
@@ -172,7 +173,7 @@ func TestBuildEntityLookup(t *testing.T) {
 
 // Mock EntityManager for testing purposes.
 type mockEntityManager struct {
-	resolveChassisResp   *Chassis
+	resolveChassisResp   *types.Chassis
 	resolveChassisErr    error
 	getBootstrapDataResp *bpb.BootstrapDataResponse
 	getBootstrapDataErr  error
@@ -180,16 +181,16 @@ type mockEntityManager struct {
 	signErr              error
 }
 
-func (m *mockEntityManager) ResolveChassis(context.Context, *EntityLookup, string) (*Chassis, error) {
+func (m *mockEntityManager) ResolveChassis(context.Context, *types.EntityLookup, string) (*types.Chassis, error) {
 	return m.resolveChassisResp, m.resolveChassisErr
 }
-func (m *mockEntityManager) GetBootstrapData(context.Context, *Chassis, string) (*bpb.BootstrapDataResponse, error) {
+func (m *mockEntityManager) GetBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error) {
 	return m.getBootstrapDataResp, m.getBootstrapDataErr
 }
 func (m *mockEntityManager) SetStatus(context.Context, *bpb.ReportStatusRequest) error {
 	return m.setStatusErr
 }
-func (m *mockEntityManager) Sign(context.Context, *bpb.GetBootstrapDataResponse, *Chassis, string) error {
+func (m *mockEntityManager) Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis, string) error {
 	return m.signErr
 }
 
@@ -266,7 +267,7 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow Success - Initial Challenge",
 			em: &mockEntityManager{
-				resolveChassisResp: &Chassis{Serial: "test-serial-123"},
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
 			},
 			clientPresentsCert: false,
 			initialReq: &bpb.BootstrapStreamRequest{
