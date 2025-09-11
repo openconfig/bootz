@@ -22,9 +22,9 @@ go_library(
     deps = [
         "//common/owner_certificate",
         "//common/signature",
+        "//common/types",
         "//proto:bootz",
         "//server/entitymanager/proto",
-        "//server/service",
         "@com_github_golang_glog//:glog",
         "@openconfig_gnsi//authz",
         "@org_golang_google_grpc//codes",
