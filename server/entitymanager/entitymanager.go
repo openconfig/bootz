@@ -25,7 +25,7 @@ import (
 
 	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	"github.com/openconfig/bootz/common/signature"
-	"github.com/openconfig/bootz/server/service"
+	"github.com/openconfig/bootz/common/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -52,19 +52,19 @@ type InMemoryEntityManager struct {
 	defaults *epb.Options
 	// security artifacts  (OVs, OC and PDC).
 	// TODO: handle mutlti-vendor case
-	secArtifacts *service.SecurityArtifacts
+	secArtifacts *types.SecurityArtifacts
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
 // If a control card serial is provided, it also looks up chassis' by its control cards.
-func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *service.EntityLookup, ccSerial string) (*service.Chassis, error) {
+func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *types.EntityLookup, ccSerial string) (*types.Chassis, error) {
 	chassis, err := m.lookupChassis(lookup, ccSerial)
 	if err != nil {
 		return nil, err
 	}
-	cards := make([]*service.ControlCard, len(chassis.GetControllerCards()))
+	cards := make([]*types.ControlCard, len(chassis.GetControllerCards()))
 	for i, controlCard := range chassis.GetControllerCards() {
-		cards[i] = &service.ControlCard{
+		cards[i] = &types.ControlCard{
 			PartNumber:   controlCard.PartNumber,
 			Manufacturer: chassis.GetManufacturer(),
 			Serial:       controlCard.GetSerialNumber(),
@@ -78,7 +78,7 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *serv
 	if err != nil {
 		return nil, err
 	}
-	return &service.Chassis{
+	return &types.Chassis{
 		Hostname:               chassis.GetName(),
 		BootMode:               chassis.GetBootMode(),
 		SoftwareImage:          chassis.GetSoftwareImage(),
@@ -93,7 +93,7 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *serv
 	}, nil
 }
 
-func (m *InMemoryEntityManager) lookupChassis(lookup *service.EntityLookup, ccSerial string) (*epb.Chassis, error) {
+func (m *InMemoryEntityManager) lookupChassis(lookup *types.EntityLookup, ccSerial string) (*epb.Chassis, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// Search for the chassis first.
@@ -185,7 +185,7 @@ func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
 }
 
 // GetBootstrapData fetches and returns the bootstrap data response from the server.
-func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, chassis *service.Chassis, serial string) (*bpb.BootstrapDataResponse, error) {
+func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, chassis *types.Chassis, serial string) (*bpb.BootstrapDataResponse, error) {
 	// TODO: Populate gnsi config
 	return &bpb.BootstrapDataResponse{
 		SerialNum:        serial,
@@ -221,7 +221,7 @@ func (m *InMemoryEntityManager) SetStatus(ctx context.Context, req *bpb.ReportSt
 }
 
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
-func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrapDataResponse, chassis *service.Chassis, controllerCard string) error {
+func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrapDataResponse, chassis *types.Chassis, controllerCard string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// Check if security artifacts are provided for signing.
@@ -293,7 +293,7 @@ func (m *InMemoryEntityManager) GetChassisInventory() []*epb.Chassis {
 }
 
 // New returns a new in-memory entity manager.
-func New(chassisConfigFile string, artifacts *service.SecurityArtifacts) (*InMemoryEntityManager, error) {
+func New(chassisConfigFile string, artifacts *types.SecurityArtifacts) (*InMemoryEntityManager, error) {
 	newManager := &InMemoryEntityManager{
 		controlCardStatuses: map[string]bpb.ControlCardState_ControlCardStatus{},
 		defaults:            &epb.Options{GnsiGlobalConfig: &epb.GNSIConfig{}},
@@ -321,7 +321,7 @@ func New(chassisConfigFile string, artifacts *service.SecurityArtifacts) (*InMem
 
 // ReplaceDevice replaces an existing chassis with a new chassis object.
 // If the chassis is not found, it is added to the inventory.
-func (m *InMemoryEntityManager) ReplaceDevice(old *service.EntityLookup, new *epb.Chassis) error {
+func (m *InMemoryEntityManager) ReplaceDevice(old *types.EntityLookup, new *epb.Chassis) error {
 	// Chassis: old device lookup, newChassis: new device
 
 	// todo: Validate before replace
@@ -349,7 +349,7 @@ func (m *InMemoryEntityManager) ReplaceDevice(old *service.EntityLookup, new *ep
 }
 
 // DeleteDevice removes the chassis at the provided lookup from the entitymanager.
-func (m *InMemoryEntityManager) DeleteDevice(chassis *service.EntityLookup) {
+func (m *InMemoryEntityManager) DeleteDevice(chassis *types.EntityLookup) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for i, ch := range m.chassisInventory {
@@ -360,7 +360,7 @@ func (m *InMemoryEntityManager) DeleteDevice(chassis *service.EntityLookup) {
 }
 
 // GetDevice returns a copy of the chassis at the provided lookup.
-func (m *InMemoryEntityManager) GetDevice(chassis *service.EntityLookup) (*epb.Chassis, error) {
+func (m *InMemoryEntityManager) GetDevice(chassis *types.EntityLookup) (*epb.Chassis, error) {
 	ch, err := m.lookupChassis(chassis, "")
 	if err != nil {
 		return nil, err

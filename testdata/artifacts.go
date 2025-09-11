@@ -30,7 +30,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/openconfig/bootz/server/service"
+	"github.com/openconfig/bootz/common/types"
 	"go.mozilla.org/pkcs7"
 )
 
@@ -202,7 +202,7 @@ func NewOwnershipVoucher(encoding string, serial string, pdc, vendorCACert *x509
 }
 
 // GenerateSecurityArtifacts generates security artifacts.
-func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, vendorOrg string) (*service.SecurityArtifacts, error) {
+func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, vendorOrg string) (*types.SecurityArtifacts, error) {
 	pdc, pdcPrivateKey, err := NewCertificateAuthority("Pinned Domain Cert", ownerOrg, "localhost")
 	if err != nil {
 		return nil, err
@@ -219,7 +219,7 @@ func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, ven
 	if err != nil {
 		return nil, err
 	}
-	ovs := service.OVList{}
+	ovs := types.OVList{}
 	for _, serial := range controlCardSerials {
 		ov, err := NewOwnershipVoucher("json", serial, pdc, vendorCA, vendorCAPrivateKey)
 		if err != nil {
@@ -232,7 +232,7 @@ func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, ven
 		return nil, err
 	}
 
-	return &service.SecurityArtifacts{
+	return &types.SecurityArtifacts{
 		TrustAnchor:           trustAnchor,
 		TrustAnchorPrivateKey: trustAnchorPrivatekey,
 		OwnerCert:             oc,
