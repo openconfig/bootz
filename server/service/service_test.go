@@ -278,7 +278,7 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow Success - Full End-to-End",
 			em: &mockEntityManager{
-				resolveChassisResp: &Chassis{Serial: "test-serial-123"},
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
 				getBootstrapDataResp: &bpb.BootstrapDataResponse{
 					BootConfig: &bpb.BootConfig{
 						VendorConfig: []byte("test-vendor-config"),
@@ -300,7 +300,7 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow Failure - Invalid Signature",
 			em: &mockEntityManager{
-				resolveChassisResp: &Chassis{Serial: "test-serial-123"},
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
 			},
 			initialReq: &bpb.BootstrapStreamRequest{
 				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
