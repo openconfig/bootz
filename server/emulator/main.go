@@ -28,7 +28,7 @@ import (
 	"github.com/openconfig/bootz/server/entitymanager"
 
 	log "github.com/golang/glog"
-	artifacts "github.com/openconfig/bootz/testdata/artifacts_gen"
+	artifacts "github.com/openconfig/bootz/testdata"
 )
 
 var (
