@@ -21,6 +21,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//proto:bootz",
+        "//common/signature",
         "//common/types",
         "@com_github_golang_glog//:glog",
         "@openconfig_gnmi//errlist",
@@ -42,7 +43,6 @@ go_test(
         "@com_github_google_go_cmp//cmp",
         "@org_golang_google_grpc//peer",
         "@org_golang_google_grpc//:go_default_library",
-        "@org_golang_google_grpc//credentials/insecure:go_default_library"
-
+        "@org_golang_google_grpc//credentials/insecure:go_default_library",
     ],
 )
