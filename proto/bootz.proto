@@ -81,9 +81,10 @@ message Identity {
     // TPM 1.2
     bool ek_pub = 2;
 
-    // TPM 2.0 PPK
-    bool ppk_pub = 3;
+    // Deprecated: Use ek_ppk_pub instead.
+    bool ppk_pub = 3 [deprecated = true];
 
+    // Deprecated: Use ek_ppk_pub instead.
     bytes ppk_csr = 4 [deprecated = true];
     
     // TPM 2.0 without IDevId, device supports both EK and PPK
