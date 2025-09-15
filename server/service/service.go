@@ -388,8 +388,25 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			log.Infof("====================== Stream status report received ======================")
 			log.Infof("=============================================================================")
 			log.Infof("Received ReportStatusRequest from %s: %+v", deviceID, req.ReportStatusRequest)
+
+			// The bootz documentation suggests that the server could respond with a new
+			// challenge if it receives a status report on a new stream (e.g., after a
+			// device reboot).
+			//
+			// This implementation enforces a stricter security model. A new gRPC stream
+			// always begins a new, unauthenticated session. Since the ReportStatusRequest
+			// itself does not contain any device identity, the server has no way of
+			// knowing which device is reporting status, making it impossible to issue a
+			// secure re-challenge.
+			//
+			// By returning `FailedPrecondition`, we reject the ambiguous request and
+			// force the client to restart the entire authentication flow. This ensures
+			// that every new connection is fully and securely authenticated from the
+			// beginning, starting with a `BootstrapRequest` that contains the
+			// necessary device identity.
+
 			if session.chassis == nil {
-				return status.Errorf(codes.InvalidArgument, "BootstrapRequest must be sent before reporting status to establish session")
+				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest must be sent before reporting status to establish session")
 			}
 			if err := s.em.SetStatus(ctx, req.ReportStatusRequest); err != nil {
 				log.Errorf("Failed to set status for device %s: %v", deviceID, err)
