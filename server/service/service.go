@@ -384,7 +384,31 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			log.Infof("Successfully sent bootstrap data to %s", deviceID)
 
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
-			// TODO: process request
+			log.Infof("=============================================================================")
+			log.Infof("====================== Stream status report received ======================")
+			log.Infof("=============================================================================")
+			log.Infof("Received ReportStatusRequest from %s: %+v", deviceID, req.ReportStatusRequest)
+			if session.chassis == nil {
+				return status.Errorf(codes.InvalidArgument, "BootstrapRequest must be sent before reporting status to establish session")
+			}
+			if err := s.em.SetStatus(ctx, req.ReportStatusRequest); err != nil {
+				log.Errorf("Failed to set status for device %s: %v", deviceID, err)
+				// The client may restart the bootstrap process on failure, so we just return the error.
+				return status.Errorf(codes.Internal, "failed to set status: %v", err)
+			}
+			log.Infof("Successfully set status for device %s", deviceID)
+
+			// Per the spec, acknowledge the status report. If the device rebooted, it should have
+			// started a new stream and sent a new BootstrapRequest.
+			resp := &bpb.BootstrapStreamResponse{
+				Type: &bpb.BootstrapStreamResponse_ReportStatusResponse{
+					ReportStatusResponse: &bpb.EmptyResponse{},
+				},
+			}
+			if err := stream.Send(resp); err != nil {
+				return err
+			}
+			log.Infof("Acknowledged status report from %s", deviceID)
 		default:
 			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
 		}
