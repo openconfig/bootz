@@ -26,7 +26,7 @@ import (
 	"github.com/h-fam/errdiff"
 	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	"github.com/openconfig/bootz/common/signature"
-	"github.com/openconfig/bootz/server/service"
+	"github.com/openconfig/bootz/common/types"
 	artifacts "github.com/openconfig/bootz/testdata"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -128,7 +128,7 @@ func TestNew(t *testing.T) {
 				opts := []cmp.Option{
 					protocmp.Transform(),
 					protocmp.IgnoreMessages(&epb.Chassis{}, &epb.Options{}, &bpb.SoftwareImage{}, &epb.DHCPConfig{}, &epb.GNSIConfig{}, &epb.BootConfig{}, &epb.Config{}, &epb.BootConfig{}, &epb.ControlCard{}),
-					cmpopts.IgnoreUnexported(service.EntityLookup{}),
+					cmpopts.IgnoreUnexported(types.EntityLookup{}),
 				}
 				if !cmp.Equal(inv.chassisInventory, test.inventory, opts...) {
 					t.Errorf("Inventory list is not as expected, Diff: %s", cmp.Diff(inv.chassisInventory, test.inventory, opts...))
@@ -216,16 +216,16 @@ func TestResolveChassis(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
 		desc    string
-		input   *service.EntityLookup
-		want    *service.Chassis
+		input   *types.EntityLookup
+		want    *types.Chassis
 		wantErr bool
 	}{{
 		desc: "Default device",
-		input: &service.EntityLookup{
+		input: &types.EntityLookup{
 			SerialNumber: "123",
 			Manufacturer: "Cisco",
 		},
-		want: &service.Chassis{
+		want: &types.Chassis{
 			Hostname:     "test",
 			Manufacturer: "Cisco",
 			Realm:        "prod",
@@ -238,7 +238,7 @@ func TestResolveChassis(t *testing.T) {
 				Url:           "https://path/to/image",
 				Version:       "1.0",
 			},
-			ControlCards: []*service.ControlCard{
+			ControlCards: []*types.ControlCard{
 				{
 					Manufacturer: "Cisco",
 					PartNumber:   "123A",
@@ -260,7 +260,7 @@ func TestResolveChassis(t *testing.T) {
 		},
 	}, {
 		desc: "Chassis Not Found",
-		input: &service.EntityLookup{
+		input: &types.EntityLookup{
 			SerialNumber: "456",
 			Manufacturer: "Cisco",
 		},
@@ -294,17 +294,17 @@ func TestSign(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
 		desc    string
-		chassis service.Chassis
+		chassis types.Chassis
 		serial  string
 		resp    *bpb.GetBootstrapDataResponse
 		wantOC  bool
 		wantErr bool
 	}{{
 		desc: "Success",
-		chassis: service.Chassis{
+		chassis: types.Chassis{
 			Manufacturer: "Cisco",
 			Serial:       "123",
-			ControlCards: []*service.ControlCard{
+			ControlCards: []*types.ControlCard{
 				{
 					Serial:       "123A",
 					Manufacturer: "Cisco",
@@ -459,14 +459,14 @@ func TestGetBootstrapData(t *testing.T) {
 	}
 	tests := []struct {
 		desc              string
-		chassis           *service.Chassis
+		chassis           *types.Chassis
 		controlCardSerial string
 		want              *bpb.BootstrapDataResponse
 		wantErr           bool
 	}{{
 		desc:              "Success",
 		controlCardSerial: "123",
-		chassis: &service.Chassis{
+		chassis: &types.Chassis{
 			Serial: "123",
 			SoftwareImage: &bpb.SoftwareImage{
 				Name:          "Default Image",
@@ -617,13 +617,13 @@ func TestGetDevice(t *testing.T) {
 	tests := []struct {
 		name        string
 		inventory   []*epb.Chassis
-		lookup      *service.EntityLookup
+		lookup      *types.EntityLookup
 		wantChassis *epb.Chassis
 		wantErr     string
 	}{
 		{
 			name:   "Successfully GetDevice",
-			lookup: &service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
+			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
 			inventory: []*epb.Chassis{
 				{
 					SerialNumber: "1234",
@@ -638,7 +638,7 @@ func TestGetDevice(t *testing.T) {
 		},
 		{
 			name:   "Unsuccessfully GetDevice",
-			lookup: &service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
+			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
 			inventory: []*epb.Chassis{
 				{
 					SerialNumber: "5678",
@@ -705,7 +705,7 @@ func TestReplaceDevice(t *testing.T) {
 	tests := []struct {
 		inventory     []*epb.Chassis
 		wantInventory []*epb.Chassis
-		lookup        *service.EntityLookup
+		lookup        *types.EntityLookup
 		name          string
 		newChassis    *epb.Chassis
 		wantErr       string
@@ -718,7 +718,7 @@ func TestReplaceDevice(t *testing.T) {
 					Manufacturer: "cisco",
 				},
 			},
-			lookup: &service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
+			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
 			newChassis: &epb.Chassis{
 				SerialNumber: "5678",
 				Manufacturer: "cisco",
@@ -755,7 +755,7 @@ func TestDeleteDevice(t *testing.T) {
 	tests := []struct {
 		inventory     []*epb.Chassis
 		wantInventory []*epb.Chassis
-		lookup        *service.EntityLookup
+		lookup        *types.EntityLookup
 		name          string
 	}{
 		{
@@ -766,7 +766,7 @@ func TestDeleteDevice(t *testing.T) {
 					Manufacturer: "cisco",
 				},
 			},
-			lookup:        &service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
+			lookup:        &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
 			wantInventory: []*epb.Chassis{},
 		},
 		{
@@ -777,7 +777,7 @@ func TestDeleteDevice(t *testing.T) {
 					Manufacturer: "cisco",
 				},
 			},
-			lookup: &service.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
+			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
 			wantInventory: []*epb.Chassis{
 				{
 					SerialNumber: "5678",

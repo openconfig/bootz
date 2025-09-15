@@ -17,9 +17,9 @@ package service
 
 import (
 	"context"
-	"crypto"
-	"crypto/tls"
+	"crypto/rand"
 	"crypto/x509"
+	"encoding/base64"
 	"io"
 	"net"
 
@@ -30,86 +30,13 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	log "github.com/golang/glog"
+	"github.com/openconfig/bootz/common/signature"
+	"github.com/openconfig/bootz/common/types"
 	bpb "github.com/openconfig/bootz/proto/bootz"
-	apb "github.com/openconfig/gnsi/authz"
 )
 
-// OVList is a mapping of control card serial number to ownership voucher.
-type OVList map[string][]byte
-
-// SecurityArtifacts contains all KeyPairs and OVs needed for the Bootz Server.
-// Currently, RSA is the only encryption standard supported by these artifacts.
-type SecurityArtifacts struct {
-	// The Ownership Certificate is an x509 certificate/private key pair signed by the PDC.
-	// The certificate is presented to the device during bootstrapping and is used to validate the Ownership Voucher.
-	OwnerCert           *x509.Certificate
-	OwnerCertPrivateKey crypto.PrivateKey
-	// The Pinned Domain Certificate is an x509 certificate/private key pair which acts as a certificate authority on the owner's side.
-	// This certificate is included in OVs.
-	PDC           *x509.Certificate
-	PDCPrivateKey crypto.PrivateKey
-	// The Vendor CA represents a certificate authority on the vendor side. This CA signs Ownership Vouchers which are verified by the device.
-	VendorCA           *x509.Certificate
-	VendorCAPrivateKey crypto.PrivateKey
-	// The Trust Anchor is a self signed CA used to generate the TLS certificate.
-	TrustAnchor           *x509.Certificate
-	TrustAnchorPrivateKey crypto.PrivateKey
-	// Ownership Vouchers are a list of PKCS7 messages signed by the Vendor CA. There is one per control card.
-	OV OVList
-	// The TLSKeypair is a TLS certificate used to secure connections between device and server. It is derived from the Trust Anchor.
-	TLSKeypair *tls.Certificate
-}
-
-// EntityLookup is used to resolve the fields of an active control card to a chassis.
-// For fixed form factor devices, the active control card is the chassis itself.
-type EntityLookup struct {
-	// The manufacturer of this control card or chassis.
-	Manufacturer string
-	// The serial number of this control card or chassis.
-	SerialNumber string
-	// The hardware model/part number of this control card or chassis.
-	PartNumber string
-	// The reported IP address of the management interface for this control
-	// card or chassis.
-	IPAddress string
-	// Whether this chassis appears to be a modular device.
-	Modular bool
-}
-
-// Chassis describes a chassis that has been resolved from an organization's inventory.
-type Chassis struct {
-	// The intended hostname of the chassis.
-	Hostname string
-	// The mode this chassis should boot into.
-	BootMode bpb.BootMode
-	// The intended software image to install on the device.
-	SoftwareImage *bpb.SoftwareImage
-	// The realm this chassis exists in, typically lab or prod.
-	Realm string
-	// The manufacturer of this chassis.
-	Manufacturer string
-	// The part number of this chassis.
-	PartNumber string
-	// The serial number of this chassis.
-	Serial string
-	// Describes the control cards that exist in this chassis.
-	ControlCards []*ControlCard
-	// The below fields are normally unset and are primarily used for
-	// cases where this data should be hardcoded e.g. for testing.
-	BootConfig             *bpb.BootConfig
-	Authz                  *apb.UploadRequest
-	BootloaderPasswordHash string
-}
-
-// ControlCard describes a control card that exists in a resolved Chassis.
-type ControlCard struct {
-	Manufacturer string
-	PartNumber   string
-	Serial       string
-}
-
 // buildEntityLookup constructs an EntityLookup object from a bootstrap request.
-func buildEntityLookup(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*EntityLookup, error) {
+func buildEntityLookup(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*types.EntityLookup, error) {
 	peerAddr, err := peerAddressFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -135,7 +62,7 @@ func buildEntityLookup(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*
 	if partNumber == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "active control card with serial %v not found in chassis descriptor", activeControlCardSerial)
 	}
-	lookup := &EntityLookup{
+	lookup := &types.EntityLookup{
 		Manufacturer: req.GetChassisDescriptor().GetManufacturer(),
 		SerialNumber: activeControlCardSerial,
 		PartNumber:   partNumber,
@@ -147,16 +74,26 @@ func buildEntityLookup(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*
 
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
-	ResolveChassis(context.Context, *EntityLookup, string) (*Chassis, error)
-	GetBootstrapData(context.Context, *Chassis, string) (*bpb.BootstrapDataResponse, error)
+	ResolveChassis(context.Context, *types.EntityLookup, string) (*types.Chassis, error)
+	GetBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error)
 	SetStatus(context.Context, *bpb.ReportStatusRequest) error
-	Sign(context.Context, *bpb.GetBootstrapDataResponse, *Chassis, string) error
+	Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis, string) error
 }
 
 // Service represents the server and entity manager.
 type Service struct {
 	bpb.UnimplementedBootstrapServer
 	em EntityManager
+}
+
+type streamSession struct {
+	currentState int
+	nonce        []byte // For TPM 2.0 nonce challenge
+
+	// Store chassis info for later stages
+	chassis           *types.Chassis
+	activeControlCard string
+	idevidCert        *x509.Certificate // For IDevID flow
 }
 
 func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*bpb.GetBootstrapDataResponse, error) {
@@ -176,7 +113,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		ccSerial = chassisDesc.GetControlCards()[0].GetSerialNumber()
 	}
 	log.Infof("Requesting for %v chassis %v", chassisDesc.GetManufacturer(), chassisDesc.GetSerialNumber())
-	lookup := &EntityLookup{
+	lookup := &types.EntityLookup{
 		Manufacturer: chassisDesc.GetManufacturer(),
 		SerialNumber: chassisDesc.GetSerialNumber(),
 		PartNumber:   chassisDesc.GetPartNumber(),
@@ -269,29 +206,187 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
 }
 
+const (
+	stateInitial = iota
+	// TPM 1.2 states
+	stateTPM12ChallengeSent
+	stateTPM12EKIdentitySent
+	// TPM 2.0 states
+	stateTPM20CSRRequested
+	stateTPM20NonceSent
+	// Common state
+	stateAttested
+)
+
 func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
+	ctx := stream.Context()
+
+	var deviceID string
+	session := &streamSession{currentState: stateInitial}
+
 	for {
 		in, err := stream.Recv()
-		if err == io.EOF { // Client is done.  Success.
-			return nil // The RPC library will call stream.CloseSend for us.
+		if err == io.EOF {
+			log.Infof("Stream closed by client: %s", deviceID)
+			return nil
 		}
 		if err != nil {
-			return err // The RPC library will call stream.Abort(err) for us.
+			log.Errorf("Error receiving message: %v", err)
+			return err
 		}
+
 		switch req := in.Type.(type) {
 		case *bpb.BootstrapStreamRequest_BootstrapRequest:
-			// TODO: process request
+			if session.currentState != stateInitial {
+				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest can only be sent as the first message.")
+			}
+			bootstrapReq := req.BootstrapRequest
+			identity := bootstrapReq.GetIdentity()
+			log.Infof("Received initial BootstrapRequest: %+v", bootstrapReq)
+
+			if identity == nil {
+				return status.Errorf(codes.InvalidArgument, "identity field is missing in BootstrapRequest")
+			}
+
+			lu, err := buildEntityLookup(ctx, bootstrapReq)
+			if err != nil {
+				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
+			}
+			chassis, err := s.em.ResolveChassis(ctx, lu, bootstrapReq.GetControlCardState().GetSerialNumber())
+			if err != nil {
+				return status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
+			}
+			session.chassis = chassis
+			session.activeControlCard = bootstrapReq.GetControlCardState().GetSerialNumber()
+
+			// Set deviceID for logging and potential future use in the session.
+			if lu.SerialNumber != "" {
+				deviceID = lu.SerialNumber
+			} else {
+				deviceID = chassis.Serial
+			}
+			if deviceID == "" {
+				return status.Errorf(codes.InvalidArgument, "unable to determine device unique identifier")
+			}
+			log.Infof("Resolved device: %s, Chassis: %s, Active CC: %s", deviceID, session.chassis.Hostname, session.activeControlCard)
+
+			switch idType := identity.Type.(type) {
+			case *bpb.Identity_IdevidCert:
+				log.Infof("Detected IDevID flow for %s", deviceID)
+				certDER, err := base64.StdEncoding.DecodeString(idType.IdevidCert)
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
+				}
+				cert, err := x509.ParseCertificate(certDER)
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
+				}
+
+				// TODO: Validate this cert against Vendor CAs & check against Entity Manager.
+				// e.g., s.em.ValidateIDevID(ctx, cert, chassis)
+				session.idevidCert = cert
+				log.Infof("Successfully parsed IDevID cert for %s", cert.Subject.CommonName)
+
+				nonceBytes := make([]byte, 32)
+				if _, err := rand.Read(nonceBytes); err != nil {
+					return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
+				}
+				session.nonce = nonceBytes
+				nonceStr := base64.StdEncoding.EncodeToString(nonceBytes)
+
+				challengeResp := &bpb.BootstrapStreamResponse{
+					Type: &bpb.BootstrapStreamResponse_Challenge_{
+						Challenge: &bpb.BootstrapStreamResponse_Challenge{
+							Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
+								Nonce: nonceStr,
+							},
+						},
+					},
+				}
+				if err := stream.Send(challengeResp); err != nil {
+					return err
+				}
+				session.currentState = stateTPM20NonceSent
+				log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
+
+			case *bpb.Identity_EkPub:
+				if !identity.GetPpkPub() {
+					// --- TPM 1.2 Flow ---
+					log.Infof("Detected TPM 1.2 flow (EK only) for %s", deviceID)
+					// TODO: logic to send the ca_pub challenge
+					return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not fully implemented")
+				} else {
+					// --- TPM 2.0 without IDevID Flow ---
+					log.Infof("Detected TPM 2.0 without IDevID flow (EK & PPK) for %s", deviceID)
+					return status.Errorf(codes.Unimplemented, "TPM 2.0 without IDevID flow not fully implemented")
+				}
+			case *bpb.Identity_PpkCsr:
+				log.Infof("Received PPK CSR in initial request for %s", deviceID)
+				return status.Errorf(codes.Unimplemented, "PPK CSR handling in initial request not implemented")
+
+			default:
+				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
+			}
+
 		case *bpb.BootstrapStreamRequest_Response_:
-			// TODO: process response
+			log.Infof("Received Response from %s", deviceID)
+			if session.currentState != stateTPM20NonceSent {
+				return status.Errorf(codes.InvalidArgument, "unexpected state %v for device %s, expecting nonce response", session.currentState, deviceID)
+			}
+
+			challengeResponse := req.Response
+
+			nonceRespWrapper, ok := challengeResponse.Type.(*bpb.BootstrapStreamRequest_Response_NonceSigned)
+			if !ok {
+				return status.Errorf(codes.InvalidArgument, "expecting nonce challenge response type, got %T", challengeResponse.Type)
+			}
+			signedNonce := nonceRespWrapper.NonceSigned
+
+			// Base64-encode the raw signed nonce before passing it to the Verify function.
+			signedNonceB64 := base64.StdEncoding.EncodeToString(signedNonce)
+
+			// Use the existing Verify function from the signature package.
+			if err := signature.Verify(session.idevidCert, session.nonce, signedNonceB64); err != nil {
+				return status.Errorf(codes.InvalidArgument, "nonce signature verification failed: %v", err)
+			}
+
+			log.Infof("Nonce signature verified successfully for %s", deviceID)
+			session.currentState = stateAttested
+
+			// If verification is successful, fetch and send the bootstrap data.
+			log.Infof("Fetching bootstrap data for %s", deviceID)
+			bootdata, err := s.em.GetBootstrapData(ctx, session.chassis, session.activeControlCard)
+			if err != nil {
+				return status.Errorf(codes.Internal, "failed to get bootstrap data: %v", err)
+			}
+			serializedSignedData, err := proto.Marshal(&bpb.BootstrapDataSigned{
+				Responses: []*bpb.BootstrapDataResponse{bootdata},
+			})
+			if err != nil {
+				return status.Errorf(codes.Internal, "failed to serialize bootstrap data: %v", err)
+			}
+			bootstrapRespForSigning := &bpb.GetBootstrapDataResponse{
+				SerializedBootstrapData: serializedSignedData,
+			}
+			if err := s.em.Sign(ctx, bootstrapRespForSigning, session.chassis, session.activeControlCard); err != nil {
+				return status.Errorf(codes.Internal, "failed to sign bootstrap data: %v", err)
+			}
+
+			// Send the bootstrap data to the device.
+			finalStreamResp := &bpb.BootstrapStreamResponse{
+				Type: &bpb.BootstrapStreamResponse_BootstrapResponse{
+					BootstrapResponse: bootstrapRespForSigning,
+				},
+			}
+			if err := stream.Send(finalStreamResp); err != nil {
+				return err
+			}
+			log.Infof("Successfully sent bootstrap data to %s", deviceID)
+
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
 			// TODO: process request
 		default:
-			return status.Errorf(codes.InvalidArgument, "bootstrapstreamrequest is of unexpected type %T", req)
-		}
-		resp := &bpb.BootstrapStreamResponse{}
-		err = stream.Send(resp)
-		if err != nil {
-			return err
+			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
 		}
 	}
 }

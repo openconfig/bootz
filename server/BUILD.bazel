@@ -22,6 +22,7 @@ go_library(
     deps = [
         "//dhcp",
         "//proto:bootz",
+        "//common/types",
         "//server/entitymanager",
         "//server/service",
         "@com_github_golang_glog//:glog",

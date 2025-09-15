@@ -28,6 +28,7 @@ import (
 	"net/http"
 
 	log "github.com/golang/glog"
+	"github.com/openconfig/bootz/common/types"
 	"github.com/openconfig/bootz/dhcp"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
@@ -89,7 +90,7 @@ type InterceptorOpts struct {
 func (*InterceptorOpts) isbootzServerOpts() {}
 
 // NewServer start a new Bootz gRPC , dhcp, and image server based on specified flags.
-func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *service.SecurityArtifacts, opts ...bootzServerOpts) (*Server, error) {
+func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *types.SecurityArtifacts, opts ...bootzServerOpts) (*Server, error) {
 	var interceptor grpc.ServerOption
 	server := &Server{}
 	for _, opt := range opts {
