@@ -91,10 +91,9 @@ type streamSession struct {
 	nonce        []byte // For TPM 2.0 nonce challenge
 
 	// Store chassis info for later stages
-	chassis             *types.Chassis
-	activeControlCard   string
-	idevidCert          *x509.Certificate // For IDevID flow
-	pendingStatusReport *bpb.ReportStatusRequest
+	chassis           *types.Chassis
+	activeControlCard string
+	idevidCert        *x509.Certificate // For IDevID flow
 }
 
 func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*bpb.GetBootstrapDataResponse, error) {
@@ -281,18 +280,17 @@ func (s *Service) sendIdevidChallenge(stream bpb.Bootstrap_BootstrapStreamServer
 }
 
 // establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM2.0 with IdevID.
-func (s *Service) establishSessionAndSendChallenge(stream bpb.Bootstrap_BootstrapStreamServer, ctx context.Context, lookup *types.EntityLookup, identity *bpb.Identity, ccSerial string) (*streamSession, string, error) {
+func (s *Service) establishSessionAndSendChallenge(session *streamSession, stream bpb.Bootstrap_BootstrapStreamServer, ctx context.Context, lookup *types.EntityLookup, identity *bpb.Identity, ccSerial string) (string, error) {
 	if identity == nil {
-		return nil, "", status.Errorf(codes.InvalidArgument, "identity field is missing in request")
+		return "", status.Errorf(codes.InvalidArgument, "identity field is missing in request")
 	}
 	chassis, err := s.em.ResolveChassis(ctx, lookup, ccSerial)
 	if err != nil {
-		return nil, "", status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
+		return "", status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
 	}
-	session := &streamSession{
-		chassis:           chassis,
-		activeControlCard: ccSerial,
-	}
+
+	session.chassis = chassis
+	session.activeControlCard = ccSerial
 
 	var deviceID string
 	if lookup.SerialNumber != "" {
@@ -301,7 +299,7 @@ func (s *Service) establishSessionAndSendChallenge(stream bpb.Bootstrap_Bootstra
 		deviceID = chassis.Serial
 	}
 	if deviceID == "" {
-		return nil, "", status.Errorf(codes.InvalidArgument, "unable to determine device unique identifier")
+		return "", status.Errorf(codes.InvalidArgument, "unable to determine device unique identifier")
 	}
 	log.Infof("Resolved device for re-authentication: %s, Chassis: %s", deviceID, session.chassis.Hostname)
 
@@ -309,11 +307,11 @@ func (s *Service) establishSessionAndSendChallenge(stream bpb.Bootstrap_Bootstra
 	case *bpb.Identity_IdevidCert:
 		log.Infof("Detected IDevID flow for %s", deviceID)
 		if err := s.sendIdevidChallenge(stream, session, deviceID, idType.IdevidCert); err != nil {
-			return nil, "", err
+			return "", err
 		}
-		return session, deviceID, nil
+		return deviceID, nil
 	default:
-		return nil, "", status.Errorf(codes.InvalidArgument, "unsupported identity type for re-authentication: %T", idType)
+		return "", status.Errorf(codes.InvalidArgument, "unsupported identity type for re-authentication: %T", idType)
 	}
 }
 
@@ -355,11 +353,10 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			switch idType := identity.Type.(type) {
 			case *bpb.Identity_IdevidCert:
 				log.Infof("Detected IDevID flow...")
-				newSession, newDeviceID, err := s.establishSessionAndSendChallenge(stream, ctx, lu, identity, bootstrapReq.GetControlCardState().GetSerialNumber())
+				newDeviceID, err := s.establishSessionAndSendChallenge(session, stream, ctx, lu, identity, bootstrapReq.GetControlCardState().GetSerialNumber())
 				if err != nil {
 					return err
 				}
-				session = newSession
 				deviceID = newDeviceID
 
 			case *bpb.Identity_EkPub:
@@ -449,12 +446,11 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 					return err
 				}
 
-				newSession, newDeviceID, err := s.establishSessionAndSendChallenge(stream, ctx, lu, req.ReportStatusRequest.GetIdentity(), ccSerial)
+				newDeviceID, err := s.establishSessionAndSendChallenge(session, stream, ctx, lu, req.ReportStatusRequest.GetIdentity(), ccSerial)
 				if err != nil {
 					return err
 				}
-				newSession.pendingStatusReport = req.ReportStatusRequest
-				session = newSession
+
 				deviceID = newDeviceID
 			} else {
 				if err := s.em.SetStatus(ctx, req.ReportStatusRequest); err != nil {
