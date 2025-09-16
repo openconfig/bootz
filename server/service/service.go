@@ -219,6 +219,27 @@ const (
 	stateAttested
 )
 
+// buildLookupFromReportStatus constructs an EntityLookup object from a ReportStatusRequest.
+func buildLookupFromReportStatus(ctx context.Context, req *bpb.ReportStatusRequest) (*types.EntityLookup, string, error) {
+	peerAddr, err := peerAddressFromContext(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	var ccSerial string
+	if states := req.GetStates(); len(states) > 0 {
+		ccSerial = states[0].GetSerialNumber()
+	}
+	if ccSerial == "" {
+		return nil, "", status.Errorf(codes.InvalidArgument, "control card serial is missing in ReportStatusRequest")
+	}
+	// Note: ReportStatusRequest doesn't have manufacturer or part number. The lookup is simpler.
+	lu := &types.EntityLookup{
+		SerialNumber: ccSerial,
+		IPAddress:    peerAddr,
+	}
+	return lu, ccSerial, nil
+}
+
 // sendIdevidChallenge contains the logic for parsing an IDevID cert, and sending a nonce challenge.
 func (s *Service) sendIdevidChallenge(stream bpb.Bootstrap_BootstrapStreamServer, session *streamSession, deviceID string, idevidCertB64 string) error {
 	certDER, err := base64.StdEncoding.DecodeString(idevidCertB64)
@@ -259,7 +280,7 @@ func (s *Service) sendIdevidChallenge(stream bpb.Bootstrap_BootstrapStreamServer
 	return nil
 }
 
-// establishSessionAndSendChallenge is a helper to handle re-authentication for a ReportStatusRequest on a new stream.
+// establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM2.0 with IdevID.
 func (s *Service) establishSessionAndSendChallenge(stream bpb.Bootstrap_BootstrapStreamServer, ctx context.Context, lookup *types.EntityLookup, identity *bpb.Identity, ccSerial string) (*streamSession, string, error) {
 	if identity == nil {
 		return nil, "", status.Errorf(codes.InvalidArgument, "identity field is missing in request")
@@ -330,30 +351,16 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			if err != nil {
 				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
 			}
-			chassis, err := s.em.ResolveChassis(ctx, lu, bootstrapReq.GetControlCardState().GetSerialNumber())
-			if err != nil {
-				return status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
-			}
-			session.chassis = chassis
-			session.activeControlCard = bootstrapReq.GetControlCardState().GetSerialNumber()
-
-			// Set deviceID for logging and potential future use in the session.
-			if lu.SerialNumber != "" {
-				deviceID = lu.SerialNumber
-			} else {
-				deviceID = chassis.Serial
-			}
-			if deviceID == "" {
-				return status.Errorf(codes.InvalidArgument, "unable to determine device unique identifier")
-			}
-			log.Infof("Resolved device: %s, Chassis: %s, Active CC: %s", deviceID, session.chassis.Hostname, session.activeControlCard)
 
 			switch idType := identity.Type.(type) {
 			case *bpb.Identity_IdevidCert:
-				log.Infof("Detected IDevID flow for %s", deviceID)
-				if err := s.sendIdevidChallenge(stream, session, deviceID, idType.IdevidCert); err != nil {
+				log.Infof("Detected IDevID flow...")
+				newSession, newDeviceID, err := s.establishSessionAndSendChallenge(stream, ctx, lu, identity, bootstrapReq.GetControlCardState().GetSerialNumber())
+				if err != nil {
 					return err
 				}
+				session = newSession
+				deviceID = newDeviceID
 
 			case *bpb.Identity_EkPub:
 				if !identity.GetPpkPub() {
@@ -437,24 +444,12 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 			if session.currentState == stateInitial {
 				log.Info("Received ReportStatusRequest on a new stream. Starting re-authentication...")
-				identity := req.ReportStatusRequest.GetIdentity()
-				var ccSerial string
-				if states := req.ReportStatusRequest.GetStates(); len(states) > 0 {
-					ccSerial = states[0].GetSerialNumber()
-				}
-				if ccSerial == "" {
-					return status.Errorf(codes.InvalidArgument, "control card serial is missing in ReportStatusRequest")
-				}
-				peerAddr, err := peerAddressFromContext(ctx)
+				lu, ccSerial, err := buildLookupFromReportStatus(ctx, req.ReportStatusRequest)
 				if err != nil {
 					return err
 				}
-				lu := &types.EntityLookup{
-					SerialNumber: ccSerial,
-					IPAddress:    peerAddr,
-				}
 
-				newSession, newDeviceID, err := s.establishSessionAndSendChallenge(stream, ctx, lu, identity, ccSerial)
+				newSession, newDeviceID, err := s.establishSessionAndSendChallenge(stream, ctx, lu, req.ReportStatusRequest.GetIdentity(), ccSerial)
 				if err != nil {
 					return err
 				}
