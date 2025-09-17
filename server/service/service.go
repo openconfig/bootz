@@ -218,6 +218,103 @@ const (
 	stateAttested
 )
 
+// buildLookupFromReportStatus constructs an EntityLookup object from a ReportStatusRequest.
+func buildLookupFromReportStatus(ctx context.Context, req *bpb.ReportStatusRequest) (*types.EntityLookup, string, error) {
+	peerAddr, err := peerAddressFromContext(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	var ccSerial string
+	if states := req.GetStates(); len(states) > 0 {
+		ccSerial = states[0].GetSerialNumber()
+	}
+	if ccSerial == "" {
+		return nil, "", status.Errorf(codes.InvalidArgument, "control card serial is missing in ReportStatusRequest")
+	}
+	// Note: ReportStatusRequest doesn't have manufacturer or part number. The lookup is simpler.
+	lu := &types.EntityLookup{
+		SerialNumber: ccSerial,
+		IPAddress:    peerAddr,
+	}
+	return lu, ccSerial, nil
+}
+
+// sendIdevidChallenge contains the logic for parsing an IDevID cert, and sending a nonce challenge.
+func (s *Service) sendIdevidChallenge(stream bpb.Bootstrap_BootstrapStreamServer, session *streamSession, deviceID string, idevidCertB64 string) error {
+	certDER, err := base64.StdEncoding.DecodeString(idevidCertB64)
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
+	}
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
+	}
+
+	// TODO: Validate this cert against Vendor CAs & check against Entity Manager.
+	// e.g., s.em.ValidateIDevID(ctx, cert, chassis)
+	session.idevidCert = cert
+	log.Infof("Successfully parsed IDevID cert for %s", cert.Subject.CommonName)
+
+	nonceBytes := make([]byte, 32)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
+	}
+	session.nonce = nonceBytes
+	nonceStr := base64.StdEncoding.EncodeToString(nonceBytes)
+
+	challengeResp := &bpb.BootstrapStreamResponse{
+		Type: &bpb.BootstrapStreamResponse_Challenge_{
+			Challenge: &bpb.BootstrapStreamResponse_Challenge{
+				Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
+					Nonce: nonceStr,
+				},
+			},
+		},
+	}
+	if err := stream.Send(challengeResp); err != nil {
+		return err
+	}
+	session.currentState = stateTPM20NonceSent
+	log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
+	return nil
+}
+
+// establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM2.0 with IdevID.
+func (s *Service) establishSessionAndSendChallenge(ctx context.Context, session *streamSession, stream bpb.Bootstrap_BootstrapStreamServer, lookup *types.EntityLookup, identity *bpb.Identity, ccSerial string) (string, error) {
+	if identity == nil {
+		return "", status.Errorf(codes.InvalidArgument, "identity field is missing in request")
+	}
+	chassis, err := s.em.ResolveChassis(ctx, lookup, ccSerial)
+	if err != nil {
+		return "", status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
+	}
+
+	session.chassis = chassis
+	session.activeControlCard = ccSerial
+
+	var deviceID string
+	if lookup.SerialNumber != "" {
+		deviceID = lookup.SerialNumber
+	} else {
+		deviceID = chassis.Serial
+	}
+	if deviceID == "" {
+		return "", status.Errorf(codes.InvalidArgument, "unable to determine device unique identifier")
+	}
+	log.Infof("Resolved device for re-authentication: %s, Chassis: %s", deviceID, session.chassis.Hostname)
+
+	switch idType := identity.Type.(type) {
+	case *bpb.Identity_IdevidCert:
+		log.Infof("Detected IDevID flow for %s", deviceID)
+		if err := s.sendIdevidChallenge(stream, session, deviceID, idType.IdevidCert); err != nil {
+			return "", err
+		}
+		return deviceID, nil
+	default:
+		return "", status.Errorf(codes.InvalidArgument, "unsupported identity type for re-authentication: %T", idType)
+	}
+}
+
 func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
 	ctx := stream.Context()
 
@@ -252,62 +349,15 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			if err != nil {
 				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
 			}
-			chassis, err := s.em.ResolveChassis(ctx, lu, bootstrapReq.GetControlCardState().GetSerialNumber())
-			if err != nil {
-				return status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
-			}
-			session.chassis = chassis
-			session.activeControlCard = bootstrapReq.GetControlCardState().GetSerialNumber()
-
-			// Set deviceID for logging and potential future use in the session.
-			if lu.SerialNumber != "" {
-				deviceID = lu.SerialNumber
-			} else {
-				deviceID = chassis.Serial
-			}
-			if deviceID == "" {
-				return status.Errorf(codes.InvalidArgument, "unable to determine device unique identifier")
-			}
-			log.Infof("Resolved device: %s, Chassis: %s, Active CC: %s", deviceID, session.chassis.Hostname, session.activeControlCard)
 
 			switch idType := identity.Type.(type) {
 			case *bpb.Identity_IdevidCert:
-				log.Infof("Detected IDevID flow for %s", deviceID)
-				certDER, err := base64.StdEncoding.DecodeString(idType.IdevidCert)
+				log.Infof("Detected IDevID flow...")
+				newDeviceID, err := s.establishSessionAndSendChallenge(ctx, session, stream, lu, identity, bootstrapReq.GetControlCardState().GetSerialNumber())
 				if err != nil {
-					return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
-				}
-				cert, err := x509.ParseCertificate(certDER)
-				if err != nil {
-					return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
-				}
-
-				// TODO: Validate this cert against Vendor CAs & check against Entity Manager.
-				// e.g., s.em.ValidateIDevID(ctx, cert, chassis)
-				session.idevidCert = cert
-				log.Infof("Successfully parsed IDevID cert for %s", cert.Subject.CommonName)
-
-				nonceBytes := make([]byte, 32)
-				if _, err := rand.Read(nonceBytes); err != nil {
-					return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
-				}
-				session.nonce = nonceBytes
-				nonceStr := base64.StdEncoding.EncodeToString(nonceBytes)
-
-				challengeResp := &bpb.BootstrapStreamResponse{
-					Type: &bpb.BootstrapStreamResponse_Challenge_{
-						Challenge: &bpb.BootstrapStreamResponse_Challenge{
-							Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
-								Nonce: nonceStr,
-							},
-						},
-					},
-				}
-				if err := stream.Send(challengeResp); err != nil {
 					return err
 				}
-				session.currentState = stateTPM20NonceSent
-				log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
+				deviceID = newDeviceID
 
 			case *bpb.Identity_EkPub:
 				if !identity.GetPpkPub() {
@@ -384,7 +434,41 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			log.Infof("Successfully sent bootstrap data to %s", deviceID)
 
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
-			// TODO: process request
+			log.Infof("=============================================================================")
+			log.Infof("====================== Stream status report received ======================")
+			log.Infof("=============================================================================")
+			log.Infof("Received ReportStatusRequest from %s: %+v", deviceID, req.ReportStatusRequest)
+
+			if session.currentState == stateInitial {
+				log.Info("Received ReportStatusRequest on a new stream. Starting re-authentication...")
+				lu, ccSerial, err := buildLookupFromReportStatus(ctx, req.ReportStatusRequest)
+				if err != nil {
+					return err
+				}
+
+				newDeviceID, err := s.establishSessionAndSendChallenge(ctx, session, stream, lu, req.ReportStatusRequest.GetIdentity(), ccSerial)
+				if err != nil {
+					return err
+				}
+
+				deviceID = newDeviceID
+			} else {
+				if err := s.em.SetStatus(ctx, req.ReportStatusRequest); err != nil {
+					log.Errorf("Failed to set status for device %s: %v", deviceID, err)
+					return status.Errorf(codes.Internal, "failed to set status: %v", err)
+				}
+				log.Infof("Successfully set status for device %s", deviceID)
+
+				resp := &bpb.BootstrapStreamResponse{
+					Type: &bpb.BootstrapStreamResponse_ReportStatusResponse{
+						ReportStatusResponse: &bpb.EmptyResponse{},
+					},
+				}
+				if err := stream.Send(resp); err != nil {
+					return err
+				}
+				log.Infof("Acknowledged status report from %s", deviceID)
+			}
 		default:
 			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
 		}

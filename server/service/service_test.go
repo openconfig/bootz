@@ -252,11 +252,12 @@ func TestBootstrapStream(t *testing.T) {
 	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
 
 	tests := []struct {
-		name        string
-		em          *mockEntityManager
-		initialReq  *bpb.BootstrapStreamRequest
-		wantErrCode codes.Code
-		signedNonce []byte
+		name         string
+		em           *mockEntityManager
+		initialReq   *bpb.BootstrapStreamRequest
+		wantErrCode  codes.Code
+		signedNonce  []byte
+		reportStatus bool
 	}{
 		{
 			name: "IDevID Flow Success - Initial Challenge Only",
@@ -323,6 +324,47 @@ func TestBootstrapStream(t *testing.T) {
 				},
 			},
 			wantErrCode: codes.InvalidArgument,
+		},
+		{
+			name: "IDevID Flow with Successful Status Report",
+			em: &mockEntityManager{
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
+				getBootstrapDataResp: &bpb.BootstrapDataResponse{
+					BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
+				},
+			},
+			initialReq: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+					BootstrapRequest: &bpb.GetBootstrapDataRequest{
+						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-SUCCESS-STATUS"},
+						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
+						Identity:          &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
+					},
+				},
+			},
+			signedNonce:  []byte{},
+			reportStatus: true,
+		},
+		{
+			name: "IDevID Flow with Failing Status Report",
+			em: &mockEntityManager{
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
+				getBootstrapDataResp: &bpb.BootstrapDataResponse{
+					BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
+				},
+				setStatusErr: status.Errorf(codes.Internal, "db error"),
+			},
+			initialReq: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+					BootstrapRequest: &bpb.GetBootstrapDataRequest{
+						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-FAIL-STATUS"},
+						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
+						Identity:          &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
+					},
+				},
+			},
+			signedNonce:  []byte{},
+			reportStatus: true,
 		},
 	}
 
@@ -410,7 +452,6 @@ func TestBootstrapStream(t *testing.T) {
 			if err := stream.Send(responseReq); err != nil {
 				t.Fatalf("stream.Send(responseReq) failed: %v", err)
 			}
-			stream.CloseSend()
 
 			// === Second Recv: Expect Bootstrap Data or Error ===
 			finalResp, err := stream.Recv()
@@ -438,6 +479,39 @@ func TestBootstrapStream(t *testing.T) {
 				t.Error("Final response is missing the serialized bootstrap data")
 			}
 
+			// === Optional Third Stage: Status Reporting ===
+			if test.reportStatus {
+				statusReq := &bpb.BootstrapStreamRequest{
+					Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{
+						ReportStatusRequest: &bpb.ReportStatusRequest{
+							Status: bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+						},
+					},
+				}
+				if err := stream.Send(statusReq); err != nil {
+					t.Fatalf("stream.Send(statusReq) failed: %v", err)
+				}
+
+				ack, err := stream.Recv()
+				if test.em.setStatusErr != nil {
+					if err == nil {
+						t.Fatalf("Expected error on status report, got %v", ack)
+					}
+					if s, _ := status.FromError(err); s.Code() != codes.Internal {
+						t.Errorf("Expected Internal error, got %v", s.Code())
+					}
+					return
+				}
+
+				if err != nil {
+					t.Fatalf("Got unexpected error on status report: %v", err)
+				}
+				if ack.GetReportStatusResponse() == nil {
+					t.Fatalf("Expected ReportStatusResponse, got %T", ack.Type)
+				}
+			}
+
+			stream.CloseSend()
 			_, err = stream.Recv()
 			if err != io.EOF {
 				t.Errorf("Expected EOF after final response, got %v", err)
