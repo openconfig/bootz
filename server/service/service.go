@@ -280,7 +280,7 @@ func (s *Service) sendIdevidChallenge(stream bpb.Bootstrap_BootstrapStreamServer
 }
 
 // establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM2.0 with IdevID.
-func (s *Service) establishSessionAndSendChallenge(session *streamSession, stream bpb.Bootstrap_BootstrapStreamServer, ctx context.Context, lookup *types.EntityLookup, identity *bpb.Identity, ccSerial string) (string, error) {
+func (s *Service) establishSessionAndSendChallenge(ctx context.Context, session *streamSession, stream bpb.Bootstrap_BootstrapStreamServer, lookup *types.EntityLookup, identity *bpb.Identity, ccSerial string) (string, error) {
 	if identity == nil {
 		return "", status.Errorf(codes.InvalidArgument, "identity field is missing in request")
 	}
@@ -353,7 +353,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			switch idType := identity.Type.(type) {
 			case *bpb.Identity_IdevidCert:
 				log.Infof("Detected IDevID flow...")
-				newDeviceID, err := s.establishSessionAndSendChallenge(session, stream, ctx, lu, identity, bootstrapReq.GetControlCardState().GetSerialNumber())
+				newDeviceID, err := s.establishSessionAndSendChallenge(ctx, session, stream, lu, identity, bootstrapReq.GetControlCardState().GetSerialNumber())
 				if err != nil {
 					return err
 				}
@@ -446,7 +446,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 					return err
 				}
 
-				newDeviceID, err := s.establishSessionAndSendChallenge(session, stream, ctx, lu, req.ReportStatusRequest.GetIdentity(), ccSerial)
+				newDeviceID, err := s.establishSessionAndSendChallenge(ctx, session, stream, lu, req.ReportStatusRequest.GetIdentity(), ccSerial)
 				if err != nil {
 					return err
 				}
