@@ -49,8 +49,8 @@ service Bootstrap {
   // BootstrapStream provides the streaming implementation of the Bootz
   // service. This flow allows for both server and client validation via
   // nonces and certificate validation. This allows the service to start with
-  // non owner signed certificates and build trust relationship.
-  // This bypasses the need to require the iDevID cert to be sent as part of
+  // non owner signed certificates and build a trust relationship.
+  // This bypasses the need to require the IDevID cert to be sent as part of
   // the initial gRPC TLS handshake.
   // The workflow should follow:
   //    BootstrapStreamRequest.bootstrap_request
@@ -62,18 +62,18 @@ service Bootstrap {
       returns (stream BootstrapStreamResponse) {}
 }
 
-// Describes how the device will prove its identity to the Bootstrap server
-// during the BootstreapStream() RPC.
-// For systems which support iDevID that will be the preferred method.
-// If identity is set one of the types must be set or an error is
-// returned.
+// Identity describes how the device will prove its identity to the Bootstrap
+// server during the BootstreapStream() RPC.
+// For systems which support IDevID that will be the preferred method.
+// If identity is set, one of the types must be set or an error is returned.
 message Identity {
   oneof type {
-    // idevid_cert will be validated via OVGS and the vendor CA bundle.
-    // Additional it will be used to validate the nonce_signed.
+    // idevid_cert will be validated via OVGS (Ownership Voucher gRPC Service)
+    // and the vendor CA bundle.
+    // Additionally it will be used to validate the nonce_signed.
     // The format is a base64 encoding of an x509 DER certificate.
     string idevid_cert = 1;
-    // One of the key types must be set for non-iDevID based systems.
+    // One of the key types must be set for non-IDevID based systems.
     // The public keys will be used to encrypt the nonce and validate
     // that the keys match the data in OVGS. The decrypted
     // nonce will be returned to validate the device identity.
@@ -87,7 +87,7 @@ message Identity {
     // Deprecated: Use ek_ppk_pub instead.
     bytes ppk_csr = 4 [deprecated = true];
     
-    // TPM 2.0 without IDevId, device supports both EK and PPK
+    // TPM 2.0 without IDevId. Device supports both EK and PPK.
     bool ek_ppk_pub = 5;
   }
 }
@@ -107,21 +107,21 @@ message GetBootstrapDataRequest {
 
   // Identity will contain information used to validate the identity
   // of the device.
-  // For systems which support iDevID that will be the preferred method.
-  // If identity is set one of the types must be set or an error is
+  // For systems which support IDevID that will be the preferred method.
+  // If identity is set, one of the types must be set or an error is
   // returned.
   Identity identity = 1003;
 } 
 
-// BootstrapStreamRequest is used to both build send chassis information
-// as well as build a trust relationship if the iDevID cert is not used
+// BootstrapStreamRequest is used to both send chassis information
+// as well as build a trust relationship if the IDevID cert is not used
 // during TLS setup.
 message BootstrapStreamRequest {
   message Response {
     oneof type {
-      // Nonce to be signed with IAK from the device for iDevID based systems.
+      // Nonce to be signed with IAK from the device for IDevID based systems.
       bytes nonce_signed = 1;
-      // For non-iDevID systems the encrypted nonce will be decrypted via:
+      // For non-IDevID systems the encrypted nonce will be decrypted via:
       // TPM 2.0: PPK
       // TPM 1.2: EK
       string nonce = 2;
@@ -159,11 +159,11 @@ message BootstrapStreamRequest {
 } 
 
 // BootstrapStreamResponse will be returned based on the request from the
-// client. The challenge will be based on the data provided in the initial
-// GetBootstrapDataRequest based on the identity message.
+// client. The challenge will be based on the Identity message provided in
+// the initial GetBootstrapDataRequest message.
 message BootstrapStreamResponse {
   message Challenge {
-    // TPM 2.0 without IDevId may be provisioned using using EK or PPK
+    // TPM 2.0 without IDevId may be provisioned using EK or PPK
     enum TPM20CsrRequest {
       TPM2_0_CSR_REQUEST_UNSPECIFIED = 0;
       TPM2_0_CSR_REQUEST_EK = 1;
@@ -171,15 +171,14 @@ message BootstrapStreamResponse {
     }
    
     oneof type {
-      // nonce will be returned for iDevID based system for signing by IAK.
+      // nonce will be returned for IDevID based system for signing by IAK.
       string nonce = 1;
-      // nonce_encrypted will be returned for non-iDevID based systems.
+      // nonce_encrypted will be returned for non-IDevID based systems.
       // The public key used to encrypt the data will be based on the 
-      // public key provided by OVGS. This maybe EK or PPK.
+      // public key provided by OVGS, which may be EK or PPK.
       bytes nonce_encrypted = 2; 
       // TPM 1.2 EK CA public cert
       bytes ca_pub = 3;
-
       // TPM 2.0 without IDevId
       TPM20CsrRequest tpm20_csr_request = 4;
     } 
@@ -200,19 +199,19 @@ message BootstrapStreamResponse {
 }
 
 // Structured message containing the chassis details, and listing its component
-// control-card modules.
+// control card modules.
 message ChassisDescriptor {
   string manufacturer = 1;
   string part_number = 2;
-  // This field must be populated for fixed form-factor chassis.
-  // The serial can be empty for modular chassis.
+  // This field must be populated for fixed form factor chassis.
+  // The serial number can be empty for modular chassis.
   string serial_number = 3;
   // For modular chassis this field will be used to list the control cards
   // to be bootstrapped.
   repeated ControlCard control_cards = 4;
 }
 
-// Details of the control card, including serial-number and the location
+// Details of the control card, including serial number and the location
 // of the card on the chassis.
 message ControlCard {
   string part_number = 1;
@@ -227,36 +226,36 @@ message ControlCard {
 // At the beginning of the bootstrap process (i.e. before a
 // ReportStatus has completed with BOOTSTRAP_STATUS_SUCCESS),
 // all control cards (1 or 2) are in NOT_INITIALIZED state.
-// If bootstrap successfully completes for a control-card, the
+// If bootstrap successfully completes for a control card, its
 // ControlCardStatus changes to INITIALIZED.
 //
-// Once a control-card is in INITIALIZED state, it may remain in that
+// Once a control card is in INITIALIZED state, it may remain in that
 // state indefinitely, even if removed and reinstalled in a chassis.
 //
-// When there are 2 control-cards present and INITIALIZED and 1 is
+// When there are 2 control cards present and INITIALIZED then one is
 // removed, the remaining control card remains in INITIALIZED state.
-// If a new control-card is inserted which has never completed the
+// If a new control card is inserted which has never completed the
 // bootstrap process, it will start with NOT_INITIALIZED state.
 message ControlCardState {
 
   enum ControlCardStatus {
-    // the bootstrap process status is not reported.
+    // The bootstrap process status is not reported.
     CONTROL_CARD_STATUS_UNSPECIFIED = 0;
-    // the bootstrap process has not successfully completed.
+    // The bootstrap process has not successfully completed.
     CONTROL_CARD_STATUS_NOT_INITIALIZED = 1;
-    // the bootstrap process has successfully completed.
+    // The bootstrap process has successfully completed.
     CONTROL_CARD_STATUS_INITIALIZED = 2;
   }
 
-  // Serial must align with the serial number of the provided
+  // serial_number must align with the serial number of the provided
   // control card in the chassis descriptor.
   string serial_number = 1;
   ControlCardStatus status = 2;
 }
 
 message BootstrapDataResponse {
-  // The serial number of the control card to which this state should
-  // be applied.
+  // The serial number of the control card to which this bootstrap data
+  // should be applied.
   string serial_num = 1;
   // The device should download and install this image (or skip if the
   // device is already running it).
@@ -276,13 +275,13 @@ message BootstrapDataResponse {
 }
 
 // CertzProfiles contains the Certz profiles and entities to create.
-// The profiles cannot contain duplicate id's and must never contain
-// the id `system_default_profile`.
+// The profiles cannot contain duplicate ID's and must never contain
+// the ID `system_default_profile`.
 message CertzProfiles {
   repeated CertzProfile profiles = 1;
 }
 
-// CertzProfile is the profile ID and Certz entities for the profile.
+// CertzProfile contains the profile ID and Certz entities for the profile.
 message CertzProfile {
   string ssl_profile_id = 1;
   gnsi.certz.v1.UploadRequest certz = 2; 
@@ -330,8 +329,7 @@ message GetBootstrapDataResponse {
   bytes serialized_bootstrap_data = 104;
 }
 
-// Fields required by the device to be able to
-// download and verify an image.
+// Fields required by the device to be able to download and verify an image.
 // The format of this message is identical to the `boot-image` data 
 // model outlined in the sZTP RFC:
 // https://datatracker.ietf.org/doc/html/rfc8572#section-6.1
@@ -347,7 +345,7 @@ message SoftwareImage {
   // `hex-string`, identified in RFC6991 as "A hexadecimal string with 
   // octets represented as hex digits separated by colons.
   // The canonical representation uses lowercase characters."
-  // e.g.: "d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5"
+  // E.g.: "d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5"
   string os_image_hash = 4;
   // The identity of the hash algorithm used. These hash identiities are 
   // defined in sZTP RFC 8572. There is currently only one hash algorithm
@@ -363,7 +361,7 @@ message Credentials {
 }
 
 message BootConfig {
-  // Proprietary key-value parameters that are required as part of boot
+  // Proprietary key-value pairs that are required as part of boot
   // configuration (e.g., feature flags, or vendor-specific hardware knobs).
   google.protobuf.Struct metadata = 1;
 
@@ -385,7 +383,7 @@ message BootConfig {
   // 
   // Native format vendor configuration.
   bytes vendor_config = 2;
-  // JSON rendered OC configuration.
+  // JSON rendered OpenConfig configuration.
   bytes oc_config = 3;
 
   // dynamic_vendor_config and dynamic_oc_config specify boot configuration
@@ -397,15 +395,15 @@ message BootConfig {
   //
   // Native format vendor configuration.
   bytes dynamic_vendor_config = 5;
-  // JSON rendered OC configuration.
+  // JSON rendered OpenConfig configuration.
   bytes dynamic_oc_config = 6;
 
-  // Bootloader key-value parameters that are required as part of boot
+  // Bootloader key-value pairs that are required as part of boot
   // configuration.
   google.protobuf.Struct bootloader_config = 4;
 }
 
-// The device reports the status of applying Bootstrap data using this service.
+// The device reports the status of applying bootstrap data using this service.
 // The status_message is a human-readable message indicating the nature of
 // failure, if any.
 message ReportStatusRequest {
@@ -423,18 +421,18 @@ message ReportStatusRequest {
   repeated ControlCardState states = 3;
   // Identity will contain information used to validate the identity
   // of the device.
-  // For systems which support iDevID that will be the preferred method.
-  // If identity is set one of the types must be set or an error is
+  // For systems which support IDevID that will be the preferred method.
+  // If identity is set, one of the types must be set or an error is
   // returned.
   Identity identity = 4;
 }
 
-// Used in  RPC methods that are not expected to return a response.
+// Used in RPC methods that are not expected to return a response.
 message EmptyResponse {
 }
 
-// BootMode specifies if the chassis should utilize OV data.
-// Secure mode uses the OV validation.
+// BootMode specifies if the chassis should utilize Ownership Voucher data.
+// Secure mode uses the Ownership Voucher validation.
 enum BootMode {
   BOOT_MODE_UNSPECIFIED = 0;
   BOOT_MODE_INSECURE = 1;
