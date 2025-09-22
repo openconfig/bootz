@@ -274,7 +274,7 @@ can install production configuration and certificates into the device.
       or `OPTION_V6_SZTP_REDIRECT` (136).
    4. The format of the DHCP message (other than response option code) follows
       [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
-      1.  The URI will be in the format of `bootz://<hostname or ip>:<port>`
+      1. The URI will be in the format of `bootz://<hostname or ip>:<port>`
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.GetBootstrappingData` to
       the bootz-server whose address was obtained from the DHCP server.
@@ -329,12 +329,12 @@ the ownership voucher and ownership certificate.
       RMA'd module.
    4. The device/modules should download the OS image, verify its hash and
       install the OS.
-      1.  A reboot may be performed, if required.
+      1. A reboot may be performed, if required.
    5. The device/modules will then apply the configuration.
-      1.  A reboot may be performed, if required.
+      1. A reboot may be performed, if required.
    6. The `GetBootstrappingData` gRPC can be performed as many times as
       required (i.e. it is idempotent).
-4.  ReportProgress
+4. ReportProgress
    1. This gRPC method is used by the device to inform the bootz server that
       the bootstrapping process is complete. Success or failure is indicated
       using an enum.
