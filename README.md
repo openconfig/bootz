@@ -24,11 +24,11 @@ monolithic single configuration that stores all parameters[^1].
 For the use cases in our or service provider networks, we consider the following
 units:
 
-* **Boot Config** - Static “bootstrap” configuration required to get a device
+- **Boot Config** - Static “bootstrap” configuration required to get a device
   into a manageable state within the network. This configuration includes
   parameters such as the gRPC services that are to run, and the management
   connectivity configuration.
-* **Security Config** - Policies related to provide device access - such as
+- **Security Config** - Policies related to provide device access - such as
   authentication and authorization configurations. This configuration
   explicitly controls access to who can write the configuration, read
   parameters from the device via telemetry, and interact with operational
@@ -36,7 +36,7 @@ units:
   device configuration, since it is owned by a separate entity within the
   service provider management plane. It also should not be something that can
   be modified by an entity that is given read access to the configuration.
-* **Dynamic config** - configuration of the device which is generated
+- **Dynamic config** - configuration of the device which is generated
   according to the topology, and services that are running on the device.
 
 It is desirable for each of these elements of configuration to each have a
@@ -52,13 +52,13 @@ consider:
 
 #### Path based authorization for configuration
 
-* This concept still has a single root configuration on the device. Clients
+- This concept still has a single root configuration on the device. Clients
   “own” part of the namespace of this configuration (e.g., `/system/aaa` in
   OpenConfig), controlled by `gnsi.Pathz` configuration.
-* The positive of this approach is that it aligns with existing device
+- The positive of this approach is that it aligns with existing device
   operational models, with a single configuration (other than `Pathz` exists
   on the device).
-* The major downside of this approach is fragility - the “dynamic”
+- The major downside of this approach is fragility - the “dynamic”
   configuration described above is the catch-all configuration for the device,
   and would ideally replace `/`, however, it can no longer do this, since
   there exists data under the bootstrap configuration (for example,
@@ -69,21 +69,21 @@ consider:
   can render the device unmanageable, or can reflect a security problem
   (whereby a client that is not authorized to change security policies is able
   to do so).
-* Equally, authentication policies become more complex in this scenario - we
+- Equally, authentication policies become more complex in this scenario - we
   imply the existence of a new namespace (`Pathz`), and create this new
   concept of multiple configurations solely to enforce the restrictions on the
   single configuration that we were trying to maintain.
 
 ##### Path based implementation details
 
-* `gnsi.Pathz` policy would limit specific OpenConfig paths from general
+- `gnsi.Pathz` policy would limit specific OpenConfig paths from general
   writability
-* The response to the gNMI `SetRequest` that contains the OpenConfig
+- The response to the gNMI `SetRequest` that contains the OpenConfig
   configuration change (update, set, delete) is expected to indicate that the
   request failed if those paths are not writable by the caller
-* The full config replace would be responsible for only "replacing" specific
+- The full config replace would be responsible for only "replacing" specific
   paths rather than a root level replace
-  * `/system/<subpaths>` but excluding `/system/aaa`, or
+  - `/system/<subpaths>` but excluding `/system/aaa`, or
     `/interfaces/interface [name=\*]` but exclude
     `/interfaces[name=mgmt0|1]`, this introduces fragility and complexity in
     how the `/interfaces/interface` list or `/system` paths are managed
@@ -91,15 +91,15 @@ consider:
 
 #### Multiple namespaces for the configuration
 
-* This is the approach that has been pursued with gNSI - whereby certain
+- This is the approach that has been pursued with gNSI - whereby certain
   subsets of the configuration are moved into a separate namespace (origin in
   OpenConfig naming), which is not manipulated via gNMI’s `Set` RPC. To
   support the bootstrap configuration, an additional ‘boot’ configuration
   namespace would be introduced.
-* A disadvantage of this approach is the change that it makes to existing
+- A disadvantage of this approach is the change that it makes to existing
   device configurations, introducing the concept of multiple potentially
   overlapping configurations.
-* An advantage of the approach is that there is clean separation according to
+- An advantage of the approach is that there is clean separation according to
   the operational use case described above - a gNSI namespace exists for
   policies on the device; the ‘boot’ namespace would exist for configuration
   that is immutable after device boot; and the existing configuration becomes
@@ -110,41 +110,41 @@ consider:
 
 ##### Multiple namespace implementation details
 
-* Data supplied by gNSI is considered as a separate namespace/configuration
+- Data supplied by gNSI is considered as a separate namespace/configuration
   store that is treated independently of configuration interacted with via
   gNMI. All system AAA paths, certificates, keys, accounts and other gNSI
   covered data is contained in this namespace.
-* If gNSI is enabled on the device all of the content covered via gNSI is
+- If gNSI is enabled on the device all of the content covered via gNSI is
   interacted with solely within this namespace. To interact with this content,
   gNSI is used. gNSI `SetRequests` are ACL'ed via `gnsi.Pathz`. Additionally,
   gNSI endpoints would continue to provide set operations as well for those
   configuration elements.
-* OpenConfig and vendor configuration would not be allowed to configure those
+- OpenConfig and vendor configuration would not be allowed to configure those
   leaves.
 
 #### Explicit exclusion of configuration based on a specification in `gNMI.Set`
 
-* In this approach, rather than having separate namespaces be defined, a
+- In this approach, rather than having separate namespaces be defined, a
   client that was performing a `gNMI.Set` request would include some
   additional information (likely defined through having a new extension
   message) that specified a set of paths that explicitly should not be
   modified through the contents of the `SetRequest`. Specifically, this would
   ensure that:
-  * Should the payload of the `SetRequest` specify a path that was in the
+  - Should the payload of the `SetRequest` specify a path that was in the
     “paths that are not to be modified" list, an error would be returned.
-  * `Replace` operations that give the declarative set of end contents for a
+  - `Replace` operations that give the declarative set of end contents for a
     particular path would exclude these being replaced (e.g., a `replace`
     operation that impacted `/system`, along with a payload that specified
     that `/system/aaa` is not to be modified) would have the semantics of
     replacing the contents of `/system` with that specified, yet leaving
     `/system/aaa` in place.
-* This approach allows for a flexible means by which a scope can be declared
+- This approach allows for a flexible means by which a scope can be declared
   by a client that knows that there are specific areas of the configuration
   that it is not intending to modify. Since this scope would be declared by
   the client, clearly it is not a security mechanism, and hence `gNSI.Pathz`
   is still required to define the authorisation policy as to which client can
   write to specific parts of the configuration.
-* The downside of this approach is the complexity introduced into the
+- The downside of this approach is the complexity introduced into the
   implementation of the `Set` handler – and at the client. A client that is
   managing the dynamic configuration must have a definition as to what areas
   of the configuration it does not expect to overwrite, and the target
@@ -153,15 +153,15 @@ consider:
 
 ##### Explicit exclusion implementation details
 
-* A gNMI `SetRequest` would require the inclusion of a message to indicate
+- A gNMI `SetRequest` would require the inclusion of a message to indicate
   that a specific set of "exclude paths" are to be honored.
-* These paths would be excluded from the merge / replace operations.
-* Currently, for some implementations this behavior can be achieved via a
+- These paths would be excluded from the merge / replace operations.
+- Currently, for some implementations this behavior can be achieved via a
   proprietary switch within the vendor-configuration that excludes specific
   paths from being settable from gNMI.
-  * In this implementation any attempts to "set an excluded path" is
+  - In this implementation any attempts to "set an excluded path" is
     ignored.
-  * This is not advisable as it makes it very opaque during a set as to why
+  - This is not advisable as it makes it very opaque during a set as to why
     a set is having a specific output.
 
 ### Proposed Solution
@@ -176,33 +176,33 @@ Figure 1: Proposed configuration namespaces and clients.
 
 The proposed operational model for devices is shown in Figure 1 above.
 
-* Security credentials (authorization, accounting, authentication) are
+- Security credentials (authorization, accounting, authentication) are
   considered part of security/auth namespace. gNSI manages this configuration
   store completely. It is considered a “precedence 0” store, whereby it is the
   authoritative source of configuration in the case of any overlap with other
   namespaces. Explicitly, this means that gNSI owns this configuration, and
   calls must be made to gNSI to mutate this store.
-* Boot configuration (discussed in more detail in this document) is considered
+- Boot configuration (discussed in more detail in this document) is considered
   part of a bootstrap namespace. gNOI.Bootz manages this configuration store
   completely (proposed and described in this document). Boot configuration is
   considered a “precedence 10” store, with it being the authoritative source
   of configuration in the case of overlaps.
-* Boot configuration is expressly defined to be immutable, and provided only
+- Boot configuration is expressly defined to be immutable, and provided only
   at the time of device boot. If the boot configuration is required to be
   modified, it would be changed through calling a `Set` RPC through the
   `Bootz` service.
-  * When changing this configuration the device must "reapply" configuration
+  - When changing this configuration the device must "reapply" configuration
     just as would be expected through a controller doing a `gnmi.Set`
     union-merge.
-* Dynamic configuration reflects the current, widely-understood concept of
+- Dynamic configuration reflects the current, widely-understood concept of
   configuration on a network device. It is managed via gNMI. Each origin
   within gNMI is assigned an explicit precedence. The precedence for origins
   is defined in the relevant document - but the value suggested is >= 100,
   i.e., for overlaps with other namespaces it is explicitly ignored. It is
   expected that this is needed in the case that:
-  * `/system/aaa` is populated on the device running gNSI. In such a case,
+  - `/system/aaa` is populated on the device running gNSI. In such a case,
     gNSI (in the auth namespace) is the source of truth.
-  * Management interfaces, or running gRPC daemons are specified in the Boot
+  - Management interfaces, or running gRPC daemons are specified in the Boot
     namespace, also in the `/system` or `/interfaces` hierarchies within the
     dynamic configuration.
 
@@ -230,9 +230,9 @@ certificates, keys and device configuration.
 
 ### Reference Documentation
 
-* External
-  * RFC: [RFC8572](https://datatracker.ietf.org/doc/html/rfc8572)
-  * Attestation:
+- External
+  - RFC: [RFC8572](https://datatracker.ietf.org/doc/html/rfc8572)
+  - Attestation:
     [Charra Draft](https://datatracker.ietf.org/doc/pdf/draft-ietf-rats-yang-tpm-charra-21#page=5)
 
 ### Bootz Operation
@@ -412,7 +412,7 @@ the ownership voucher and ownership certificate.
       body before accepting the message.
    4. If the signature could not be verified, the bootstrap process starts
       from Step 1.
-3. BootstrapStreamRequest.bootstrap\_request
+3. BootstrapStreamRequest.bootstrap_request
    1. The bootz BootstrapStream is initiated by the device sending a
       `GetBootstrapDataRequest` message to the bootz-server in the first
       message of the stream.
@@ -456,7 +456,7 @@ the ownership voucher and ownership certificate.
       data.
    4. If the challenge fails an error will be returned and the device must
       start over from Step 1.
-8. BootstrapStreamResponse.bootstrap\_response
+8. BootstrapStreamResponse.bootstrap_response
    1. The server responds with the intent for the device's baseline state.
       This includes the OS version and boot password hash, and an initial
       device configuration. This would include initial gNSI artifacts such as:
@@ -473,19 +473,19 @@ the ownership voucher and ownership certificate.
       1. A reboot may be performed, if required.
    5. The device/modules will then apply the configuration.
       1. A reboot may be performed, if required.
-9. BootstrapStreamRequest.report\_status\_request
+9. BootstrapStreamRequest.report_status_request
    1. The device sends a `ReportStatusRequest` message to the bootz-server.
    2. If bootstrapping is successful, the device should report all control
       cards as `CONTROL_CARD_STATUS_INITIALIZED` and
       `BOOTSTRAP_STATUS_SUCCESS`.
-   3. If bootstrapping is not successful, the device *may* report status as
+   3. If bootstrapping is not successful, the device _may_ report status as
       `BOOTSTRAP_STATUS_FAILURE` and then should restart the process from
       Step 1.
    4. If the device terminated the previous stream (due to a reboot or to
       apply a configuration).
       1. The server responds with a `BootstrapStreamResponse.challenge` to
          re-authenticate with the device (i.e restart from Step 4).
-   5. If the device *did not* terminate the previous stream.
+   5. If the device _did not_ terminate the previous stream.
       1. the server responds with an empty `ReportStatusResponse` message to
          acknowledge the status report.
 
@@ -525,7 +525,7 @@ configuration.
    bootserver containing serial number of new card, and gets back bootz
    artifacts.
 9. Inventory service makes call to enrollment API and provides proper OV for
-    the new control card.
+   the new control card.
 10. Inventory service makes call to attestation API to verify attestation
     values.
 11. Active control card now verifies the new card, brings the new card into
