@@ -17,10 +17,13 @@ package entitymanager
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 	"sync"
 
 	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
@@ -53,6 +56,7 @@ type InMemoryEntityManager struct {
 	// security artifacts  (OVs, OC and PDC).
 	// TODO: handle mutlti-vendor case
 	secArtifacts *types.SecurityArtifacts
+	vendorCAPool *x509.CertPool
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
@@ -254,6 +258,42 @@ func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrap
 	resp.OwnershipCertificate = ocCMS
 	log.Infof("OC populated")
 	return nil
+}
+
+// ValidateIDevID verifies the authenticity and authorization of a device
+// by validating its IDevID certificate.
+func (em *InMemoryEntityManager) ValidateIDevID(ctx context.Context, cert *x509.Certificate, chassis *types.Chassis) error {
+	opts := x509.VerifyOptions{
+		Roots:     em.vendorCAPool,
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	}
+	if _, err := cert.Verify(opts); err != nil {
+		return fmt.Errorf("IDevID certificate chain validation failed: %w", err)
+	}
+
+	certSerial := getCertSerialNumber(cert.Subject.SerialNumber)
+
+	if !strings.EqualFold(certSerial, chassis.Serial) {
+		if !slices.ContainsFunc(chassis.ControlCards, func(cc *types.ControlCard) bool { return strings.EqualFold(certSerial, cc.Serial) }) {
+			return fmt.Errorf("serial number from certificate (%q) does not match chassis serial (%q) or any control card serials", strings.ToUpper(certSerial), strings.ToUpper(chassis.Serial))
+		}
+	}
+
+	log.InfoContextf(ctx, "Successfully validated IDevID for chassis with serial %q", chassis.Serial)
+	return nil
+}
+
+// getCertSerialNumber extracts the serial number from the cert subject serial number.
+// this logic is the same as http://google3/third_party/openconfig/attestz/service/biz/tpm_cert_verifier.go;l=126;rcl=778139857.
+func getCertSerialNumber(serial string) string {
+	// cert.Subject.SerialNumber can come in the format PID:xxxxxxx SN:1234JF or just
+	// the serial number as is.
+	// Try to extract out the value after SN:
+	sn := strings.Split(serial, "SN:")
+	if len(sn) != 2 {
+		return sn[0]
+	}
+	return sn[1]
 }
 
 // fetchOwnershipVoucher retrieves the ownership voucher for a control card

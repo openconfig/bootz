@@ -78,6 +78,7 @@ type EntityManager interface {
 	GetBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error)
 	SetStatus(context.Context, *bpb.ReportStatusRequest) error
 	Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis, string) error
+	ValidateIDevID(context.Context, *x509.Certificate, *types.Chassis) error
 }
 
 // Service represents the server and entity manager.
