@@ -284,7 +284,6 @@ func (em *InMemoryEntityManager) ValidateIDevID(ctx context.Context, cert *x509.
 }
 
 // getCertSerialNumber extracts the serial number from the cert subject serial number.
-// this logic is the same as http://google3/third_party/openconfig/attestz/service/biz/tpm_cert_verifier.go;l=126;rcl=778139857.
 func getCertSerialNumber(serial string) string {
 	// cert.Subject.SerialNumber can come in the format PID:xxxxxxx SN:1234JF or just
 	// the serial number as is.
