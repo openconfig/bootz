@@ -195,6 +195,9 @@ func (m *mockEntityManager) SetStatus(context.Context, *bpb.ReportStatusRequest)
 func (m *mockEntityManager) Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis, string) error {
 	return m.signErr
 }
+func (m *mockEntityManager) ValidateIDevID(context.Context, *x509.Certificate, *types.Chassis) error {
+	return m.signErr
+}
 
 // Helper function to create a dummy X509 certificate
 func createTestCertificate(t *testing.T, commonName string, serialNumber string) (*rsa.PrivateKey, []byte) {
