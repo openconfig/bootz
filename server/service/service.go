@@ -398,8 +398,8 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			// The device signs the base64-encoded nonce string.
 			if err := signature.Verify(session.idevidCert, []byte(session.nonce), signedNonceB64); err != nil {
 				log.Errorf("Nonce signature verification failed for device %s. Signature: %s, Error: %v", deviceID, signedNonceB64, err)
- 				return status.Errorf(codes.InvalidArgument, "nonce signature verification failed: %v", err)
- 			}
+				return status.Errorf(codes.InvalidArgument, "nonce signature verification failed: %v", err)
+			}
 
 			log.Infof("Nonce signature verified successfully for %s", deviceID)
 			session.currentState = stateAttested
