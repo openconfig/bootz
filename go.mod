@@ -3,7 +3,7 @@ module github.com/openconfig/bootz
 go 1.23.0
 
 require (
-	github.com/coredhcp/coredhcp v0.0.0-20250806070228-f7e98e4e350b
+	github.com/coredhcp/coredhcp d2ed887fca9b
 	github.com/golang/glog v1.2.5
 	github.com/google/go-cmp v0.7.0
 	github.com/h-fam/errdiff v1.0.2
@@ -13,7 +13,7 @@ require (
 	go.mozilla.org/pkcs7 v0.9.0
 	google.golang.org/grpc v1.75.1
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1
-	google.golang.org/protobuf v1.36.9
+	google.golang.org/protobuf v1.36.10
 )
 
 require (
