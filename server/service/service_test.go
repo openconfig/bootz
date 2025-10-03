@@ -410,19 +410,15 @@ func TestBootstrapStream(t *testing.T) {
 			if challenge == nil {
 				t.Fatalf("Response missing challenge")
 			}
-			nonceStr := challenge.GetNonce()
-			if nonceStr == "" {
+			nonce := challenge.GetNonce()
+			if nonce == "" {
 				t.Errorf("Challenge missing nonce")
-			}
-			nonce, err := base64.StdEncoding.DecodeString(nonceStr)
-			if err != nil {
-				t.Fatalf("Nonce is not valid base64: %v", err)
 			}
 
 			// If signedNonce is nil, the test ends here.
 			if test.signedNonce == nil {
 				stream.CloseSend()
-				_, err = stream.Recv()
+				_, err := stream.Recv()
 				if err != io.EOF {
 					t.Errorf("Expected EOF after response, got %v", err)
 				}
@@ -434,7 +430,7 @@ func TestBootstrapStream(t *testing.T) {
 			if len(test.signedNonce) == 0 {
 				// If signedNonce is an empty slice, compute a valid one.
 				hasher := sha256.New()
-				hasher.Write(nonce)
+				hasher.Write([]byte(nonce))
 				hashedNonce := hasher.Sum(nil)
 				finalSignedNonce, err = rsa.SignPKCS1v15(rand.Reader, devicePrivKey, crypto.SHA256, hashedNonce)
 				if err != nil {
