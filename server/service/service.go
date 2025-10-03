@@ -89,7 +89,7 @@ type Service struct {
 
 type streamSession struct {
 	currentState int
-	nonce        []byte // For TPM 2.0 nonce challenge
+	nonce        string // base64 encoded, for TPM 2.0 nonce challenge
 
 	// Store chassis info for later stages
 	chassis           *types.Chassis
@@ -260,14 +260,13 @@ func (s *Service) sendIdevidChallenge(stream bpb.Bootstrap_BootstrapStreamServer
 	if _, err := rand.Read(nonceBytes); err != nil {
 		return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
 	}
-	session.nonce = nonceBytes
-	nonceStr := base64.StdEncoding.EncodeToString(nonceBytes)
+	session.nonce = base64.StdEncoding.EncodeToString(nonceBytes)
 
 	challengeResp := &bpb.BootstrapStreamResponse{
 		Type: &bpb.BootstrapStreamResponse_Challenge_{
 			Challenge: &bpb.BootstrapStreamResponse_Challenge{
 				Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
-					Nonce: nonceStr,
+					Nonce: session.nonce,
 				},
 			},
 		},
@@ -396,10 +395,11 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			// Base64-encode the raw signed nonce before passing it to the Verify function.
 			signedNonceB64 := base64.StdEncoding.EncodeToString(signedNonce)
 
-			// Use the existing Verify function from the signature package.
-			if err := signature.Verify(session.idevidCert, session.nonce, signedNonceB64); err != nil {
-				return status.Errorf(codes.InvalidArgument, "nonce signature verification failed: %v", err)
-			}
+			// The device signs the base64-encoded nonce string.
+			if err := signature.Verify(session.idevidCert, []byte(session.nonce), signedNonceB64); err != nil {
+				log.Errorf("Nonce signature verification failed for device %s. Signature: %s, Error: %v", deviceID, signedNonceB64, err)
+ 				return status.Errorf(codes.InvalidArgument, "nonce signature verification failed: %v", err)
+ 			}
 
 			log.Infof("Nonce signature verified successfully for %s", deviceID)
 			session.currentState = stateAttested
