@@ -241,7 +241,7 @@ func buildLookupFromReportStatus(ctx context.Context, req *bpb.ReportStatusReque
 }
 
 // sendIdevidChallenge contains the logic for parsing an IDevID cert, and sending a nonce challenge.
-func (s *Service) sendIdevidChallenge(stream bpb.Bootstrap_BootstrapStreamServer, session *streamSession, deviceID string, idevidCertB64 string) error {
+func (s *Service) sendIdevidChallenge(ctx context.Context, stream bpb.Bootstrap_BootstrapStreamServer, session *streamSession, deviceID string, idevidCertB64 string) error {
 	certDER, err := base64.StdEncoding.DecodeString(idevidCertB64)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
@@ -251,8 +251,9 @@ func (s *Service) sendIdevidChallenge(stream bpb.Bootstrap_BootstrapStreamServer
 		return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
 	}
 
-	// TODO: Validate this cert against Vendor CAs & check against Entity Manager.
-	// e.g., s.em.ValidateIDevID(ctx, cert, chassis)
+	if err := s.em.ValidateIDevID(ctx, cert, session.chassis); err != nil {
+		return status.Errorf(codes.PermissionDenied, "failed to validate idevid_cert: %v", err)
+	}
 	session.idevidCert = cert
 	log.Infof("Successfully parsed IDevID cert for %s", cert.Subject.CommonName)
 
@@ -306,7 +307,7 @@ func (s *Service) establishSessionAndSendChallenge(ctx context.Context, session 
 	switch idType := identity.Type.(type) {
 	case *bpb.Identity_IdevidCert:
 		log.Infof("Detected IDevID flow for %s", deviceID)
-		if err := s.sendIdevidChallenge(stream, session, deviceID, idType.IdevidCert); err != nil {
+		if err := s.sendIdevidChallenge(ctx, stream, session, deviceID, idType.IdevidCert); err != nil {
 			return "", err
 		}
 		return deviceID, nil
