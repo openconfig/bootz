@@ -215,6 +215,7 @@ const (
 	// TPM 2.0 states
 	stateTPM20CSRRequested
 	stateTPM20NonceSent
+	stateTPM20ReauthNonceSent
 	// Common state
 	stateAttested
 )
@@ -241,7 +242,7 @@ func buildLookupFromReportStatus(ctx context.Context, req *bpb.ReportStatusReque
 }
 
 // sendIdevidChallenge contains the logic for parsing an IDevID cert, and sending a nonce challenge.
-func (s *Service) sendIdevidChallenge(ctx context.Context, stream bpb.Bootstrap_BootstrapStreamServer, session *streamSession, deviceID string, idevidCertB64 string) error {
+func (s *Service) sendIdevidChallenge(ctx context.Context, stream bpb.Bootstrap_BootstrapStreamServer, session *streamSession, deviceID string, idevidCertB64 string, nextState int) error {
 	certDER, err := base64.StdEncoding.DecodeString(idevidCertB64)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
@@ -275,13 +276,13 @@ func (s *Service) sendIdevidChallenge(ctx context.Context, stream bpb.Bootstrap_
 	if err := stream.Send(challengeResp); err != nil {
 		return err
 	}
-	session.currentState = stateTPM20NonceSent
+	session.currentState = nextState
 	log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
 	return nil
 }
 
 // establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM2.0 with IdevID.
-func (s *Service) establishSessionAndSendChallenge(ctx context.Context, session *streamSession, stream bpb.Bootstrap_BootstrapStreamServer, lookup *types.EntityLookup, identity *bpb.Identity, ccSerial string) (string, error) {
+func (s *Service) establishSessionAndSendChallenge(ctx context.Context, session *streamSession, stream bpb.Bootstrap_BootstrapStreamServer, lookup *types.EntityLookup, identity *bpb.Identity, ccSerial string, nextState int) (string, error) {
 	if identity == nil {
 		return "", status.Errorf(codes.InvalidArgument, "identity field is missing in request")
 	}
@@ -307,7 +308,7 @@ func (s *Service) establishSessionAndSendChallenge(ctx context.Context, session 
 	switch idType := identity.Type.(type) {
 	case *bpb.Identity_IdevidCert:
 		log.Infof("Detected IDevID flow for %s", deviceID)
-		if err := s.sendIdevidChallenge(ctx, stream, session, deviceID, idType.IdevidCert); err != nil {
+		if err := s.sendIdevidChallenge(ctx, stream, session, deviceID, idType.IdevidCert, nextState); err != nil {
 			return "", err
 		}
 		return deviceID, nil
@@ -354,7 +355,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			switch idType := identity.Type.(type) {
 			case *bpb.Identity_IdevidCert:
 				log.Infof("Detected IDevID flow...")
-				newDeviceID, err := s.establishSessionAndSendChallenge(ctx, session, stream, lu, identity, bootstrapReq.GetControlCardState().GetSerialNumber())
+				newDeviceID, err := s.establishSessionAndSendChallenge(ctx, session, stream, lu, identity, bootstrapReq.GetControlCardState().GetSerialNumber(), stateTPM20NonceSent)
 				if err != nil {
 					return err
 				}
@@ -381,7 +382,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 		case *bpb.BootstrapStreamRequest_Response_:
 			log.Infof("Received Response from %s", deviceID)
-			if session.currentState != stateTPM20NonceSent {
+			if session.currentState != stateTPM20NonceSent && session.currentState != stateTPM20ReauthNonceSent {
 				return status.Errorf(codes.InvalidArgument, "unexpected state %v for device %s, expecting nonce response", session.currentState, deviceID)
 			}
 
@@ -403,6 +404,21 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 
 			log.Infof("Nonce signature verified successfully for %s", deviceID)
+
+			if session.currentState == stateTPM20ReauthNonceSent {
+				log.Infof("Acknowledging status report for %s after re-authentication", deviceID)
+				resp := &bpb.BootstrapStreamResponse{
+					Type: &bpb.BootstrapStreamResponse_ReportStatusResponse{
+						ReportStatusResponse: &bpb.EmptyResponse{},
+					},
+				}
+				if err := stream.Send(resp); err != nil {
+					return err
+				}
+				log.Infof("Acknowledged status report from %s", deviceID)
+				session.currentState = stateAttested
+				continue
+			}
 			session.currentState = stateAttested
 
 			// If verification is successful, fetch and send the bootstrap data.
@@ -448,7 +464,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 					return err
 				}
 
-				newDeviceID, err := s.establishSessionAndSendChallenge(ctx, session, stream, lu, req.ReportStatusRequest.GetIdentity(), ccSerial)
+				newDeviceID, err := s.establishSessionAndSendChallenge(ctx, session, stream, lu, req.ReportStatusRequest.GetIdentity(), ccSerial, stateTPM20ReauthNonceSent)
 				if err != nil {
 					return err
 				}
