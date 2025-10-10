@@ -470,6 +470,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				}
 
 				deviceID = newDeviceID
+				session.currentState = stateTPM20ReauthNonceSent
 			} else {
 				if err := s.em.SetStatus(ctx, req.ReportStatusRequest); err != nil {
 					log.Errorf("Failed to set status for device %s: %v", deviceID, err)
