@@ -215,6 +215,7 @@ const (
 	// TPM 2.0 states
 	stateTPM20CSRRequested
 	stateTPM20NonceSent
+	stateTPM20ReauthNonceSent
 	// Common state
 	stateAttested
 )
@@ -275,7 +276,6 @@ func (s *Service) sendIdevidChallenge(ctx context.Context, stream bpb.Bootstrap_
 	if err := stream.Send(challengeResp); err != nil {
 		return err
 	}
-	session.currentState = stateTPM20NonceSent
 	log.Infof("Sent nonce challenge to IDevID device: %s", deviceID)
 	return nil
 }
@@ -359,6 +359,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 					return err
 				}
 				deviceID = newDeviceID
+				session.currentState = stateTPM20NonceSent
 
 			case *bpb.Identity_EkPub:
 				if !identity.GetPpkPub() {
@@ -381,7 +382,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 		case *bpb.BootstrapStreamRequest_Response_:
 			log.Infof("Received Response from %s", deviceID)
-			if session.currentState != stateTPM20NonceSent {
+			if session.currentState != stateTPM20NonceSent && session.currentState != stateTPM20ReauthNonceSent {
 				return status.Errorf(codes.InvalidArgument, "unexpected state %v for device %s, expecting nonce response", session.currentState, deviceID)
 			}
 
@@ -403,6 +404,21 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 
 			log.Infof("Nonce signature verified successfully for %s", deviceID)
+
+			if session.currentState == stateTPM20ReauthNonceSent {
+				log.Infof("Acknowledging status report for %s after re-authentication", deviceID)
+				resp := &bpb.BootstrapStreamResponse{
+					Type: &bpb.BootstrapStreamResponse_ReportStatusResponse{
+						ReportStatusResponse: &bpb.EmptyResponse{},
+					},
+				}
+				if err := stream.Send(resp); err != nil {
+					return err
+				}
+				log.Infof("Acknowledged status report from %s", deviceID)
+				session.currentState = stateAttested
+				continue
+			}
 			session.currentState = stateAttested
 
 			// If verification is successful, fetch and send the bootstrap data.
@@ -454,6 +470,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				}
 
 				deviceID = newDeviceID
+				session.currentState = stateTPM20ReauthNonceSent
 			} else {
 				if err := s.em.SetStatus(ctx, req.ReportStatusRequest); err != nil {
 					log.Errorf("Failed to set status for device %s: %v", deviceID, err)

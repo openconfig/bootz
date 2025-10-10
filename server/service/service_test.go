@@ -369,6 +369,23 @@ func TestBootstrapStream(t *testing.T) {
 			signedNonce:  []byte{},
 			reportStatus: true,
 		},
+		{
+			name: "IDevID Flow Re-authentication on new stream with Status Report",
+			em: &mockEntityManager{
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
+			},
+			initialReq: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{
+					ReportStatusRequest: &bpb.ReportStatusRequest{
+						Identity: &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
+						States: []*bpb.ControlCardState{
+							{SerialNumber: "test-serial-123"},
+						},
+					},
+				},
+			},
+			signedNonce: []byte{}, // valid signature
+		},
 	}
 
 	for _, test := range tests {
@@ -464,6 +481,17 @@ func TestBootstrapStream(t *testing.T) {
 					t.Fatalf("stream.Recv() got final error code %v, want %v: %v", stat.Code(), codes.InvalidArgument, err)
 				}
 				return
+			}
+
+			// Handle re-authentication flow initiated by a status report.
+			if _, ok := test.initialReq.Type.(*bpb.BootstrapStreamRequest_ReportStatusRequest); ok {
+				if err != nil {
+					t.Fatalf("stream.Recv() for re-auth response got unexpected error: %v", err)
+				}
+				if finalResp.GetReportStatusResponse() == nil {
+					t.Fatalf("Expected report status response for re-auth, but got: %v", finalResp)
+				}
+				return // End of test for this case.
 			}
 
 			// An empty slice implies a successful bootstrap.
