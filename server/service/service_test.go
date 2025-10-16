@@ -265,7 +265,7 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow Success - Initial Challenge Only",
 			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
 			},
 			initialReq: &bpb.BootstrapStreamRequest{
 				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
@@ -282,7 +282,7 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow Success - Full End-to-End",
 			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
 				getBootstrapDataResp: &bpb.BootstrapDataResponse{
 					BootConfig: &bpb.BootConfig{
 						VendorConfig: []byte("test-vendor-config"),
@@ -304,7 +304,7 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow Failure - Invalid Signature",
 			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
 			},
 			initialReq: &bpb.BootstrapStreamRequest{
 				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
@@ -331,7 +331,7 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow with Successful Status Report",
 			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
 				getBootstrapDataResp: &bpb.BootstrapDataResponse{
 					BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
 				},
@@ -351,7 +351,7 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow with Failing Status Report",
 			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
 				getBootstrapDataResp: &bpb.BootstrapDataResponse{
 					BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
 				},
@@ -372,7 +372,7 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow Re-authentication on new stream with Status Report",
 			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123"},
+				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
 			},
 			initialReq: &bpb.BootstrapStreamRequest{
 				Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{

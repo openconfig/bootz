@@ -289,7 +289,9 @@ func (s *Service) establishSessionAndSendChallenge(ctx context.Context, session 
 	if err != nil {
 		return "", status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
 	}
-
+	if !chassis.StreamingSupported {
+		return "", status.Errorf(codes.Unimplemented, "streaming bootstrap is not supported for this device")
+	}
 	session.chassis = chassis
 	session.activeControlCard = ccSerial
 

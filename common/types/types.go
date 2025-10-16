@@ -74,6 +74,7 @@ type Chassis struct {
 	BootConfig             *bpb.BootConfig
 	Authz                  *apb.UploadRequest
 	BootloaderPasswordHash string
+	StreamingSupported     bool
 }
 
 // ControlCard describes a control card that exists in a resolved Chassis.
