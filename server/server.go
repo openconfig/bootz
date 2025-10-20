@@ -113,9 +113,25 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *ty
 	trustBundle := x509.NewCertPool()
 	trustBundle.AddCert(sa.TrustAnchor)
 
+	// In a real scenario, this cert pool would contain CA(s) that
+	// signed the device's IDevID cert.
+	vendorIDevIDPool := x509.NewCertPool()
+
 	tls := &tls.Config{
 		Certificates: []tls.Certificate{*sa.TLSKeypair},
 		RootCAs:      trustBundle,
+		// The client does not have to present a certificate, but if it does, it must
+		// be verified against the ClientCAs cert pool.
+		// For BootstrapStream, the client should NOT present a certificate in the TLS
+		// handshake and instead establish trust using the challenge-response process.
+		// For unary Bootz gRPCs, the client should present a valid IDevID cert in
+		// the TLS handshake so that Bootz server can verify it.
+		// Although not shown here, the Bootz server implementation must ensure that
+		// either TLS cert verification OR the challenge-response process is completed.
+		// E.g., if a client attempts to perform a unary gRPC call without an IDevID
+		// cert in the TLS handshake, Bootz server should reject.
+		ClientAuth: tls.VerifyClientCertIfGiven,
+		ClientCAs:  vendorIDevIDPool,
 	}
 	log.Infof("Creating server...")
 	s := &grpc.Server{}
