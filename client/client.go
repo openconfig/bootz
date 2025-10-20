@@ -18,7 +18,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -69,6 +71,9 @@ var (
 	urlImageMap       = map[string]string{
 		"https://path/to/image": "../testdata/image.txt",
 	}
+	streamRPC      = flag.Bool("stream_rpc", false, "Whether to use the streaming bootstrap RPC.")
+	idevidCertFile = flag.String("idevid_cert", "", "Path to the IDevID certificate.")
+	idevidKeyFile  = flag.String("idevid_key", "", "Path to the IDevID private key.")
 )
 
 // validateArtifacts checks the signed artifacts in a GetBootstrapDataResponse. Specifically, it:
@@ -169,6 +174,110 @@ func generateNonce() (string, error) {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(b), nil
+}
+
+// loadIDevID loads the IDevID certificate and private key from the specified files.
+func loadIDevID(certFile, keyFile string) (*tls.Certificate, error) {
+	certPEM, err := os.ReadFile(certFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read idevid cert file: %w", err)
+	}
+	keyPEM, err := os.ReadFile(keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read idevid key file: %w", err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse idevid key pair: %w", err)
+	}
+	return &cert, nil
+}
+
+// getBootstrapDataStream handles the streaming bootstrap workflow.
+func getBootstrapDataStream(ctx context.Context, c bpb.BootstrapClient, req *bpb.GetBootstrapDataRequest, chassis *bpb.ChassisDescriptor) (*bpb.GetBootstrapDataResponse, error) {
+	log.Info("Starting streaming bootstrap...")
+	stream, err := c.BootstrapStream(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start bootstrap stream: %w", err)
+	}
+
+	// Load IDevID certificate
+	idevid, err := loadIDevID(*idevidCertFile, *idevidKeyFile)
+	if err != nil {
+		return nil, err
+	}
+	req.Identity = &bpb.Identity{
+		Type: &bpb.Identity_IdevidCert{
+			IdevidCert: base64.StdEncoding.EncodeToString(idevid.Certificate[0]),
+		},
+	}
+
+	// Send initial request
+	if err := stream.Send(&bpb.BootstrapStreamRequest{Type: &bpb.BootstrapStreamRequest_BootstrapRequest{BootstrapRequest: req}}); err != nil {
+		return nil, fmt.Errorf("failed to send initial bootstrap request: %w", err)
+	}
+
+	// Receive challenge
+	challengeResp, err := stream.Recv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to receive challenge: %w", err)
+	}
+	challenge := challengeResp.GetChallenge()
+	if challenge == nil {
+		return nil, fmt.Errorf("expected a challenge, but got %v", challengeResp)
+	}
+	nonce := challenge.GetNonce()
+	if nonce == "" {
+		return nil, fmt.Errorf("challenge is missing nonce")
+	}
+
+	// Sign nonce and send response
+	hasher := sha256.New()
+	hasher.Write([]byte(nonce))
+	hashedNonce := hasher.Sum(nil)
+	signedNonce, err := rsa.SignPKCS1v15(rand.Reader, idevid.PrivateKey.(*rsa.PrivateKey), crypto.SHA256, hashedNonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign nonce: %w", err)
+	}
+
+	if err := stream.Send(&bpb.BootstrapStreamRequest{Type: &bpb.BootstrapStreamRequest_Response_{Response: &bpb.BootstrapStreamRequest_Response{Type: &bpb.BootstrapStreamRequest_Response_NonceSigned{NonceSigned: signedNonce}}}}); err != nil {
+		return nil, fmt.Errorf("failed to send signed nonce: %w", err)
+	}
+
+	// Receive bootstrap data
+	bootstrapDataResp, err := stream.Recv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to receive bootstrap data: %w", err)
+	}
+	if bootstrapDataResp.GetBootstrapResponse() == nil {
+		return nil, fmt.Errorf("expected bootstrap response, but got %v", bootstrapDataResp)
+	}
+
+	bootstrapResp := bootstrapDataResp.GetBootstrapResponse()
+
+	// Report status
+	log.Infof("=========================== Sending Status Report ===========================")
+	statusReq := &bpb.ReportStatusRequest{
+		Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
+		StatusMessage: "Bootstrap Success",
+		States: []*bpb.ControlCardState{
+			{Status: bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED, SerialNumber: chassis.GetControlCards()[0].GetSerialNumber()},
+			{Status: bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED, SerialNumber: chassis.GetControlCards()[1].GetSerialNumber()},
+		},
+	}
+
+	if err := stream.Send(&bpb.BootstrapStreamRequest{
+		Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{ReportStatusRequest: statusReq},
+	}); err != nil {
+		return nil, fmt.Errorf("failed to send status report: %w", err)
+	}
+
+	statusAckResp, err := stream.Recv()
+	if err != nil || statusAckResp.GetReportStatusResponse() == nil {
+		return nil, fmt.Errorf("did not receive status report ack")
+	}
+	log.Infof("Status report sent and acknowledged")
+	return bootstrapResp, nil
 }
 
 func validateChassisDescriptor(chassis *bpb.ChassisDescriptor) {
@@ -277,12 +386,20 @@ func main() {
 
 	// Get bootstrapping data from Bootz server
 	// TODO: Extract and parse response.
-	log.Infof("Requesting Bootstrap Data from Bootz server")
-	resp, err := c.GetBootstrapData(ctx, req)
-	if err != nil {
-		log.Exitf("Error calling GetBootstrapData: %v", err)
+	var resp *bpb.GetBootstrapDataResponse
+	if *streamRPC {
+		resp, err = getBootstrapDataStream(ctx, c, req)
+		if err != nil {
+			log.Exitf("Error calling getBootstrapDataStream: %v", err)
+		}
+	} else {
+		log.Infof("Requesting Bootstrap Data from Bootz server")
+		resp, err = c.GetBootstrapData(ctx, req)
+		if err != nil {
+			log.Exitf("Error calling GetBootstrapData: %v", err)
+		}
+		log.Infof("Successfully retrieved Bootstrap Data from server")
 	}
-	log.Infof("Successfully retrieved Bootstrap Data from server")
 
 	// Only check OC, OV and response signature if SecureOnly is set.
 	if !*insecureBoot {
