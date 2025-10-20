@@ -388,10 +388,12 @@ func main() {
 	// TODO: Extract and parse response.
 	var resp *bpb.GetBootstrapDataResponse
 	if *streamRPC {
-		resp, err = getBootstrapDataStream(ctx, c, req)
+		_, err = getBootstrapDataStream(ctx, c, req, chassis)
 		if err != nil {
 			log.Exitf("Error calling getBootstrapDataStream: %v", err)
 		}
+		// In streaming mode, the rest of the logic is handled within getBootstrapDataStream.
+		return
 	} else {
 		log.Infof("Requesting Bootstrap Data from Bootz server")
 		resp, err = c.GetBootstrapData(ctx, req)
