@@ -18,6 +18,8 @@ load("@bazel_gazelle//:def.bzl", "gazelle")
 # gazelle:proto_import_prefix github.com/openconfig/bootz
 # gazelle:prefix github.com/openconfig/bootz
 # gazelle:resolve go github.com/openconfig/bootz/proto/bootz //proto:bootz
+# gazelle:resolve proto go github.com/openconfig/attestz/proto/tpm_enrollz.proto @openconfig_attestz//proto:tpm_enrollz_go
+# gazelle:resolve proto github.com/openconfig/attestz/proto/tpm_enrollz.proto @openconfig_attestz//proto:tpm_enrollz_proto
 # gazelle:resolve proto go github.com/openconfig/gnsi/authz/authz.proto @openconfig_gnsi//authz:authz
 # gazelle:resolve proto github.com/openconfig/gnsi/authz/authz.proto @openconfig_gnsi//authz:authz_proto
 # gazelle:resolve proto go github.com/openconfig/gnsi/certz/certz.proto @openconfig_gnsi//certz:certz

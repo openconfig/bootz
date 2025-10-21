@@ -7,6 +7,7 @@
 package bootz
 
 import (
+	tpm_enrollz "github.com/openconfig/attestz/proto/tpm_enrollz"
 	authz "github.com/openconfig/gnsi/authz"
 	certz "github.com/openconfig/gnsi/certz"
 	credentialz "github.com/openconfig/gnsi/credentialz"
@@ -75,6 +76,7 @@ func (BootMode) EnumDescriptor() ([]byte, []int) {
 	return file_github_com_openconfig_bootz_proto_bootz_proto_rawDescGZIP(), []int{0}
 }
 
+// Deprecated: Marked as deprecated in github.com/openconfig/bootz/proto/bootz.proto.
 type BootstrapStreamResponse_Challenge_TPM20CsrRequest int32
 
 const (
@@ -515,6 +517,7 @@ func (x *BootstrapStreamRequest) GetEkIdentityRequest() *BootstrapStreamRequest_
 	return nil
 }
 
+// Deprecated: Marked as deprecated in github.com/openconfig/bootz/proto/bootz.proto.
 func (x *BootstrapStreamRequest) GetEkCsrIdentityRequest() *BootstrapStreamRequest_EKCSRIdentityRequest {
 	if x != nil {
 		if x, ok := x.Type.(*BootstrapStreamRequest_EkCsrIdentityRequest); ok {
@@ -524,6 +527,7 @@ func (x *BootstrapStreamRequest) GetEkCsrIdentityRequest() *BootstrapStreamReque
 	return nil
 }
 
+// Deprecated: Marked as deprecated in github.com/openconfig/bootz/proto/bootz.proto.
 func (x *BootstrapStreamRequest) GetPpkCsrIdentityRequest() *BootstrapStreamRequest_PPKCSRIdentityRequest {
 	if x != nil {
 		if x, ok := x.Type.(*BootstrapStreamRequest_PpkCsrIdentityRequest); ok {
@@ -554,10 +558,12 @@ type BootstrapStreamRequest_EkIdentityRequest struct {
 }
 
 type BootstrapStreamRequest_EkCsrIdentityRequest struct {
+	// Deprecated: Marked as deprecated in github.com/openconfig/bootz/proto/bootz.proto.
 	EkCsrIdentityRequest *BootstrapStreamRequest_EKCSRIdentityRequest `protobuf:"bytes,5,opt,name=ek_csr_identity_request,json=ekCsrIdentityRequest,proto3,oneof"`
 }
 
 type BootstrapStreamRequest_PpkCsrIdentityRequest struct {
+	// Deprecated: Marked as deprecated in github.com/openconfig/bootz/proto/bootz.proto.
 	PpkCsrIdentityRequest *BootstrapStreamRequest_PPKCSRIdentityRequest `protobuf:"bytes,6,opt,name=ppk_csr_identity_request,json=ppkCsrIdentityRequest,proto3,oneof"`
 }
 
@@ -1551,6 +1557,7 @@ type BootstrapStreamRequest_Response struct {
 	//
 	//	*BootstrapStreamRequest_Response_NonceSigned
 	//	*BootstrapStreamRequest_Response_Nonce
+	//	*BootstrapStreamRequest_Response_HmacChallengeResponse
 	Type          isBootstrapStreamRequest_Response_Type `protobuf_oneof:"type"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1611,6 +1618,15 @@ func (x *BootstrapStreamRequest_Response) GetNonce() string {
 	return ""
 }
 
+func (x *BootstrapStreamRequest_Response) GetHmacChallengeResponse() *tpm_enrollz.HMACChallengeResponse {
+	if x != nil {
+		if x, ok := x.Type.(*BootstrapStreamRequest_Response_HmacChallengeResponse); ok {
+			return x.HmacChallengeResponse
+		}
+	}
+	return nil
+}
+
 type isBootstrapStreamRequest_Response_Type interface {
 	isBootstrapStreamRequest_Response_Type()
 }
@@ -1623,9 +1639,16 @@ type BootstrapStreamRequest_Response_Nonce struct {
 	Nonce string `protobuf:"bytes,2,opt,name=nonce,proto3,oneof"`
 }
 
+type BootstrapStreamRequest_Response_HmacChallengeResponse struct {
+	HmacChallengeResponse *tpm_enrollz.HMACChallengeResponse `protobuf:"bytes,3,opt,name=hmac_challenge_response,json=hmacChallengeResponse,proto3,oneof"`
+}
+
 func (*BootstrapStreamRequest_Response_NonceSigned) isBootstrapStreamRequest_Response_Type() {}
 
 func (*BootstrapStreamRequest_Response_Nonce) isBootstrapStreamRequest_Response_Type() {}
+
+func (*BootstrapStreamRequest_Response_HmacChallengeResponse) isBootstrapStreamRequest_Response_Type() {
+}
 
 type BootstrapStreamRequest_EKIdentityRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -1679,6 +1702,7 @@ func (x *BootstrapStreamRequest_EKIdentityRequest) GetIdentityRequest() []byte {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in github.com/openconfig/bootz/proto/bootz.proto.
 type BootstrapStreamRequest_EKCSRIdentityRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	EkCsr         []byte                 `protobuf:"bytes,1,opt,name=ek_csr,json=ekCsr,proto3" json:"ek_csr,omitempty"`
@@ -1723,6 +1747,7 @@ func (x *BootstrapStreamRequest_EKCSRIdentityRequest) GetEkCsr() []byte {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in github.com/openconfig/bootz/proto/bootz.proto.
 type BootstrapStreamRequest_PPKCSRIdentityRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PpkCsr        []byte                 `protobuf:"bytes,1,opt,name=ppk_csr,json=ppkCsr,proto3" json:"ppk_csr,omitempty"`
@@ -1775,6 +1800,7 @@ type BootstrapStreamResponse_Challenge struct {
 	//	*BootstrapStreamResponse_Challenge_NonceEncrypted
 	//	*BootstrapStreamResponse_Challenge_CaPub
 	//	*BootstrapStreamResponse_Challenge_Tpm20CsrRequest
+	//	*BootstrapStreamResponse_Challenge_Tpm20HmacChallenge
 	Type          isBootstrapStreamResponse_Challenge_Type `protobuf_oneof:"type"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1826,6 +1852,7 @@ func (x *BootstrapStreamResponse_Challenge) GetNonce() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in github.com/openconfig/bootz/proto/bootz.proto.
 func (x *BootstrapStreamResponse_Challenge) GetNonceEncrypted() []byte {
 	if x != nil {
 		if x, ok := x.Type.(*BootstrapStreamResponse_Challenge_NonceEncrypted); ok {
@@ -1844,6 +1871,7 @@ func (x *BootstrapStreamResponse_Challenge) GetCaPub() []byte {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in github.com/openconfig/bootz/proto/bootz.proto.
 func (x *BootstrapStreamResponse_Challenge) GetTpm20CsrRequest() BootstrapStreamResponse_Challenge_TPM20CsrRequest {
 	if x != nil {
 		if x, ok := x.Type.(*BootstrapStreamResponse_Challenge_Tpm20CsrRequest); ok {
@@ -1851,6 +1879,15 @@ func (x *BootstrapStreamResponse_Challenge) GetTpm20CsrRequest() BootstrapStream
 		}
 	}
 	return BootstrapStreamResponse_Challenge_TPM2_0_CSR_REQUEST_UNSPECIFIED
+}
+
+func (x *BootstrapStreamResponse_Challenge) GetTpm20HmacChallenge() *BootstrapStreamResponse_Challenge_TPM20HMACChallenge {
+	if x != nil {
+		if x, ok := x.Type.(*BootstrapStreamResponse_Challenge_Tpm20HmacChallenge); ok {
+			return x.Tpm20HmacChallenge
+		}
+	}
+	return nil
 }
 
 type isBootstrapStreamResponse_Challenge_Type interface {
@@ -1862,6 +1899,7 @@ type BootstrapStreamResponse_Challenge_Nonce struct {
 }
 
 type BootstrapStreamResponse_Challenge_NonceEncrypted struct {
+	// Deprecated: Marked as deprecated in github.com/openconfig/bootz/proto/bootz.proto.
 	NonceEncrypted []byte `protobuf:"bytes,2,opt,name=nonce_encrypted,json=nonceEncrypted,proto3,oneof"`
 }
 
@@ -1870,7 +1908,12 @@ type BootstrapStreamResponse_Challenge_CaPub struct {
 }
 
 type BootstrapStreamResponse_Challenge_Tpm20CsrRequest struct {
+	// Deprecated: Marked as deprecated in github.com/openconfig/bootz/proto/bootz.proto.
 	Tpm20CsrRequest BootstrapStreamResponse_Challenge_TPM20CsrRequest `protobuf:"varint,4,opt,name=tpm20_csr_request,json=tpm20CsrRequest,proto3,enum=bootz.BootstrapStreamResponse_Challenge_TPM20CsrRequest,oneof"`
+}
+
+type BootstrapStreamResponse_Challenge_Tpm20HmacChallenge struct {
+	Tpm20HmacChallenge *BootstrapStreamResponse_Challenge_TPM20HMACChallenge `protobuf:"bytes,5,opt,name=tpm20_hmac_challenge,json=tpm20HmacChallenge,proto3,oneof"`
 }
 
 func (*BootstrapStreamResponse_Challenge_Nonce) isBootstrapStreamResponse_Challenge_Type() {}
@@ -1880,6 +1923,9 @@ func (*BootstrapStreamResponse_Challenge_NonceEncrypted) isBootstrapStreamRespon
 func (*BootstrapStreamResponse_Challenge_CaPub) isBootstrapStreamResponse_Challenge_Type() {}
 
 func (*BootstrapStreamResponse_Challenge_Tpm20CsrRequest) isBootstrapStreamResponse_Challenge_Type() {
+}
+
+func (*BootstrapStreamResponse_Challenge_Tpm20HmacChallenge) isBootstrapStreamResponse_Challenge_Type() {
 }
 
 type BootstrapStreamResponse_EKIdentityResponse struct {
@@ -1934,11 +1980,63 @@ func (x *BootstrapStreamResponse_EKIdentityResponse) GetSymmetric() []byte {
 	return nil
 }
 
+type BootstrapStreamResponse_Challenge_TPM20HMACChallenge struct {
+	state         protoimpl.MessageState     `protogen:"open.v1"`
+	Key           tpm_enrollz.Key            `protobuf:"varint,1,opt,name=key,proto3,enum=openconfig.attestz.Key" json:"key,omitempty"`
+	HmacChallenge *tpm_enrollz.HMACChallenge `protobuf:"bytes,2,opt,name=hmac_challenge,json=hmacChallenge,proto3" json:"hmac_challenge,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BootstrapStreamResponse_Challenge_TPM20HMACChallenge) Reset() {
+	*x = BootstrapStreamResponse_Challenge_TPM20HMACChallenge{}
+	mi := &file_github_com_openconfig_bootz_proto_bootz_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BootstrapStreamResponse_Challenge_TPM20HMACChallenge) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BootstrapStreamResponse_Challenge_TPM20HMACChallenge) ProtoMessage() {}
+
+func (x *BootstrapStreamResponse_Challenge_TPM20HMACChallenge) ProtoReflect() protoreflect.Message {
+	mi := &file_github_com_openconfig_bootz_proto_bootz_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BootstrapStreamResponse_Challenge_TPM20HMACChallenge.ProtoReflect.Descriptor instead.
+func (*BootstrapStreamResponse_Challenge_TPM20HMACChallenge) Descriptor() ([]byte, []int) {
+	return file_github_com_openconfig_bootz_proto_bootz_proto_rawDescGZIP(), []int{3, 0, 0}
+}
+
+func (x *BootstrapStreamResponse_Challenge_TPM20HMACChallenge) GetKey() tpm_enrollz.Key {
+	if x != nil {
+		return x.Key
+	}
+	return tpm_enrollz.Key(0)
+}
+
+func (x *BootstrapStreamResponse_Challenge_TPM20HMACChallenge) GetHmacChallenge() *tpm_enrollz.HMACChallenge {
+	if x != nil {
+		return x.HmacChallenge
+	}
+	return nil
+}
+
 var File_github_com_openconfig_bootz_proto_bootz_proto protoreflect.FileDescriptor
 
 const file_github_com_openconfig_bootz_proto_bootz_proto_rawDesc = "" +
 	"\n" +
-	"-github.com/openconfig/bootz/proto/bootz.proto\x12\x05bootz\x1a\x1cgoogle/protobuf/struct.proto\x1a,github.com/openconfig/gnsi/authz/authz.proto\x1a,github.com/openconfig/gnsi/certz/certz.proto\x1a8github.com/openconfig/gnsi/credentialz/credentialz.proto\x1a,github.com/openconfig/gnsi/pathz/pathz.proto\"\xac\x01\n" +
+	"-github.com/openconfig/bootz/proto/bootz.proto\x12\x05bootz\x1a\x1cgoogle/protobuf/struct.proto\x1a,github.com/openconfig/gnsi/authz/authz.proto\x1a,github.com/openconfig/gnsi/certz/certz.proto\x1a8github.com/openconfig/gnsi/credentialz/credentialz.proto\x1a,github.com/openconfig/gnsi/pathz/pathz.proto\x1a5github.com/openconfig/attestz/proto/tpm_enrollz.proto\"\xac\x01\n" +
 	"\bIdentity\x12!\n" +
 	"\videvid_cert\x18\x01 \x01(\tH\x00R\n" +
 	"idevidCert\x12\x17\n" +
@@ -1952,40 +2050,45 @@ const file_github_com_openconfig_bootz_proto_bootz_proto_rawDesc = "" +
 	"\x12chassis_descriptor\x18\x01 \x01(\v2\x18.bootz.ChassisDescriptorR\x11chassisDescriptor\x12E\n" +
 	"\x12control_card_state\x18\x02 \x01(\v2\x17.bootz.ControlCardStateR\x10controlCardState\x12\x15\n" +
 	"\x05nonce\x18\xe9\a \x01(\tR\x05nonce\x12,\n" +
-	"\bidentity\x18\xeb\a \x01(\v2\x0f.bootz.IdentityR\bidentity\"\xd0\x06\n" +
+	"\bidentity\x18\xeb\a \x01(\v2\x0f.bootz.IdentityR\bidentity\"\xc6\a\n" +
 	"\x16BootstrapStreamRequest\x12M\n" +
 	"\x11bootstrap_request\x18\x01 \x01(\v2\x1e.bootz.GetBootstrapDataRequestH\x00R\x10bootstrapRequest\x12D\n" +
 	"\bresponse\x18\x02 \x01(\v2&.bootz.BootstrapStreamRequest.ResponseH\x00R\bresponse\x12P\n" +
 	"\x15report_status_request\x18\x03 \x01(\v2\x1a.bootz.ReportStatusRequestH\x00R\x13reportStatusRequest\x12a\n" +
-	"\x13ek_identity_request\x18\x04 \x01(\v2/.bootz.BootstrapStreamRequest.EKIdentityRequestH\x00R\x11ekIdentityRequest\x12k\n" +
-	"\x17ek_csr_identity_request\x18\x05 \x01(\v22.bootz.BootstrapStreamRequest.EKCSRIdentityRequestH\x00R\x14ekCsrIdentityRequest\x12n\n" +
-	"\x18ppk_csr_identity_request\x18\x06 \x01(\v23.bootz.BootstrapStreamRequest.PPKCSRIdentityRequestH\x00R\x15ppkCsrIdentityRequest\x1aO\n" +
+	"\x13ek_identity_request\x18\x04 \x01(\v2/.bootz.BootstrapStreamRequest.EKIdentityRequestH\x00R\x11ekIdentityRequest\x12o\n" +
+	"\x17ek_csr_identity_request\x18\x05 \x01(\v22.bootz.BootstrapStreamRequest.EKCSRIdentityRequestB\x02\x18\x01H\x00R\x14ekCsrIdentityRequest\x12r\n" +
+	"\x18ppk_csr_identity_request\x18\x06 \x01(\v23.bootz.BootstrapStreamRequest.PPKCSRIdentityRequestB\x02\x18\x01H\x00R\x15ppkCsrIdentityRequest\x1a\xb4\x01\n" +
 	"\bResponse\x12#\n" +
 	"\fnonce_signed\x18\x01 \x01(\fH\x00R\vnonceSigned\x12\x16\n" +
-	"\x05nonce\x18\x02 \x01(\tH\x00R\x05nonceB\x06\n" +
+	"\x05nonce\x18\x02 \x01(\tH\x00R\x05nonce\x12c\n" +
+	"\x17hmac_challenge_response\x18\x03 \x01(\v2).openconfig.attestz.HMACChallengeResponseH\x00R\x15hmacChallengeResponseB\x06\n" +
 	"\x04type\x1aU\n" +
 	"\x11EKIdentityRequest\x12\x15\n" +
 	"\x06ek_pub\x18\x01 \x01(\fR\x05ekPub\x12)\n" +
-	"\x10identity_request\x18\x02 \x01(\fR\x0fidentityRequest\x1a-\n" +
+	"\x10identity_request\x18\x02 \x01(\fR\x0fidentityRequest\x1a1\n" +
 	"\x14EKCSRIdentityRequest\x12\x15\n" +
-	"\x06ek_csr\x18\x01 \x01(\fR\x05ekCsr\x1a0\n" +
+	"\x06ek_csr\x18\x01 \x01(\fR\x05ekCsr:\x02\x18\x01\x1a4\n" +
 	"\x15PPKCSRIdentityRequest\x12\x17\n" +
-	"\appk_csr\x18\x01 \x01(\fR\x06ppkCsrB\x06\n" +
-	"\x04type\"\x8e\x06\n" +
+	"\appk_csr\x18\x01 \x01(\fR\x06ppkCsr:\x02\x18\x01B\x06\n" +
+	"\x04type\"\x97\b\n" +
 	"\x17BootstrapStreamResponse\x12H\n" +
 	"\tchallenge\x18\x01 \x01(\v2(.bootz.BootstrapStreamResponse.ChallengeH\x00R\tchallenge\x12P\n" +
 	"\x12bootstrap_response\x18\x02 \x01(\v2\x1f.bootz.GetBootstrapDataResponseH\x00R\x11bootstrapResponse\x12L\n" +
 	"\x16report_status_response\x18\x03 \x01(\v2\x14.bootz.EmptyResponseH\x00R\x14reportStatusResponse\x12e\n" +
-	"\x14ek_identity_response\x18\x04 \x01(\v21.bootz.BootstrapStreamResponse.EKIdentityResponseH\x00R\x12ekIdentityResponse\x1a\xc5\x02\n" +
+	"\x14ek_identity_response\x18\x04 \x01(\v21.bootz.BootstrapStreamResponse.EKIdentityResponseH\x00R\x12ekIdentityResponse\x1a\xce\x04\n" +
 	"\tChallenge\x12\x16\n" +
-	"\x05nonce\x18\x01 \x01(\tH\x00R\x05nonce\x12)\n" +
-	"\x0fnonce_encrypted\x18\x02 \x01(\fH\x00R\x0enonceEncrypted\x12\x17\n" +
-	"\x06ca_pub\x18\x03 \x01(\fH\x00R\x05caPub\x12f\n" +
-	"\x11tpm20_csr_request\x18\x04 \x01(\x0e28.bootz.BootstrapStreamResponse.Challenge.TPM20CsrRequestH\x00R\x0ftpm20CsrRequest\"l\n" +
+	"\x05nonce\x18\x01 \x01(\tH\x00R\x05nonce\x12-\n" +
+	"\x0fnonce_encrypted\x18\x02 \x01(\fB\x02\x18\x01H\x00R\x0enonceEncrypted\x12\x17\n" +
+	"\x06ca_pub\x18\x03 \x01(\fH\x00R\x05caPub\x12j\n" +
+	"\x11tpm20_csr_request\x18\x04 \x01(\x0e28.bootz.BootstrapStreamResponse.Challenge.TPM20CsrRequestB\x02\x18\x01H\x00R\x0ftpm20CsrRequest\x12o\n" +
+	"\x14tpm20_hmac_challenge\x18\x05 \x01(\v2;.bootz.BootstrapStreamResponse.Challenge.TPM20HMACChallengeH\x00R\x12tpm20HmacChallenge\x1a\x89\x01\n" +
+	"\x12TPM20HMACChallenge\x12)\n" +
+	"\x03key\x18\x01 \x01(\x0e2\x17.openconfig.attestz.KeyR\x03key\x12H\n" +
+	"\x0ehmac_challenge\x18\x02 \x01(\v2!.openconfig.attestz.HMACChallengeR\rhmacChallenge\"p\n" +
 	"\x0fTPM20CsrRequest\x12\"\n" +
 	"\x1eTPM2_0_CSR_REQUEST_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15TPM2_0_CSR_REQUEST_EK\x10\x01\x12\x1a\n" +
-	"\x16TPM2_0_CSR_REQUEST_PPK\x10\x02B\x06\n" +
+	"\x16TPM2_0_CSR_REQUEST_PPK\x10\x02\x1a\x02\x18\x01B\x06\n" +
 	"\x04type\x1aR\n" +
 	"\x12EKIdentityResponse\x12\x1e\n" +
 	"\n" +
@@ -2091,42 +2194,46 @@ func file_github_com_openconfig_bootz_proto_bootz_proto_rawDescGZIP() []byte {
 }
 
 var file_github_com_openconfig_bootz_proto_bootz_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_github_com_openconfig_bootz_proto_bootz_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_github_com_openconfig_bootz_proto_bootz_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_github_com_openconfig_bootz_proto_bootz_proto_goTypes = []any{
 	(BootMode)(0), // 0: bootz.BootMode
-	(BootstrapStreamResponse_Challenge_TPM20CsrRequest)(0), // 1: bootz.BootstrapStreamResponse.Challenge.TPM20CsrRequest
-	(ControlCardState_ControlCardStatus)(0),                // 2: bootz.ControlCardState.ControlCardStatus
-	(ReportStatusRequest_BootstrapStatus)(0),               // 3: bootz.ReportStatusRequest.BootstrapStatus
-	(*Identity)(nil),                                       // 4: bootz.Identity
-	(*GetBootstrapDataRequest)(nil),                        // 5: bootz.GetBootstrapDataRequest
-	(*BootstrapStreamRequest)(nil),                         // 6: bootz.BootstrapStreamRequest
-	(*BootstrapStreamResponse)(nil),                        // 7: bootz.BootstrapStreamResponse
-	(*ChassisDescriptor)(nil),                              // 8: bootz.ChassisDescriptor
-	(*ControlCard)(nil),                                    // 9: bootz.ControlCard
-	(*ControlCardState)(nil),                               // 10: bootz.ControlCardState
-	(*BootstrapDataResponse)(nil),                          // 11: bootz.BootstrapDataResponse
-	(*CertzProfiles)(nil),                                  // 12: bootz.CertzProfiles
-	(*CertzProfile)(nil),                                   // 13: bootz.CertzProfile
-	(*BootstrapDataSigned)(nil),                            // 14: bootz.BootstrapDataSigned
-	(*GetBootstrapDataResponse)(nil),                       // 15: bootz.GetBootstrapDataResponse
-	(*SoftwareImage)(nil),                                  // 16: bootz.SoftwareImage
-	(*Credentials)(nil),                                    // 17: bootz.Credentials
-	(*BootConfig)(nil),                                     // 18: bootz.BootConfig
-	(*ReportStatusRequest)(nil),                            // 19: bootz.ReportStatusRequest
-	(*EmptyResponse)(nil),                                  // 20: bootz.EmptyResponse
-	(*BootstrapStreamRequest_Response)(nil),                // 21: bootz.BootstrapStreamRequest.Response
-	(*BootstrapStreamRequest_EKIdentityRequest)(nil),       // 22: bootz.BootstrapStreamRequest.EKIdentityRequest
-	(*BootstrapStreamRequest_EKCSRIdentityRequest)(nil),    // 23: bootz.BootstrapStreamRequest.EKCSRIdentityRequest
-	(*BootstrapStreamRequest_PPKCSRIdentityRequest)(nil),   // 24: bootz.BootstrapStreamRequest.PPKCSRIdentityRequest
-	(*BootstrapStreamResponse_Challenge)(nil),              // 25: bootz.BootstrapStreamResponse.Challenge
-	(*BootstrapStreamResponse_EKIdentityResponse)(nil),     // 26: bootz.BootstrapStreamResponse.EKIdentityResponse
-	(*pathz.UploadRequest)(nil),                            // 27: gnsi.pathz.v1.UploadRequest
-	(*authz.UploadRequest)(nil),                            // 28: gnsi.authz.v1.UploadRequest
-	(*certz.UploadRequest)(nil),                            // 29: gnsi.certz.v1.UploadRequest
-	(*credentialz.AuthorizedKeysRequest)(nil),              // 30: gnsi.credentialz.v1.AuthorizedKeysRequest
-	(*credentialz.AuthorizedUsersRequest)(nil),             // 31: gnsi.credentialz.v1.AuthorizedUsersRequest
-	(*credentialz.PasswordRequest)(nil),                    // 32: gnsi.credentialz.v1.PasswordRequest
-	(*structpb.Struct)(nil),                                // 33: google.protobuf.Struct
+	(BootstrapStreamResponse_Challenge_TPM20CsrRequest)(0),       // 1: bootz.BootstrapStreamResponse.Challenge.TPM20CsrRequest
+	(ControlCardState_ControlCardStatus)(0),                      // 2: bootz.ControlCardState.ControlCardStatus
+	(ReportStatusRequest_BootstrapStatus)(0),                     // 3: bootz.ReportStatusRequest.BootstrapStatus
+	(*Identity)(nil),                                             // 4: bootz.Identity
+	(*GetBootstrapDataRequest)(nil),                              // 5: bootz.GetBootstrapDataRequest
+	(*BootstrapStreamRequest)(nil),                               // 6: bootz.BootstrapStreamRequest
+	(*BootstrapStreamResponse)(nil),                              // 7: bootz.BootstrapStreamResponse
+	(*ChassisDescriptor)(nil),                                    // 8: bootz.ChassisDescriptor
+	(*ControlCard)(nil),                                          // 9: bootz.ControlCard
+	(*ControlCardState)(nil),                                     // 10: bootz.ControlCardState
+	(*BootstrapDataResponse)(nil),                                // 11: bootz.BootstrapDataResponse
+	(*CertzProfiles)(nil),                                        // 12: bootz.CertzProfiles
+	(*CertzProfile)(nil),                                         // 13: bootz.CertzProfile
+	(*BootstrapDataSigned)(nil),                                  // 14: bootz.BootstrapDataSigned
+	(*GetBootstrapDataResponse)(nil),                             // 15: bootz.GetBootstrapDataResponse
+	(*SoftwareImage)(nil),                                        // 16: bootz.SoftwareImage
+	(*Credentials)(nil),                                          // 17: bootz.Credentials
+	(*BootConfig)(nil),                                           // 18: bootz.BootConfig
+	(*ReportStatusRequest)(nil),                                  // 19: bootz.ReportStatusRequest
+	(*EmptyResponse)(nil),                                        // 20: bootz.EmptyResponse
+	(*BootstrapStreamRequest_Response)(nil),                      // 21: bootz.BootstrapStreamRequest.Response
+	(*BootstrapStreamRequest_EKIdentityRequest)(nil),             // 22: bootz.BootstrapStreamRequest.EKIdentityRequest
+	(*BootstrapStreamRequest_EKCSRIdentityRequest)(nil),          // 23: bootz.BootstrapStreamRequest.EKCSRIdentityRequest
+	(*BootstrapStreamRequest_PPKCSRIdentityRequest)(nil),         // 24: bootz.BootstrapStreamRequest.PPKCSRIdentityRequest
+	(*BootstrapStreamResponse_Challenge)(nil),                    // 25: bootz.BootstrapStreamResponse.Challenge
+	(*BootstrapStreamResponse_EKIdentityResponse)(nil),           // 26: bootz.BootstrapStreamResponse.EKIdentityResponse
+	(*BootstrapStreamResponse_Challenge_TPM20HMACChallenge)(nil), // 27: bootz.BootstrapStreamResponse.Challenge.TPM20HMACChallenge
+	(*pathz.UploadRequest)(nil),                                  // 28: gnsi.pathz.v1.UploadRequest
+	(*authz.UploadRequest)(nil),                                  // 29: gnsi.authz.v1.UploadRequest
+	(*certz.UploadRequest)(nil),                                  // 30: gnsi.certz.v1.UploadRequest
+	(*credentialz.AuthorizedKeysRequest)(nil),                    // 31: gnsi.credentialz.v1.AuthorizedKeysRequest
+	(*credentialz.AuthorizedUsersRequest)(nil),                   // 32: gnsi.credentialz.v1.AuthorizedUsersRequest
+	(*credentialz.PasswordRequest)(nil),                          // 33: gnsi.credentialz.v1.PasswordRequest
+	(*structpb.Struct)(nil),                                      // 34: google.protobuf.Struct
+	(*tpm_enrollz.HMACChallengeResponse)(nil),                    // 35: openconfig.attestz.HMACChallengeResponse
+	(tpm_enrollz.Key)(0),                                         // 36: openconfig.attestz.Key
+	(*tpm_enrollz.HMACChallenge)(nil),                            // 37: openconfig.attestz.HMACChallenge
 }
 var file_github_com_openconfig_bootz_proto_bootz_proto_depIdxs = []int32{
 	8,  // 0: bootz.GetBootstrapDataRequest.chassis_descriptor:type_name -> bootz.ChassisDescriptor
@@ -2147,34 +2254,38 @@ var file_github_com_openconfig_bootz_proto_bootz_proto_depIdxs = []int32{
 	16, // 15: bootz.BootstrapDataResponse.intended_image:type_name -> bootz.SoftwareImage
 	18, // 16: bootz.BootstrapDataResponse.boot_config:type_name -> bootz.BootConfig
 	17, // 17: bootz.BootstrapDataResponse.credentials:type_name -> bootz.Credentials
-	27, // 18: bootz.BootstrapDataResponse.pathz:type_name -> gnsi.pathz.v1.UploadRequest
-	28, // 19: bootz.BootstrapDataResponse.authz:type_name -> gnsi.authz.v1.UploadRequest
-	29, // 20: bootz.BootstrapDataResponse.certificates:type_name -> gnsi.certz.v1.UploadRequest
+	28, // 18: bootz.BootstrapDataResponse.pathz:type_name -> gnsi.pathz.v1.UploadRequest
+	29, // 19: bootz.BootstrapDataResponse.authz:type_name -> gnsi.authz.v1.UploadRequest
+	30, // 20: bootz.BootstrapDataResponse.certificates:type_name -> gnsi.certz.v1.UploadRequest
 	12, // 21: bootz.BootstrapDataResponse.certz_profiles:type_name -> bootz.CertzProfiles
 	13, // 22: bootz.CertzProfiles.profiles:type_name -> bootz.CertzProfile
-	29, // 23: bootz.CertzProfile.certz:type_name -> gnsi.certz.v1.UploadRequest
+	30, // 23: bootz.CertzProfile.certz:type_name -> gnsi.certz.v1.UploadRequest
 	11, // 24: bootz.BootstrapDataSigned.responses:type_name -> bootz.BootstrapDataResponse
 	14, // 25: bootz.GetBootstrapDataResponse.signed_response:type_name -> bootz.BootstrapDataSigned
-	30, // 26: bootz.Credentials.credentials:type_name -> gnsi.credentialz.v1.AuthorizedKeysRequest
-	31, // 27: bootz.Credentials.users:type_name -> gnsi.credentialz.v1.AuthorizedUsersRequest
-	32, // 28: bootz.Credentials.passwords:type_name -> gnsi.credentialz.v1.PasswordRequest
-	33, // 29: bootz.BootConfig.metadata:type_name -> google.protobuf.Struct
-	33, // 30: bootz.BootConfig.bootloader_config:type_name -> google.protobuf.Struct
+	31, // 26: bootz.Credentials.credentials:type_name -> gnsi.credentialz.v1.AuthorizedKeysRequest
+	32, // 27: bootz.Credentials.users:type_name -> gnsi.credentialz.v1.AuthorizedUsersRequest
+	33, // 28: bootz.Credentials.passwords:type_name -> gnsi.credentialz.v1.PasswordRequest
+	34, // 29: bootz.BootConfig.metadata:type_name -> google.protobuf.Struct
+	34, // 30: bootz.BootConfig.bootloader_config:type_name -> google.protobuf.Struct
 	3,  // 31: bootz.ReportStatusRequest.status:type_name -> bootz.ReportStatusRequest.BootstrapStatus
 	10, // 32: bootz.ReportStatusRequest.states:type_name -> bootz.ControlCardState
 	4,  // 33: bootz.ReportStatusRequest.identity:type_name -> bootz.Identity
-	1,  // 34: bootz.BootstrapStreamResponse.Challenge.tpm20_csr_request:type_name -> bootz.BootstrapStreamResponse.Challenge.TPM20CsrRequest
-	5,  // 35: bootz.Bootstrap.GetBootstrapData:input_type -> bootz.GetBootstrapDataRequest
-	19, // 36: bootz.Bootstrap.ReportStatus:input_type -> bootz.ReportStatusRequest
-	6,  // 37: bootz.Bootstrap.BootstrapStream:input_type -> bootz.BootstrapStreamRequest
-	15, // 38: bootz.Bootstrap.GetBootstrapData:output_type -> bootz.GetBootstrapDataResponse
-	20, // 39: bootz.Bootstrap.ReportStatus:output_type -> bootz.EmptyResponse
-	7,  // 40: bootz.Bootstrap.BootstrapStream:output_type -> bootz.BootstrapStreamResponse
-	38, // [38:41] is the sub-list for method output_type
-	35, // [35:38] is the sub-list for method input_type
-	35, // [35:35] is the sub-list for extension type_name
-	35, // [35:35] is the sub-list for extension extendee
-	0,  // [0:35] is the sub-list for field type_name
+	35, // 34: bootz.BootstrapStreamRequest.Response.hmac_challenge_response:type_name -> openconfig.attestz.HMACChallengeResponse
+	1,  // 35: bootz.BootstrapStreamResponse.Challenge.tpm20_csr_request:type_name -> bootz.BootstrapStreamResponse.Challenge.TPM20CsrRequest
+	27, // 36: bootz.BootstrapStreamResponse.Challenge.tpm20_hmac_challenge:type_name -> bootz.BootstrapStreamResponse.Challenge.TPM20HMACChallenge
+	36, // 37: bootz.BootstrapStreamResponse.Challenge.TPM20HMACChallenge.key:type_name -> openconfig.attestz.Key
+	37, // 38: bootz.BootstrapStreamResponse.Challenge.TPM20HMACChallenge.hmac_challenge:type_name -> openconfig.attestz.HMACChallenge
+	5,  // 39: bootz.Bootstrap.GetBootstrapData:input_type -> bootz.GetBootstrapDataRequest
+	19, // 40: bootz.Bootstrap.ReportStatus:input_type -> bootz.ReportStatusRequest
+	6,  // 41: bootz.Bootstrap.BootstrapStream:input_type -> bootz.BootstrapStreamRequest
+	15, // 42: bootz.Bootstrap.GetBootstrapData:output_type -> bootz.GetBootstrapDataResponse
+	20, // 43: bootz.Bootstrap.ReportStatus:output_type -> bootz.EmptyResponse
+	7,  // 44: bootz.Bootstrap.BootstrapStream:output_type -> bootz.BootstrapStreamResponse
+	42, // [42:45] is the sub-list for method output_type
+	39, // [39:42] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_github_com_openconfig_bootz_proto_bootz_proto_init() }
@@ -2206,12 +2317,14 @@ func file_github_com_openconfig_bootz_proto_bootz_proto_init() {
 	file_github_com_openconfig_bootz_proto_bootz_proto_msgTypes[17].OneofWrappers = []any{
 		(*BootstrapStreamRequest_Response_NonceSigned)(nil),
 		(*BootstrapStreamRequest_Response_Nonce)(nil),
+		(*BootstrapStreamRequest_Response_HmacChallengeResponse)(nil),
 	}
 	file_github_com_openconfig_bootz_proto_bootz_proto_msgTypes[21].OneofWrappers = []any{
 		(*BootstrapStreamResponse_Challenge_Nonce)(nil),
 		(*BootstrapStreamResponse_Challenge_NonceEncrypted)(nil),
 		(*BootstrapStreamResponse_Challenge_CaPub)(nil),
 		(*BootstrapStreamResponse_Challenge_Tpm20CsrRequest)(nil),
+		(*BootstrapStreamResponse_Challenge_Tpm20HmacChallenge)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2219,7 +2332,7 @@ func file_github_com_openconfig_bootz_proto_bootz_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_github_com_openconfig_bootz_proto_bootz_proto_rawDesc), len(file_github_com_openconfig_bootz_proto_bootz_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   23,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

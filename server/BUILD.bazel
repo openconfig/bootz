@@ -20,9 +20,9 @@ go_library(
     importpath = "github.com/openconfig/bootz/server",
     visibility = ["//visibility:public"],
     deps = [
+        "//common/types",
         "//dhcp",
         "//proto:bootz",
-        "//common/types",
         "//server/entitymanager",
         "//server/service",
         "@com_github_golang_glog//:glog",

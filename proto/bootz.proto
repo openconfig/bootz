@@ -18,14 +18,13 @@ package bootz;
 
 import "google/protobuf/struct.proto";
 
+import "github.com/openconfig/attestz/proto/tpm_enrollz.proto";
 import "github.com/openconfig/gnsi/authz/authz.proto";
 import "github.com/openconfig/gnsi/certz/certz.proto";
 import "github.com/openconfig/gnsi/credentialz/credentialz.proto";
 import "github.com/openconfig/gnsi/pathz/pathz.proto";
 
-
 option go_package = "github.com/openconfig/bootz/proto/bootz";
-
 
 // The Bootz service definition.
 // Bootz service is hosted by the bootz-server, and the device is the
@@ -86,7 +85,7 @@ message Identity {
 
     // Deprecated: Use ek_ppk_pub instead.
     bytes ppk_csr = 4 [deprecated = true];
-    
+
     // TPM 2.0 without IDevId. Device supports both EK and PPK.
     bool ek_ppk_pub = 5;
   }
@@ -111,7 +110,7 @@ message GetBootstrapDataRequest {
   // If identity is set, one of the types must be set or an error is
   // returned.
   Identity identity = 1003;
-} 
+}
 
 // BootstrapStreamRequest is used to both send chassis information
 // as well as build a trust relationship if the IDevID cert is not used
@@ -121,13 +120,13 @@ message BootstrapStreamRequest {
     oneof type {
       // Nonce to be signed with IAK from the device for IDevID based systems.
       bytes nonce_signed = 1;
-      // For non-IDevID systems the encrypted nonce will be decrypted via:
-      // TPM 2.0: PPK
-      // TPM 1.2: EK
+      // For TPM 1.2 systems the nonce will be decrypted via EK.
       string nonce = 2;
+      // HMAC challenge response for TPM 2.0 no-IDevID systems.
+      openconfig.attestz.HMACChallengeResponse hmac_challenge_response = 3;
     }
-  } 
-    
+  }
+
   message EKIdentityRequest {
     // TPM 1.2 EK Public Request
     bytes ek_pub = 1;
@@ -138,52 +137,66 @@ message BootstrapStreamRequest {
     bytes identity_request = 2;
   }
 
+  // Deprecated: Do NOT use.
   message EKCSRIdentityRequest {
+    option deprecated = true;
     // TPM 2.0 without IDevId EK CSR request
     bytes ek_csr = 1;
   }
- 
+
+  // Deprecated: Do NOT use.
   message PPKCSRIdentityRequest {
+    option deprecated = true;
     // TPM 2.0 without IDevId PPK CSR request
     bytes ppk_csr = 1;
   }
- 
+
   oneof type {
     GetBootstrapDataRequest bootstrap_request = 1;
     Response response = 2;
     ReportStatusRequest report_status_request = 3;
     EKIdentityRequest ek_identity_request = 4;
-    EKCSRIdentityRequest ek_csr_identity_request = 5;
-    PPKCSRIdentityRequest ppk_csr_identity_request = 6;
+    // DEPRECATED. Do NOT use.
+    EKCSRIdentityRequest ek_csr_identity_request = 5 [deprecated = true];
+    // DEPRECATED. Do NOT use.
+    PPKCSRIdentityRequest ppk_csr_identity_request = 6 [deprecated = true];
   }
-} 
+}
 
 // BootstrapStreamResponse will be returned based on the request from the
 // client. The challenge will be based on the Identity message provided in
 // the initial GetBootstrapDataRequest message.
 message BootstrapStreamResponse {
   message Challenge {
-    // TPM 2.0 without IDevId may be provisioned using EK or PPK
+    // DEPRECATED. Do NOT use.
     enum TPM20CsrRequest {
+      option deprecated = true;
       TPM2_0_CSR_REQUEST_UNSPECIFIED = 0;
       TPM2_0_CSR_REQUEST_EK = 1;
       TPM2_0_CSR_REQUEST_PPK = 2;
     }
-   
+
+    message TPM20HMACChallenge {
+      // The public key to be used, which can be either EK or PPK.
+      openconfig.attestz.Key key = 1;
+      // The HMAC challenge to be imported by the TPM.
+      openconfig.attestz.HMACChallenge hmac_challenge = 2;
+    }
+
     oneof type {
       // nonce will be returned for IDevID based system for signing by IAK.
       string nonce = 1;
-      // nonce_encrypted will be returned for non-IDevID based systems.
-      // The public key used to encrypt the data will be based on the 
-      // public key provided by OVGS, which may be EK or PPK.
-      bytes nonce_encrypted = 2; 
+      // DEPRECATED. Do NOT use.
+      bytes nonce_encrypted = 2 [deprecated = true];
       // TPM 1.2 EK CA public cert
       bytes ca_pub = 3;
-      // TPM 2.0 without IDevId
-      TPM20CsrRequest tpm20_csr_request = 4;
-    } 
-  } 
-  
+      // DEPRECATED. Do NOT use.
+      TPM20CsrRequest tpm20_csr_request = 4 [deprecated = true];
+      // HMAC challenge for TPM 2.0 no-IDevID systems.
+      TPM20HMACChallenge tpm20_hmac_challenge = 5;
+    }
+  }
+
   message EKIdentityResponse {
     // TPM 1.2 challenge
     bytes asymmetric = 1;
@@ -237,7 +250,6 @@ message ControlCard {
 // If a new control card is inserted which has never completed the
 // bootstrap process, it will start with NOT_INITIALIZED state.
 message ControlCardState {
-
   enum ControlCardStatus {
     // The bootstrap process status is not reported.
     CONTROL_CARD_STATUS_UNSPECIFIED = 0;
@@ -270,7 +282,7 @@ message BootstrapDataResponse {
   Credentials credentials = 6;
   gnsi.pathz.v1.UploadRequest pathz = 7;
   gnsi.authz.v1.UploadRequest authz = 8;
-  gnsi.certz.v1.UploadRequest certificates = 9 [deprecated=true];
+  gnsi.certz.v1.UploadRequest certificates = 9 [deprecated = true];
   CertzProfiles certz_profiles = 10;
 }
 
@@ -284,7 +296,7 @@ message CertzProfiles {
 // CertzProfile contains the profile ID and Certz entities for the profile.
 message CertzProfile {
   string ssl_profile_id = 1;
-  gnsi.certz.v1.UploadRequest certz = 2; 
+  gnsi.certz.v1.UploadRequest certz = 2;
 }
 
 // Container message that is signed by server.
@@ -299,8 +311,8 @@ message BootstrapDataSigned {
 
 message GetBootstrapDataResponse {
   // DEPRECATED: Use serialized_bootstrap_data instead.
-  // Contains the signed bootstrap response. Deserialization of this 
-  // field is not stable so the response_signature should not be used 
+  // Contains the signed bootstrap response. Deserialization of this
+  // field is not stable so the response_signature should not be used
   // to verify this.
   BootstrapDataSigned signed_response = 1 [deprecated = true];
   // This should not be set if the device does not check for ownership
@@ -312,7 +324,7 @@ message GetBootstrapDataResponse {
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field
   // in the GetBootstrapDataRequest message.
-  // The field is a CMS message (RFC 5652) which includes and is 
+  // The field is a CMS message (RFC 5652) which includes and is
   // signed by the OwnershipCertificate.
   bytes ownership_certificate = 102;
   // This is a signature of the serialized_bootstrap_data field,
@@ -320,17 +332,17 @@ message GetBootstrapDataResponse {
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field
   // in the GetBootstrapDataRequest message.
-  // The field is a base64-encoding of a signature generated using PKCS1v15 
+  // The field is a base64-encoding of a signature generated using PKCS1v15
   // with SHA256 as the hashing algorithm.
   string response_signature = 103;
-  // Contains the wire format encoding of the BootstrapDataSigned 
+  // Contains the wire format encoding of the BootstrapDataSigned
   // message. This field should be verified with the response_signature
   // before unmarshalling.
   bytes serialized_bootstrap_data = 104;
 }
 
 // Fields required by the device to be able to download and verify an image.
-// The format of this message is identical to the `boot-image` data 
+// The format of this message is identical to the `boot-image` data
 // model outlined in the sZTP RFC:
 // https://datatracker.ietf.org/doc/html/rfc8572#section-6.1
 message SoftwareImage {
@@ -341,13 +353,13 @@ message SoftwareImage {
   // An HTTP location from where the OS file can be downloaded.
   string url = 3;
   // Hash of the OS image. The device must verify that the hash of the
-  // downloaded OS image matches this. The format of this field is a 
-  // `hex-string`, identified in RFC6991 as "A hexadecimal string with 
+  // downloaded OS image matches this. The format of this field is a
+  // `hex-string`, identified in RFC6991 as "A hexadecimal string with
   // octets represented as hex digits separated by colons.
   // The canonical representation uses lowercase characters."
   // E.g.: "d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5"
   string os_image_hash = 4;
-  // The identity of the hash algorithm used. These hash identiities are 
+  // The identity of the hash algorithm used. These hash identiities are
   // defined in sZTP RFC 8572. There is currently only one hash algorithm
   // defined in this spec:
   // `ietf-sztp-conveyed-info:sha-256` for the SHA 256 algorithm.
@@ -377,10 +389,10 @@ message BootConfig {
   // `gnoi.bootconfig.SetBootConfig`. In the case that these fields are
   // populated in the `SetBootConfig` RPC, an error with the code
   // `InvalidArgument` MUST be returned.
-  // 
+  //
   // vendor_config and oc_config specify boot configuration that is considered
   // immutable per the specification described in github.com/openconfig/bootz.
-  // 
+  //
   // Native format vendor configuration.
   bytes vendor_config = 2;
   // JSON rendered OpenConfig configuration.
@@ -416,7 +428,7 @@ message ReportStatusRequest {
   BootstrapStatus status = 1;
   string status_message = 2;
   // Lists the current states of all control cards in the chassis.
-  // For a fixed form factor chassis, this should contain a single 
+  // For a fixed form factor chassis, this should contain a single
   // state matching the chassis serial number.
   repeated ControlCardState states = 3;
   // Identity will contain information used to validate the identity
