@@ -29,6 +29,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -135,13 +136,14 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse) 
 func validateImage(image []byte, softwareImage *bpb.SoftwareImage) error {
 	log.Info("Start to validate the downloaded image")
 	var hashed [32]byte
-	if softwareImage.GetHashAlgorithm() == "SHA256" {
+	if strings.Contains(softwareImage.GetHashAlgorithm(), "256") {
 		hashed = sha256.Sum256(image)
 	} else {
 		return fmt.Errorf("unknown hash algorithm: %q", softwareImage.GetHashAlgorithm())
 	}
 
-	receivedHashed, err := hex.DecodeString(softwareImage.GetOsImageHash())
+	// The hash string from the server may contain colons, which need to be removed.
+	receivedHashed, err := hex.DecodeString(strings.ReplaceAll(softwareImage.GetOsImageHash(), ":", ""))
 	if err != nil {
 		return fmt.Errorf("can not decode received hashed image to bytes, received hash: %q", softwareImage.GetOsImageHash())
 	}
