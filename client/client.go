@@ -136,7 +136,7 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse) 
 func validateImage(image []byte, softwareImage *bpb.SoftwareImage) error {
 	log.Info("Start to validate the downloaded image")
 	var hashed [32]byte
-	if strings.Contains(softwareImage.GetHashAlgorithm(), "256") {
+	if softwareImage.GetHashAlgorithm() == "ietf-sztp-conveyed-info:sha-256" {
 		hashed = sha256.Sum256(image)
 	} else {
 		return fmt.Errorf("unknown hash algorithm: %q", softwareImage.GetHashAlgorithm())
@@ -257,28 +257,6 @@ func getBootstrapDataStream(ctx context.Context, c bpb.BootstrapClient, req *bpb
 
 	bootstrapResp := bootstrapDataResp.GetBootstrapResponse()
 
-	// Report status
-	log.Infof("=========================== Sending Status Report ===========================")
-	statusReq := &bpb.ReportStatusRequest{
-		Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
-		StatusMessage: "Bootstrap Success",
-		States: []*bpb.ControlCardState{
-			{Status: bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED, SerialNumber: chassis.GetControlCards()[0].GetSerialNumber()},
-			{Status: bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED, SerialNumber: chassis.GetControlCards()[1].GetSerialNumber()},
-		},
-	}
-
-	if err := stream.Send(&bpb.BootstrapStreamRequest{
-		Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{ReportStatusRequest: statusReq},
-	}); err != nil {
-		return nil, fmt.Errorf("failed to send status report: %w", err)
-	}
-
-	statusAckResp, err := stream.Recv()
-	if err != nil || statusAckResp.GetReportStatusResponse() == nil {
-		return nil, fmt.Errorf("did not receive status report ack")
-	}
-	log.Infof("Status report sent and acknowledged")
 	return bootstrapResp, nil
 }
 
@@ -394,8 +372,6 @@ func main() {
 		if err != nil {
 			log.Exitf("Error calling getBootstrapDataStream: %v", err)
 		}
-		// In streaming mode, the rest of the logic is handled within getBootstrapDataStream.
-		return
 	} else {
 		log.Infof("Requesting Bootstrap Data from Bootz server")
 		resp, err = c.GetBootstrapData(ctx, req)
