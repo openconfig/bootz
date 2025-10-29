@@ -18,7 +18,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -27,6 +29,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -69,6 +72,9 @@ var (
 	urlImageMap       = map[string]string{
 		"https://path/to/image": "../testdata/image.txt",
 	}
+	streamRPC      = flag.Bool("stream_rpc", false, "Whether to use the streaming bootstrap RPC.")
+	idevidCertFile = flag.String("idevid_cert", "", "Path to the IDevID certificate.")
+	idevidKeyFile  = flag.String("idevid_key", "", "Path to the IDevID private key.")
 )
 
 // validateArtifacts checks the signed artifacts in a GetBootstrapDataResponse. Specifically, it:
@@ -130,13 +136,14 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse) 
 func validateImage(image []byte, softwareImage *bpb.SoftwareImage) error {
 	log.Info("Start to validate the downloaded image")
 	var hashed [32]byte
-	if softwareImage.GetHashAlgorithm() == "SHA256" {
+	if softwareImage.GetHashAlgorithm() == "ietf-sztp-conveyed-info:sha-256" {
 		hashed = sha256.Sum256(image)
 	} else {
 		return fmt.Errorf("unknown hash algorithm: %q", softwareImage.GetHashAlgorithm())
 	}
 
-	receivedHashed, err := hex.DecodeString(softwareImage.GetOsImageHash())
+	// The hash string from the server may contain colons, which need to be removed.
+	receivedHashed, err := hex.DecodeString(strings.ReplaceAll(softwareImage.GetOsImageHash(), ":", ""))
 	if err != nil {
 		return fmt.Errorf("can not decode received hashed image to bytes, received hash: %q", softwareImage.GetOsImageHash())
 	}
@@ -171,6 +178,88 @@ func generateNonce() (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
+// loadIDevID loads the IDevID certificate and private key from the specified files.
+func loadIDevID(certFile, keyFile string) (*tls.Certificate, error) {
+	certPEM, err := os.ReadFile(certFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read idevid cert file: %w", err)
+	}
+	keyPEM, err := os.ReadFile(keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read idevid key file: %w", err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse idevid key pair: %w", err)
+	}
+	return &cert, nil
+}
+
+// getBootstrapDataStream handles the streaming bootstrap workflow.
+func getBootstrapDataStream(ctx context.Context, c bpb.BootstrapClient, req *bpb.GetBootstrapDataRequest, chassis *bpb.ChassisDescriptor) (*bpb.GetBootstrapDataResponse, bpb.Bootstrap_BootstrapStreamClient, error) {
+	log.Info("Starting streaming bootstrap...")
+	stream, err := c.BootstrapStream(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to start bootstrap stream: %w", err)
+	}
+
+	// Load IDevID certificate
+	idevid, err := loadIDevID(*idevidCertFile, *idevidKeyFile)
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Identity = &bpb.Identity{
+		Type: &bpb.Identity_IdevidCert{
+			IdevidCert: base64.StdEncoding.EncodeToString(idevid.Certificate[0]),
+		},
+	}
+
+	// Send initial request
+	if err := stream.Send(&bpb.BootstrapStreamRequest{Type: &bpb.BootstrapStreamRequest_BootstrapRequest{BootstrapRequest: req}}); err != nil {
+		return nil, nil, fmt.Errorf("failed to send initial bootstrap request: %w", err)
+	}
+
+	// Receive challenge
+	challengeResp, err := stream.Recv()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to receive challenge: %w", err)
+	}
+	challenge := challengeResp.GetChallenge()
+	if challenge == nil {
+		return nil, nil, fmt.Errorf("expected a challenge, but got %v", challengeResp)
+	}
+	nonce := challenge.GetNonce()
+	if nonce == "" {
+		return nil, nil, fmt.Errorf("challenge is missing nonce")
+	}
+
+	// Sign nonce and send response
+	hasher := sha256.New()
+	hasher.Write([]byte(nonce))
+	hashedNonce := hasher.Sum(nil)
+	signedNonce, err := rsa.SignPKCS1v15(rand.Reader, idevid.PrivateKey.(*rsa.PrivateKey), crypto.SHA256, hashedNonce)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to sign nonce: %w", err)
+	}
+
+	if err := stream.Send(&bpb.BootstrapStreamRequest{Type: &bpb.BootstrapStreamRequest_Response_{Response: &bpb.BootstrapStreamRequest_Response{Type: &bpb.BootstrapStreamRequest_Response_NonceSigned{NonceSigned: signedNonce}}}}); err != nil {
+		return nil, nil, fmt.Errorf("failed to send signed nonce: %w", err)
+	}
+
+	// Receive bootstrap data
+	bootstrapDataResp, err := stream.Recv()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to receive bootstrap data: %w", err)
+	}
+	if bootstrapDataResp.GetBootstrapResponse() == nil {
+		return nil, nil, fmt.Errorf("expected bootstrap response, but got %v", bootstrapDataResp)
+	}
+
+	bootstrapResp := bootstrapDataResp.GetBootstrapResponse()
+
+	return bootstrapResp, stream, nil
+}
+
 func validateChassisDescriptor(chassis *bpb.ChassisDescriptor) {
 	if chassis.GetManufacturer() == "" || chassis.GetPartNumber() == "" {
 		log.Exitf("Chassis validation error: chassis %v does not have required fields", chassis)
@@ -191,6 +280,72 @@ func validateChassisDescriptor(chassis *bpb.ChassisDescriptor) {
 	}
 	if chassis.GetSerialNumber() == "" {
 		log.Exitf("Chassis validation error: fixed form factor chassis does not contain serial number: %v", chassis)
+	}
+}
+
+// reconnectWithTrustCert re-establishes the gRPC connection with the server using the provided trust certificate.
+func reconnectWithTrustCert(conn *grpc.ClientConn, bootzAddress string, signedResp *bpb.BootstrapDataSigned) (*grpc.ClientConn, bpb.BootstrapClient, error) {
+	log.Infof("Re-establishing TLS connection with server using provided trust cert")
+	if len(signedResp.GetResponses()) == 0 {
+		return nil, nil, fmt.Errorf("response contained no bootstrap responses")
+	}
+	trustCert := signedResp.GetResponses()[0].GetServerTrustCert()
+	if trustCert == "" {
+		return nil, nil, fmt.Errorf("server did not provide a server trust certificate")
+	}
+	// Decode the trust cert
+	trustCertDecoded, err := base64.StdEncoding.DecodeString(trustCert)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to base64-decode trust cert: %w", err)
+	}
+	trustAnchor, err := x509.ParseCertificate(trustCertDecoded)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to parse server trust certificate: %w", err)
+	}
+
+	trustCertPool := x509.NewCertPool()
+	trustCertPool.AddCert(trustAnchor)
+
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: false,
+		RootCAs:            trustCertPool,
+	}
+	conn.Close()
+	newConn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+	if err != nil {
+		return nil, nil, fmt.Errorf("client unable to re-connect to Bootstrap Server: %w", err)
+	}
+	newC := bpb.NewBootstrapClient(newConn)
+	log.Infof("Reconnected to server with fully trusted TLS")
+	return newConn, newC, nil
+}
+
+// processControlCardConfigs handles the downloading and installation of boot configurations.
+func processControlCardConfigs(signedResp *bpb.BootstrapDataSigned) {
+	// Simply print out the received configs we get. This section should actually contain the logic to verify and install the images and config.
+	log.Infof("=============================================================================")
+	log.Infof("===================== Processing control card configs =======================")
+	log.Infof("=============================================================================")
+	if len(signedResp.GetResponses()) == 0 {
+		log.Exitf("response contained no bootstrap responses")
+	}
+	for _, data := range signedResp.GetResponses() {
+		log.Infof("Received config for control card %v", data.GetSerialNum())
+		log.Infof("Start to download and validate image, received: %+v...", data.GetIntendedImage())
+		image, err := downloadImage(data.GetIntendedImage().GetUrl())
+		if err != nil {
+			log.Exitf("unable to download image (url: %q): %v", data.GetIntendedImage().GetUrl(), err)
+		}
+		err = validateImage(image, data.GetIntendedImage())
+		if err != nil {
+			log.Exitf("Error validating intended image: %v", err)
+		}
+		time.Sleep(time.Second * 5)
+		log.Infof("Done")
+		log.Infof("Installing boot config %+v...", data.GetBootConfig())
+		time.Sleep(time.Second * 5)
+		log.Infof("Done")
+		log.Infof("=============================================================================")
 	}
 }
 
@@ -277,12 +432,21 @@ func main() {
 
 	// Get bootstrapping data from Bootz server
 	// TODO: Extract and parse response.
-	log.Infof("Requesting Bootstrap Data from Bootz server")
-	resp, err := c.GetBootstrapData(ctx, req)
-	if err != nil {
-		log.Exitf("Error calling GetBootstrapData: %v", err)
+	var resp *bpb.GetBootstrapDataResponse
+	var stream bpb.Bootstrap_BootstrapStreamClient
+	if *streamRPC {
+		resp, stream, err = getBootstrapDataStream(ctx, c, req, chassis)
+		if err != nil {
+			log.Exitf("Error calling getBootstrapDataStream: %v", err)
+		}
+	} else {
+		log.Infof("Requesting Bootstrap Data from Bootz server")
+		resp, err = c.GetBootstrapData(ctx, req)
+		if err != nil {
+			log.Exitf("Error calling GetBootstrapData: %v", err)
+		}
+		log.Infof("Successfully retrieved Bootstrap Data from server")
 	}
-	log.Infof("Successfully retrieved Bootstrap Data from server")
 
 	// Only check OC, OV and response signature if SecureOnly is set.
 	if !*insecureBoot {
@@ -305,61 +469,15 @@ func main() {
 
 	// TODO: Verify the hash of the intended image.
 	// Simply print out the received configs we get. This section should actually contain the logic to verify and install the images and config.
-	log.Infof("=============================================================================")
-	log.Infof("===================== Processing control card configs =======================")
-	log.Infof("=============================================================================")
-	if len(signedResp.GetResponses()) == 0 {
-		log.Exitf("response contained no bootstrap responses")
-	}
-	for _, data := range signedResp.GetResponses() {
-		log.Infof("Received config for control card %v", data.GetSerialNum())
-		log.Infof("Start to download and validate image, received: %+v...", data.GetIntendedImage())
-		image, err := downloadImage(data.GetIntendedImage().GetUrl())
-		if err != nil {
-			log.Exitf("unable to download image (url: %q): %v", data.GetIntendedImage().GetUrl(), err)
-		}
-		err = validateImage(image, data.GetIntendedImage())
-		if err != nil {
-			log.Exitf("Error validating intended image: %v", err)
-		}
-		time.Sleep(time.Second * 5)
-		log.Infof("Done")
-		log.Infof("Installing boot config %+v...", data.GetBootConfig())
-		time.Sleep(time.Second * 5)
-		log.Infof("Done")
-		log.Infof("=============================================================================")
-	}
+	processControlCardConfigs(&signedResp)
 
 	// Reconnect to the server with the provided server_trust_cert.
 	log.Infof("Re-establishing TLS connection with server using provided trust cert")
-	trustCert := signedResp.GetResponses()[0].GetServerTrustCert()
-	if trustCert == "" {
-		log.Exitf("server did not provide a server trust certificate")
-	}
-	// Decode the trust cert
-	trustCertDecoded, err := base64.StdEncoding.DecodeString(trustCert)
+	// Reconnect to the server with the provided server_trust_cert.
+	conn, c, err = reconnectWithTrustCert(conn, bootzAddress, &signedResp)
 	if err != nil {
-		log.Exitf("unable to base64-decode trust cert")
+		log.Exitf("Error reconnecting to server: %v", err)
 	}
-	trustAnchor, err := x509.ParseCertificate(trustCertDecoded)
-	if err != nil {
-		log.Exitf("unable to parse server trust certificate")
-	}
-
-	trustCertPool := x509.NewCertPool()
-	trustCertPool.AddCert(trustAnchor)
-
-	tlsConfig = &tls.Config{
-		InsecureSkipVerify: false,
-		RootCAs:            trustCertPool,
-	}
-	conn.Close()
-	conn, err = grpc.Dial(bootzAddress, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
-	if err != nil {
-		log.Exitf("Client unable to re-connect to Bootstrap Server: %v", err)
-	}
-	c = bpb.NewBootstrapClient(conn)
-	log.Infof("Reconnected to server with fully trusted TLS")
 
 	// 6. ReportProgress
 	log.Infof("=========================== Sending Status Report ===========================")
@@ -379,10 +497,25 @@ func main() {
 		},
 	}
 
-	_, err = c.ReportStatus(ctx, statusReq)
-	if err != nil {
-		log.Exitf("Error reporting status: %v", err)
+	if *streamRPC {
+		if err := stream.Send(&bpb.BootstrapStreamRequest{
+			Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{ReportStatusRequest: statusReq},
+		}); err != nil {
+			log.Exitf("failed to send status report: %w", err)
+		}
+
+		statusAckResp, err := stream.Recv()
+		if err != nil || statusAckResp.GetReportStatusResponse() == nil {
+			log.Exitf("did not receive status report ack")
+		}
+		log.Infof("Status report sent and acknowledged")
+
+	} else {
+		_, err = c.ReportStatus(ctx, statusReq)
+		if err != nil {
+			log.Exitf("Error reporting status: %v", err)
+		}
+		log.Infof("Status report sent")
 	}
-	log.Infof("Status report sent")
 	// At this point the device has minimal configuration and can receive further gRPC calls. After this, the TPM Enrollment and attestation occurs.
 }
