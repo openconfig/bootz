@@ -431,6 +431,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 			serializedSignedData, err := proto.Marshal(&bpb.BootstrapDataSigned{
 				Responses: []*bpb.BootstrapDataResponse{bootdata},
+				Nonce:     session.nonce,
 			})
 			if err != nil {
 				return status.Errorf(codes.Internal, "failed to serialize bootstrap data: %v", err)
