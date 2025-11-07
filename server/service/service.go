@@ -23,17 +23,23 @@ import (
 	"io"
 	"net"
 
+	log "github.com/golang/glog"
+	"github.com/google/go-tpm/tpm2"
+	"github.com/openconfig/attestz/service/biz"
+	"github.com/openconfig/bootz/common/signature"
+	"github.com/openconfig/bootz/common/types"
 	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	log "github.com/golang/glog"
-	"github.com/openconfig/bootz/common/signature"
-	"github.com/openconfig/bootz/common/types"
+	epb "github.com/openconfig/attestz/proto/tpm_enrollz"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
+
+// For test overriding purpose.
+var TPM20Utils biz.TPM20Utils = &biz.DefaultTPM20Utils{}
 
 // buildEntityLookup constructs an EntityLookup object from a bootstrap request.
 func buildEntityLookup(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*types.EntityLookup, error) {
@@ -88,13 +94,12 @@ type Service struct {
 }
 
 type streamSession struct {
-	currentState int
-	nonce        string // base64 encoded, for TPM 2.0 nonce challenge
-
-	// Store chassis info for later stages
-	chassis           *types.Chassis
+	currentState      int
+	chassis           *types.Chassis // Store chassis info for later stages
 	activeControlCard string
-	idevidCert        *x509.Certificate // For IDevID flow
+	idevidCert        *x509.Certificate   // For IDevID flow
+	nonce             string              // base64 encoded, for TPM 2.0 nonce challenge
+	hmacSensitive     *tpm2.TPMTSensitive // For TPM 2.0 without IDevID
 }
 
 func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*bpb.GetBootstrapDataResponse, error) {
@@ -209,13 +214,9 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 
 const (
 	stateInitial = iota
-	// TPM 1.2 states
-	stateTPM12ChallengeSent
-	stateTPM12EKIdentitySent
 	// TPM 2.0 states
-	stateTPM20CSRRequested
-	stateTPM20NonceSent
-	stateTPM20ReauthNonceSent
+	stateTPM20ChallengeSent
+	stateTPM20ReauthChallengeSent
 	// Common state
 	stateAttested
 )
@@ -280,7 +281,46 @@ func (s *Service) sendIdevidChallenge(ctx context.Context, stream bpb.Bootstrap_
 	return nil
 }
 
-// establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM2.0 with IdevID.
+// sendHMACChallenge contains the logic for sending an HMAC challenge.
+func (s *Service) sendHMACChallenge(stream bpb.Bootstrap_BootstrapStreamServer, session *streamSession, deviceID string) error {
+	// Generate a restricted HMAC key.
+	hmacPub, hmacSensitive, err := TPM20Utils.GenerateRestrictedHMACKey()
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to generate restricted HMAC key: %v", err)
+	}
+
+	// Wrap HMAC key to EK/PPK public key.
+	duplicate, inSymSeed, err := TPM20Utils.WrapHMACKeytoRSAPublicKey(session.chassis.PubKey, hmacPub, hmacSensitive)
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to wrap HMAC key to EK/PPK public key: %v", err)
+	}
+
+	session.hmacSensitive = hmacSensitive
+
+	challengeResp := &bpb.BootstrapStreamResponse{
+		Type: &bpb.BootstrapStreamResponse_Challenge_{
+			Challenge: &bpb.BootstrapStreamResponse_Challenge{
+				Type: &bpb.BootstrapStreamResponse_Challenge_Tpm20HmacChallenge{
+					Tpm20HmacChallenge: &bpb.BootstrapStreamResponse_Challenge_TPM20HMACChallenge{
+						Key: session.chassis.PubKeyType,
+						HmacChallenge: &epb.HMACChallenge{
+							HmacPubKey: tpm2.Marshal(hmacPub),
+							Duplicate:  duplicate,
+							InSymSeed:  inSymSeed,
+						},
+					},
+				},
+			},
+		},
+	}
+	if err := stream.Send(challengeResp); err != nil {
+		return err
+	}
+	log.Infof("Sent HMAC challenge to device: %s", deviceID)
+	return nil
+}
+
+// establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM2.0 with or without IDevID.
 func (s *Service) establishSessionAndSendChallenge(ctx context.Context, session *streamSession, stream bpb.Bootstrap_BootstrapStreamServer, lookup *types.EntityLookup, identity *bpb.Identity, ccSerial string) (string, error) {
 	if identity == nil {
 		return "", status.Errorf(codes.InvalidArgument, "identity field is missing in request")
@@ -308,8 +348,14 @@ func (s *Service) establishSessionAndSendChallenge(ctx context.Context, session 
 
 	switch idType := identity.Type.(type) {
 	case *bpb.Identity_IdevidCert:
-		log.Infof("Detected IDevID flow for %s", deviceID)
+		log.Infof("Started sendIdevidChallenge for TPM 2.0 with IDevID flow for %s", deviceID)
 		if err := s.sendIdevidChallenge(ctx, stream, session, deviceID, idType.IdevidCert); err != nil {
+			return "", err
+		}
+		return deviceID, nil
+	case *bpb.Identity_EkPpkPub:
+		log.Infof("Started sendHMACChallenge for TPM 2.0 without IDevID flow for %s", deviceID)
+		if err := s.sendHMACChallenge(stream, session, deviceID); err != nil {
 			return "", err
 		}
 		return deviceID, nil
@@ -361,22 +407,21 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 					return err
 				}
 				deviceID = newDeviceID
-				session.currentState = stateTPM20NonceSent
+				session.currentState = stateTPM20ChallengeSent
+
+			case *bpb.Identity_EkPpkPub:
+				log.Infof("Detected TPM 2.0 without IDevID flow...")
+				newDeviceID, err := s.establishSessionAndSendChallenge(ctx, session, stream, lu, identity, bootstrapReq.GetControlCardState().GetSerialNumber())
+				if err != nil {
+					return err
+				}
+				deviceID = newDeviceID
+				session.currentState = stateTPM20ChallengeSent
 
 			case *bpb.Identity_EkPub:
-				if !identity.GetPpkPub() {
-					// --- TPM 1.2 Flow ---
-					log.Infof("Detected TPM 1.2 flow (EK only) for %s", deviceID)
-					// TODO: logic to send the ca_pub challenge
-					return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not fully implemented")
-				} else {
-					// --- TPM 2.0 without IDevID Flow ---
-					log.Infof("Detected TPM 2.0 without IDevID flow (EK & PPK) for %s", deviceID)
-					return status.Errorf(codes.Unimplemented, "TPM 2.0 without IDevID flow not fully implemented")
-				}
-			case *bpb.Identity_PpkCsr:
-				log.Infof("Received PPK CSR in initial request for %s", deviceID)
-				return status.Errorf(codes.Unimplemented, "PPK CSR handling in initial request not implemented")
+				log.Infof("Detected TPM 1.2 flow (EK only) for %s", deviceID)
+				// TODO: logic to send the ca_pub challenge
+				return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not fully implemented")
 
 			default:
 				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
@@ -384,30 +429,61 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 		case *bpb.BootstrapStreamRequest_Response_:
 			log.Infof("Received Response from %s", deviceID)
-			if session.currentState != stateTPM20NonceSent && session.currentState != stateTPM20ReauthNonceSent {
-				return status.Errorf(codes.InvalidArgument, "unexpected state %v for device %s, expecting nonce response", session.currentState, deviceID)
+			if session.currentState != stateTPM20ChallengeSent && session.currentState != stateTPM20ReauthChallengeSent {
+				return status.Errorf(codes.InvalidArgument, "unexpected state %v for device %s, expecting challenge response", session.currentState, deviceID)
 			}
 
 			challengeResponse := req.Response
 
-			nonceRespWrapper, ok := challengeResponse.Type.(*bpb.BootstrapStreamRequest_Response_NonceSigned)
-			if !ok {
-				return status.Errorf(codes.InvalidArgument, "expecting nonce challenge response type, got %T", challengeResponse.Type)
+			switch challengeType := challengeResponse.Type.(type) {
+			case *bpb.BootstrapStreamRequest_Response_NonceSigned:
+				if len(session.nonce) == 0 {
+					return status.Errorf(codes.InvalidArgument, "received unexpected nonce challenge response")
+				}
+				// Base64-encode the raw signed nonce before passing it to the Verify function.
+				signedNonceB64 := base64.StdEncoding.EncodeToString(challengeResponse.GetNonceSigned())
+				// The device signs the base64-encoded nonce string.
+				if err := signature.Verify(session.idevidCert, []byte(session.nonce), signedNonceB64); err != nil {
+					log.Errorf("Nonce signature verification failed for device %s. Signature: %s, Error: %v", deviceID, signedNonceB64, err)
+					return status.Errorf(codes.InvalidArgument, "nonce signature verification failed: %v", err)
+				}
+				log.Infof("Nonce signature verified successfully for %s", deviceID)
+
+			case *bpb.BootstrapStreamRequest_Response_HmacChallengeResponse:
+				if session.hmacSensitive == nil {
+					return status.Errorf(codes.InvalidArgument, "received unexpected HMAC challenge response")
+				}
+				hmacResponse := challengeResponse.GetHmacChallengeResponse()
+
+				// Verify HMAC Challenge response.
+				if err = TPM20Utils.VerifyHMAC(hmacResponse.GetIakCertifyInfo(), hmacResponse.GetIakCertifyInfoSignature(), session.hmacSensitive); err != nil {
+					return status.Errorf(codes.InvalidArgument, "HMAC verification failed: %v", err)
+				}
+				// Verify IAK public key attributes.
+				iakPubKey, err := TPM20Utils.VerifyIAKAttributes(hmacResponse.GetIakPub())
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "IAK public key verification failed: %v", err)
+				}
+				iakCertifyInfo, err := tpm2.Unmarshal[tpm2.TPMSAttest](hmacResponse.GetIakCertifyInfo())
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "Unmarshaling IAK certify info failed: %v", err)
+				}
+				// Verify IAK certify info.
+				if err := TPM20Utils.VerifyCertifyInfo(iakCertifyInfo, iakPubKey); err != nil {
+					return status.Errorf(codes.InvalidArgument, "IAK certify info verification failed: %v", err)
+				}
+				log.Infof("HMAC challenge verified successfully for %s", deviceID)
+
+			case *bpb.BootstrapStreamRequest_Response_Nonce:
+				log.Infof("received TPM 1.2 nonce challenge response for %s", deviceID)
+				// TODO: logic to verify the nonce challenge
+				return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not fully implemented")
+
+			default:
+				return status.Errorf(codes.InvalidArgument, "unsupported challenge response type: %T", challengeType)
 			}
-			signedNonce := nonceRespWrapper.NonceSigned
 
-			// Base64-encode the raw signed nonce before passing it to the Verify function.
-			signedNonceB64 := base64.StdEncoding.EncodeToString(signedNonce)
-
-			// The device signs the base64-encoded nonce string.
-			if err := signature.Verify(session.idevidCert, []byte(session.nonce), signedNonceB64); err != nil {
-				log.Errorf("Nonce signature verification failed for device %s. Signature: %s, Error: %v", deviceID, signedNonceB64, err)
-				return status.Errorf(codes.InvalidArgument, "nonce signature verification failed: %v", err)
-			}
-
-			log.Infof("Nonce signature verified successfully for %s", deviceID)
-
-			if session.currentState == stateTPM20ReauthNonceSent {
+			if session.currentState == stateTPM20ReauthChallengeSent {
 				log.Infof("Acknowledging status report for %s after re-authentication", deviceID)
 				resp := &bpb.BootstrapStreamResponse{
 					Type: &bpb.BootstrapStreamResponse_ReportStatusResponse{
@@ -472,7 +548,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				}
 
 				deviceID = newDeviceID
-				session.currentState = stateTPM20ReauthNonceSent
+				session.currentState = stateTPM20ReauthChallengeSent
 			} else {
 				if err := s.em.SetStatus(ctx, req.ReportStatusRequest); err != nil {
 					log.Errorf("Failed to set status for device %s: %v", deviceID, err)
