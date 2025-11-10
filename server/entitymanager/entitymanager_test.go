@@ -279,7 +279,7 @@ func TestResolveChassis(t *testing.T) {
 			if (err != nil) != test.wantErr {
 				t.Fatalf("ResolveChassis(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
-			if diff := cmp.Diff(got, test.want, protocmp.Transform()); diff != "" {
+			if diff := cmp.Diff(got, test.want, protocmp.Transform(), cmpopts.IgnoreFields(types.Chassis{}, "PubKey")); diff != "" {
 				t.Errorf("ResolveChassis(%v) diff = %v", test.input, diff)
 			}
 		})

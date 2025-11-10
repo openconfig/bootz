@@ -2,9 +2,11 @@ package types
 
 import (
 	"crypto"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 
+	epb "github.com/openconfig/attestz/proto/tpm_enrollz"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	apb "github.com/openconfig/gnsi/authz"
 )
@@ -75,6 +77,8 @@ type Chassis struct {
 	Authz                  *apb.UploadRequest
 	BootloaderPasswordHash string
 	StreamingSupported     bool
+	PubKey                 *rsa.PublicKey
+	PubKeyType             epb.Key
 }
 
 // ControlCard describes a control card that exists in a resolved Chassis.
