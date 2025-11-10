@@ -94,16 +94,12 @@ type Service struct {
 }
 
 type streamSession struct {
-	currentState int
-	nonce        string // base64 encoded, for TPM 2.0 nonce challenge
-	clientNonce  string
-
-
 	currentState      int
 	chassis           *types.Chassis // Store chassis info for later stages
 	activeControlCard string
 	idevidCert        *x509.Certificate   // For IDevID flow
 	nonce             string              // base64 encoded, for TPM 2.0 nonce challenge
+	clientNonce       string              // client nonce from bootsrap request
 	hmacSensitive     *tpm2.TPMTSensitive // For TPM 2.0 without IDevID
 }
 
