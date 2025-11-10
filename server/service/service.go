@@ -90,6 +90,7 @@ type Service struct {
 type streamSession struct {
 	currentState int
 	nonce        string // base64 encoded, for TPM 2.0 nonce challenge
+	clientNonce  string
 
 	// Store chassis info for later stages
 	chassis           *types.Chassis
@@ -342,6 +343,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 			bootstrapReq := req.BootstrapRequest
 			identity := bootstrapReq.GetIdentity()
+			session.clientNonce = bootstrapReq.GetNonce()
 			log.Infof("Received initial BootstrapRequest: %+v", bootstrapReq)
 
 			if identity == nil {
@@ -431,7 +433,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 			serializedSignedData, err := proto.Marshal(&bpb.BootstrapDataSigned{
 				Responses: []*bpb.BootstrapDataResponse{bootdata},
-				Nonce:     session.nonce,
+				Nonce:     session.clientNonce,
 			})
 			if err != nil {
 				return status.Errorf(codes.Internal, "failed to serialize bootstrap data: %v", err)
