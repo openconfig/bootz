@@ -29,6 +29,9 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-tpm/tpm2"
+	"github.com/openconfig/attestz/service/biz"
+	"github.com/openconfig/bootz/common/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -36,7 +39,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	"github.com/openconfig/bootz/common/types"
+	epb "github.com/openconfig/attestz/proto/tpm_enrollz"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
@@ -199,6 +202,40 @@ func (m *mockEntityManager) ValidateIDevID(context.Context, *x509.Certificate, *
 	return m.signErr
 }
 
+type mockTPM20Utils struct {
+	errGenerate error
+	errWrap     error
+	errVerify   error
+}
+
+func (m *mockTPM20Utils) GenerateRestrictedHMACKey() (*tpm2.TPMTPublic, *tpm2.TPMTSensitive, error) {
+	return &tpm2.RSAEKTemplate, &tpm2.TPMTSensitive{}, m.errGenerate
+}
+func (m *mockTPM20Utils) WrapHMACKeytoRSAPublicKey(rsaPub *rsa.PublicKey, hmacPub *tpm2.TPMTPublic, hmacSensitive *tpm2.TPMTSensitive) ([]byte, []byte, error) {
+	return []byte("message"), []byte("signature"), m.errWrap
+}
+func (m *mockTPM20Utils) ParseTCGCSRIDevIDContent(csrBytes []byte) (*biz.TCGCSRIDevIDContents, error) {
+	return nil, nil
+}
+func (m *mockTPM20Utils) RSAEKPublicKeyToTPMTPublic(rsaPublicKey *rsa.PublicKey) (*tpm2.TPMTPublic, error) {
+	return nil, nil
+}
+func (m *mockTPM20Utils) VerifyHMAC(message []byte, signature []byte, hmacSensitive *tpm2.TPMTSensitive) error {
+	return m.errVerify
+}
+func (m *mockTPM20Utils) VerifyCertifyInfo(certifyInfoAttest *tpm2.TPMSAttest, certifiedKey *tpm2.TPMTPublic) error {
+	return nil
+}
+func (m *mockTPM20Utils) VerifyIAKAttributes(iakPub []byte) (*tpm2.TPMTPublic, error) {
+	return nil, nil
+}
+func (m *mockTPM20Utils) VerifyTPMTSignature(data []byte, signature *tpm2.TPMTSignature, pubKey *tpm2.TPMTPublic) error {
+	return nil
+}
+func (m *mockTPM20Utils) VerifyIdevidAttributes(idevidPub *tpm2.TPMTPublic, keyTemplate epb.KeyTemplate) error {
+	return nil
+}
+
 // Helper function to create a dummy X509 certificate
 func createTestCertificate(t *testing.T, commonName string, serialNumber string) (*rsa.PrivateKey, []byte) {
 	t.Helper()
@@ -251,12 +288,18 @@ func createTestClient(t *testing.T, addr string, tlsClientCreds credentials.Tran
 }
 
 func TestBootstrapStream(t *testing.T) {
+	TPM20UtilsOriginal := TPM20Utils
+	defer func() {
+		TPM20Utils = TPM20UtilsOriginal
+	}()
 	devicePrivKey, goodCertDER := createTestCertificate(t, "test-device", "test-serial-123")
 	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
+	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
 
 	tests := []struct {
 		name         string
 		em           *mockEntityManager
+		tpm          *mockTPM20Utils
 		initialReq   *bpb.BootstrapStreamRequest
 		wantErrCode  codes.Code
 		signedNonce  []byte
@@ -386,6 +429,54 @@ func TestBootstrapStream(t *testing.T) {
 			},
 			signedNonce: []byte{}, // valid signature
 		},
+		{
+			name: "TPM 2.0 no-IDevID Flow Success - Full End-to-End",
+			em: &mockEntityManager{
+				resolveChassisResp: &types.Chassis{
+					Serial:             "test-serial-123",
+					StreamingSupported: true,
+					PubKey:             ekPub,
+					PubKeyType:         epb.Key_KEY_EK,
+				},
+				getBootstrapDataResp: &bpb.BootstrapDataResponse{
+					BootConfig: &bpb.BootConfig{
+						VendorConfig: []byte("test-vendor-config"),
+					},
+				},
+			},
+			tpm: &mockTPM20Utils{},
+			initialReq: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+					BootstrapRequest: &bpb.GetBootstrapDataRequest{
+						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-SUCCESS"},
+						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
+						Identity:          &bpb.Identity{Type: &bpb.Identity_EkPpkPub{EkPpkPub: true}},
+					},
+				},
+			},
+		},
+		{
+			name: "TPM 2.0 no-IDevID Re-authentication on new stream with Status Report",
+			em: &mockEntityManager{
+				resolveChassisResp: &types.Chassis{
+					Serial:             "test-serial-123",
+					StreamingSupported: true,
+					PubKey:             ekPub,
+					PubKeyType:         epb.Key_KEY_EK,
+				},
+			},
+			tpm: &mockTPM20Utils{},
+			initialReq: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{
+					ReportStatusRequest: &bpb.ReportStatusRequest{
+						Identity: &bpb.Identity{Type: &bpb.Identity_EkPpkPub{EkPpkPub: true}},
+						States: []*bpb.ControlCardState{
+							{SerialNumber: "test-serial-123"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -396,6 +487,7 @@ func TestBootstrapStream(t *testing.T) {
 			addr := startTestServer(t, srv)
 			conn := createTestClient(t, addr, nil)
 			cli := bpb.NewBootstrapClient(conn)
+			TPM20Utils = test.tpm
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -427,43 +519,73 @@ func TestBootstrapStream(t *testing.T) {
 			if challenge == nil {
 				t.Fatalf("Response missing challenge")
 			}
-			nonce := challenge.GetNonce()
-			if nonce == "" {
-				t.Errorf("Challenge missing nonce")
-			}
-
-			// If signedNonce is nil, the test ends here.
-			if test.signedNonce == nil {
-				stream.CloseSend()
-				_, err := stream.Recv()
-				if err != io.EOF {
-					t.Errorf("Expected EOF after response, got %v", err)
+			var responseReq *bpb.BootstrapStreamRequest
+			switch challengeType := challenge.Type.(type) {
+			case *bpb.BootstrapStreamResponse_Challenge_Nonce:
+				nonce := challenge.GetNonce()
+				if nonce == "" {
+					t.Errorf("Challenge missing nonce")
 				}
-				return
-			}
 
-			// === Second Send: Respond with Signed Nonce ===
-			var finalSignedNonce []byte
-			if len(test.signedNonce) == 0 {
-				// If signedNonce is an empty slice, compute a valid one.
-				hasher := sha256.New()
-				hasher.Write([]byte(nonce))
-				hashedNonce := hasher.Sum(nil)
-				finalSignedNonce, err = rsa.SignPKCS1v15(rand.Reader, devicePrivKey, crypto.SHA256, hashedNonce)
-				if err != nil {
-					t.Fatalf("Failed to sign nonce: %v", err)
+				// If signedNonce is nil, the test ends here.
+				if test.signedNonce == nil {
+					stream.CloseSend()
+					_, err := stream.Recv()
+					if err != io.EOF {
+						t.Errorf("Expected EOF after response, got %v", err)
+					}
+					return
 				}
-			} else {
-				// Otherwise, use the value from the test case.
-				finalSignedNonce = test.signedNonce
-			}
 
-			responseReq := &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_Response_{
-					Response: &bpb.BootstrapStreamRequest_Response{
-						Type: &bpb.BootstrapStreamRequest_Response_NonceSigned{NonceSigned: finalSignedNonce},
+				// === Second Send: Respond with Signed Nonce ===
+				var finalSignedNonce []byte
+				if len(test.signedNonce) == 0 {
+					// If signedNonce is an empty slice, compute a valid one.
+					hasher := sha256.New()
+					hasher.Write([]byte(nonce))
+					hashedNonce := hasher.Sum(nil)
+					finalSignedNonce, err = rsa.SignPKCS1v15(rand.Reader, devicePrivKey, crypto.SHA256, hashedNonce)
+					if err != nil {
+						t.Fatalf("Failed to sign nonce: %v", err)
+					}
+				} else {
+					// Otherwise, use the value from the test case.
+					finalSignedNonce = test.signedNonce
+				}
+
+				responseReq = &bpb.BootstrapStreamRequest{
+					Type: &bpb.BootstrapStreamRequest_Response_{
+						Response: &bpb.BootstrapStreamRequest_Response{
+							Type: &bpb.BootstrapStreamRequest_Response_NonceSigned{NonceSigned: finalSignedNonce},
+						},
 					},
-				},
+				}
+			case *bpb.BootstrapStreamResponse_Challenge_Tpm20HmacChallenge:
+				hmac := challenge.GetTpm20HmacChallenge()
+				if hmac == nil {
+					t.Errorf("Challenge missing HMAC")
+				}
+				if hmac.GetKey() != test.em.resolveChassisResp.PubKeyType {
+					t.Errorf("Unexpected key type in challenge: got %v, want %v", hmac.GetKey(), test.em.resolveChassisResp.PubKeyType)
+				}
+				responseReq = &bpb.BootstrapStreamRequest{
+					Type: &bpb.BootstrapStreamRequest_Response_{
+						Response: &bpb.BootstrapStreamRequest_Response{
+							Type: &bpb.BootstrapStreamRequest_Response_HmacChallengeResponse{
+								HmacChallengeResponse: &epb.HMACChallengeResponse{
+									IakPub: []byte("IAKPub"),
+									IakCertifyInfo: tpm2.Marshal(tpm2.TPMSAttest{
+										Type:     tpm2.TPMSTAttestCertify,
+										Attested: tpm2.NewTPMUAttest(tpm2.TPMSTAttestCertify, &tpm2.TPMSCertifyInfo{}),
+									}),
+									IakCertifyInfoSignature: []byte("IAKCertifySignature"),
+								},
+							},
+						},
+					},
+				}
+			default:
+				t.Fatalf("Unexpected challenge type %T", challengeType)
 			}
 			if err := stream.Send(responseReq); err != nil {
 				t.Fatalf("stream.Send(responseReq) failed: %v", err)
