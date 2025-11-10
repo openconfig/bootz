@@ -99,7 +99,7 @@ type streamSession struct {
 	activeControlCard string
 	idevidCert        *x509.Certificate   // For IDevID flow
 	nonce             string              // base64 encoded, for TPM 2.0 nonce challenge
-	clientNonce       string              // client nonce from bootsrap request
+	clientNonce       string              // client nonce from bootstrap request
 	hmacSensitive     *tpm2.TPMTSensitive // For TPM 2.0 without IDevID
 }
 
