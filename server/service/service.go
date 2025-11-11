@@ -100,6 +100,7 @@ type streamSession struct {
 	activeControlCard string
 	idevidCert        *x509.Certificate   // For IDevID flow
 	nonce             string              // base64 encoded, for TPM 2.0 nonce challenge
+	clientNonce       string              // client nonce from bootstrap request
 	hmacSensitive     *tpm2.TPMTSensitive // For TPM 2.0 without IDevID
 }
 
@@ -375,6 +376,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 			bootstrapReq := req.BootstrapRequest
 			identity := bootstrapReq.GetIdentity()
+			session.clientNonce = bootstrapReq.GetNonce()
 			log.Infof("Received initial BootstrapRequest: %+v", bootstrapReq)
 
 			if identity == nil {
@@ -482,6 +484,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 			serializedSignedData, err := proto.Marshal(&bpb.BootstrapDataSigned{
 				Responses: []*bpb.BootstrapDataResponse{bootdata},
+				Nonce:     session.clientNonce,
 			})
 			if err != nil {
 				return status.Errorf(codes.Internal, "failed to serialize bootstrap data: %v", err)

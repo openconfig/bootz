@@ -319,9 +319,9 @@ func (m *InMemoryEntityManager) AddChassis(bootMode bpb.BootMode, manufacturer s
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.chassisInventory = append(m.chassisInventory, &epb.Chassis{
-		Manufacturer: manufacturer,
-		SerialNumber: serial,
-		BootMode:     bootMode,
+		Manufacturer:       manufacturer,
+		SerialNumber:       serial,
+		BootMode:           bootMode,
 		StreamingSupported: streamingSupported,
 	})
 	log.Infof("Added %v chassis %v to server entity manager", manufacturer, serial)
