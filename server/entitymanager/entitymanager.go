@@ -60,9 +60,8 @@ type InMemoryEntityManager struct {
 }
 
 // ResolveChassis returns an entity based on the provided lookup.
-// If a control card serial is provided, it also looks up chassis' by its control cards.
-func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *types.EntityLookup, ccSerial string) (*types.Chassis, error) {
-	chassis, err := m.lookupChassis(lookup, ccSerial)
+func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *types.EntityLookup) (*types.Chassis, error) {
+	chassis, err := m.lookupChassis(lookup)
 	if err != nil {
 		return nil, err
 	}
@@ -94,10 +93,14 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *type
 		BootConfig:             bootCfg,
 		Authz:                  authzConf,
 		BootloaderPasswordHash: chassis.GetBootloaderPasswordHash(),
+		StreamingSupported:     chassis.GetStreamingSupported(),
 	}, nil
 }
 
-func (m *InMemoryEntityManager) lookupChassis(lookup *types.EntityLookup, ccSerial string) (*epb.Chassis, error) {
+func (m *InMemoryEntityManager) lookupChassis(lookup *types.EntityLookup) (*epb.Chassis, error) {
+	if lookup.SerialNumber == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "lookup serial number can't be empty")
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// Search for the chassis first.
@@ -107,16 +110,14 @@ func (m *InMemoryEntityManager) lookupChassis(lookup *types.EntityLookup, ccSeri
 				return chassis, nil
 			}
 			// While we're here, try looking up by control card.
-			if ccSerial != "" {
-				for _, c := range chassis.GetControllerCards() {
-					if c.GetSerialNumber() == ccSerial {
-						return chassis, nil
-					}
+			for _, c := range chassis.GetControllerCards() {
+				if c.GetSerialNumber() == lookup.SerialNumber {
+					return chassis, nil
 				}
 			}
 		}
 	}
-	return nil, status.Errorf(codes.NotFound, "could not find chassis for lookup %+v and control card %v", lookup, ccSerial)
+	return nil, status.Errorf(codes.NotFound, "could not find chassis for lookup %+v", lookup)
 }
 
 func readOCConfig(path string) ([]byte, error) {
@@ -314,13 +315,14 @@ func (m *InMemoryEntityManager) AddControlCard(serial string) *InMemoryEntityMan
 }
 
 // AddChassis adds a new chassis to the entity manager.
-func (m *InMemoryEntityManager) AddChassis(bootMode bpb.BootMode, manufacturer string, serial string) *InMemoryEntityManager {
+func (m *InMemoryEntityManager) AddChassis(bootMode bpb.BootMode, manufacturer string, serial string, streamingSupported bool) *InMemoryEntityManager {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.chassisInventory = append(m.chassisInventory, &epb.Chassis{
 		Manufacturer: manufacturer,
 		SerialNumber: serial,
 		BootMode:     bootMode,
+		StreamingSupported: streamingSupported,
 	})
 	log.Infof("Added %v chassis %v to server entity manager", manufacturer, serial)
 	return m
@@ -400,7 +402,7 @@ func (m *InMemoryEntityManager) DeleteDevice(chassis *types.EntityLookup) {
 
 // GetDevice returns a copy of the chassis at the provided lookup.
 func (m *InMemoryEntityManager) GetDevice(chassis *types.EntityLookup) (*epb.Chassis, error) {
-	ch, err := m.lookupChassis(chassis, "")
+	ch, err := m.lookupChassis(chassis)
 	if err != nil {
 		return nil, err
 	}
