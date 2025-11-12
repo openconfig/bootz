@@ -28,6 +28,7 @@ import (
 	"net/http"
 
 	log "github.com/golang/glog"
+	"github.com/openconfig/attestz/service/biz"
 	"github.com/openconfig/bootz/common/types"
 	"github.com/openconfig/bootz/dhcp"
 	"github.com/openconfig/bootz/server/entitymanager"
@@ -108,7 +109,7 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *ty
 		}
 	}
 
-	c := service.New(em)
+	c := service.New(em, &biz.DefaultTPM20Utils{})
 
 	trustBundle := x509.NewCertPool()
 	trustBundle.AddCert(sa.TrustAnchor)

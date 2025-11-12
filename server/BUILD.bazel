@@ -26,6 +26,8 @@ go_library(
         "//server/entitymanager",
         "//server/service",
         "@com_github_golang_glog//:glog",
+        "@openconfig_attestz//service/biz:enrollz_biz",
+        "@openconfig_attestz//service/biz:tpm20_utils",
         "@org_golang_google_grpc//:grpc",
         "@org_golang_google_grpc//credentials",
     ],
