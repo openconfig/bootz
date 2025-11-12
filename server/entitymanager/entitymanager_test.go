@@ -275,7 +275,7 @@ func TestResolveChassis(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.ResolveChassis(ctx, test.input, "")
+			got, err := em.ResolveChassis(ctx, test.input)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("ResolveChassis(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
@@ -406,7 +406,7 @@ func TestSetStatus(t *testing.T) {
 	},
 	}
 	em, _ := New("", nil)
-	em.AddChassis(bpb.BootMode_BOOT_MODE_SECURE, "Cisco", "123").AddControlCard("123A")
+	em.AddChassis(bpb.BootMode_BOOT_MODE_SECURE, "Cisco", "123", true).AddControlCard("123A")
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {

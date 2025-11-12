@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	epb "github.com/openconfig/attestz/proto/tpm_enrollz"
 	bpb "github.com/openconfig/bootz/proto/bootz"
@@ -186,7 +187,7 @@ type mockEntityManager struct {
 	signErr              error
 }
 
-func (m *mockEntityManager) ResolveChassis(context.Context, *types.EntityLookup, string) (*types.Chassis, error) {
+func (m *mockEntityManager) ResolveChassis(context.Context, *types.EntityLookup) (*types.Chassis, error) {
 	return m.resolveChassisResp, m.resolveChassisErr
 }
 func (m *mockEntityManager) GetBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error) {
@@ -292,102 +293,81 @@ func TestBootstrapStream(t *testing.T) {
 	defer func() {
 		TPM20Utils = TPM20UtilsOriginal
 	}()
+
 	devicePrivKey, goodCertDER := createTestCertificate(t, "test-device", "test-serial-123")
 	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
 	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
+	em := &mockEntityManager{
+		resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true, PubKey: ekPub, PubKeyType: epb.Key_KEY_EK},
+		getBootstrapDataResp: &bpb.BootstrapDataResponse{
+			BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
+		},
+	}
+	initialReq := &bpb.BootstrapStreamRequest{
+		Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+			BootstrapRequest: &bpb.GetBootstrapDataRequest{
+				ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-123"},
+				ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
+			},
+		},
+	}
+	statusReq := &bpb.BootstrapStreamRequest{
+		Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{
+			ReportStatusRequest: &bpb.ReportStatusRequest{
+				States: []*bpb.ControlCardState{
+					{SerialNumber: "test-serial-123"},
+				},
+			},
+		},
+	}
+	idIdevid := &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}}
+	idNoIdevid := &bpb.Identity{Type: &bpb.Identity_EkPpkPub{EkPpkPub: true}}
 
 	tests := []struct {
 		name         string
 		em           *mockEntityManager
 		tpm          *mockTPM20Utils
-		initialReq   *bpb.BootstrapStreamRequest
+		req          *bpb.BootstrapStreamRequest
+		id           *bpb.Identity
 		wantErrCode  codes.Code
 		signedNonce  []byte
 		reportStatus bool
 	}{
 		{
 			name: "IDevID Flow Success - Initial Challenge Only",
-			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
-			},
-			initialReq: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
-					BootstrapRequest: &bpb.GetBootstrapDataRequest{
-						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-123"},
-						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
-						Identity:          &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
-					},
-				},
-			},
+			em:   em,
+			req:  initialReq,
+			id:   idIdevid,
 			// A nil signedNonce indicates this test only covers the initial request/response.
 			signedNonce: nil,
 		},
 		{
 			name: "IDevID Flow Success - Full End-to-End",
-			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
-				getBootstrapDataResp: &bpb.BootstrapDataResponse{
-					BootConfig: &bpb.BootConfig{
-						VendorConfig: []byte("test-vendor-config"),
-					},
-				},
-			},
-			initialReq: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
-					BootstrapRequest: &bpb.GetBootstrapDataRequest{
-						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-SUCCESS"},
-						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
-						Identity:          &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
-					},
-				},
-			},
+			em:   em,
+			req:  initialReq,
+			id:   idIdevid,
 			// An empty slice indicates a valid signature should be computed.
 			signedNonce: []byte{},
 		},
 		{
 			name: "IDevID Flow Failure - Invalid Signature",
-			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
-			},
-			initialReq: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
-					BootstrapRequest: &bpb.GetBootstrapDataRequest{
-						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-FAILURE"},
-						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
-						Identity:          &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
-					},
-				},
-			},
+			em:   em,
+			req:  initialReq,
+			id:   idIdevid,
 			// A non-empty, non-nil slice indicates a bad signature.
 			signedNonce: []byte("this is not a valid signature"),
 		},
 		{
-			name: "Missing Identity - Invalid Argument",
-			em:   &mockEntityManager{},
-			initialReq: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
-					BootstrapRequest: &bpb.GetBootstrapDataRequest{},
-				},
-			},
+			name:        "Missing Identity - Invalid Argument",
+			em:          &mockEntityManager{},
+			req:         initialReq,
 			wantErrCode: codes.InvalidArgument,
 		},
 		{
-			name: "IDevID Flow with Successful Status Report",
-			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
-				getBootstrapDataResp: &bpb.BootstrapDataResponse{
-					BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
-				},
-			},
-			initialReq: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
-					BootstrapRequest: &bpb.GetBootstrapDataRequest{
-						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-SUCCESS-STATUS"},
-						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
-						Identity:          &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
-					},
-				},
-			},
+			name:         "IDevID Flow with Successful Status Report",
+			em:           em,
+			req:          initialReq,
+			id:           idIdevid,
 			signedNonce:  []byte{},
 			reportStatus: true,
 		},
@@ -400,82 +380,31 @@ func TestBootstrapStream(t *testing.T) {
 				},
 				setStatusErr: status.Errorf(codes.Internal, "db error"),
 			},
-			initialReq: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
-					BootstrapRequest: &bpb.GetBootstrapDataRequest{
-						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-FAIL-STATUS"},
-						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
-						Identity:          &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
-					},
-				},
-			},
+			req:          initialReq,
+			id:           idIdevid,
 			signedNonce:  []byte{},
 			reportStatus: true,
 		},
 		{
-			name: "IDevID Flow Re-authentication on new stream with Status Report",
-			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
-			},
-			initialReq: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{
-					ReportStatusRequest: &bpb.ReportStatusRequest{
-						Identity: &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}},
-						States: []*bpb.ControlCardState{
-							{SerialNumber: "test-serial-123"},
-						},
-					},
-				},
-			},
+			name:        "IDevID Flow Re-authentication on new stream with Status Report",
+			em:          em,
+			req:         statusReq,
+			id:          idIdevid,
 			signedNonce: []byte{}, // valid signature
 		},
 		{
 			name: "TPM 2.0 no-IDevID Flow Success - Full End-to-End",
-			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{
-					Serial:             "test-serial-123",
-					StreamingSupported: true,
-					PubKey:             ekPub,
-					PubKeyType:         epb.Key_KEY_EK,
-				},
-				getBootstrapDataResp: &bpb.BootstrapDataResponse{
-					BootConfig: &bpb.BootConfig{
-						VendorConfig: []byte("test-vendor-config"),
-					},
-				},
-			},
-			tpm: &mockTPM20Utils{},
-			initialReq: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
-					BootstrapRequest: &bpb.GetBootstrapDataRequest{
-						ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-SUCCESS"},
-						ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
-						Identity:          &bpb.Identity{Type: &bpb.Identity_EkPpkPub{EkPpkPub: true}},
-					},
-				},
-			},
+			em:   em,
+			tpm:  &mockTPM20Utils{},
+			req:  initialReq,
+			id:   idNoIdevid,
 		},
 		{
 			name: "TPM 2.0 no-IDevID Re-authentication on new stream with Status Report",
-			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{
-					Serial:             "test-serial-123",
-					StreamingSupported: true,
-					PubKey:             ekPub,
-					PubKeyType:         epb.Key_KEY_EK,
-				},
-			},
-			tpm: &mockTPM20Utils{},
-			initialReq: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{
-					ReportStatusRequest: &bpb.ReportStatusRequest{
-						Identity: &bpb.Identity{Type: &bpb.Identity_EkPpkPub{EkPpkPub: true}},
-						States: []*bpb.ControlCardState{
-							{SerialNumber: "test-serial-123"},
-						},
-					},
-				},
-			},
+			em:   em,
+			tpm:  &mockTPM20Utils{},
+			req:  statusReq,
+			id:   idNoIdevid,
 		},
 	}
 
@@ -496,8 +425,18 @@ func TestBootstrapStream(t *testing.T) {
 				t.Fatalf("BootstrapStream() failed: %v", err)
 			}
 
-			if err := stream.Send(test.initialReq); err != nil {
-				t.Fatalf("stream.Send(%v) failed: %v", test.initialReq, err)
+			req := proto.Clone(test.req).(*bpb.BootstrapStreamRequest)
+			if test.id != nil {
+				switch reqType := req.Type.(type) {
+				case *bpb.BootstrapStreamRequest_BootstrapRequest:
+					reqType.BootstrapRequest.Identity = test.id
+				case *bpb.BootstrapStreamRequest_ReportStatusRequest:
+					reqType.ReportStatusRequest.Identity = test.id
+				}
+			}
+
+			if err := stream.Send(req); err != nil {
+				t.Fatalf("stream.Send(%v) failed: %v", req, err)
 			}
 
 			// === First Recv: Expect Challenge or Error ===
@@ -606,7 +545,7 @@ func TestBootstrapStream(t *testing.T) {
 			}
 
 			// Handle re-authentication flow initiated by a status report.
-			if _, ok := test.initialReq.Type.(*bpb.BootstrapStreamRequest_ReportStatusRequest); ok {
+			if _, ok := test.req.Type.(*bpb.BootstrapStreamRequest_ReportStatusRequest); ok {
 				if err != nil {
 					t.Fatalf("stream.Recv() for re-auth response got unexpected error: %v", err)
 				}

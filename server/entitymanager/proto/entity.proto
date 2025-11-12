@@ -159,7 +159,10 @@ message Chassis {
   Config config = 9; 
 
   // dhcp config for fixed chassis
-  DHCPConfig dhcp_config =12 ;
+  DHCPConfig dhcp_config =12;
+
+  // Whether Streaming Bootz is supported or not
+  bool streaming_supported = 13;
 }
 
 
