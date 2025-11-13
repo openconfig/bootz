@@ -138,8 +138,8 @@
     "https://bcr.bazel.build/modules/opencensus-proto/0.4.1.bcr.2/MODULE.bazel": "789706a714855f92c5c8cfcf1ef32bbb64dcd3b7c9066756ad7986ec59709d29",
     "https://bcr.bazel.build/modules/opencensus-proto/0.4.1.bcr.2/source.json": "aadf3f53e08b72376506b7c4ea3d167010c9efb160d7d6e1e304ed646bac1b36",
     "https://bcr.bazel.build/modules/opencensus-proto/0.4.1/MODULE.bazel": "4a2e8b4d0b544002502474d611a5a183aa282251e14f6a01afe841c0c1b10372",
-    "https://bcr.bazel.build/modules/openconfig_attestz/0.6.0/MODULE.bazel": "2367d98e8c565bc93bf528c0e27205a85065dd9da717fe6b3406197661e2b0c3",
-    "https://bcr.bazel.build/modules/openconfig_attestz/0.6.0/source.json": "e99a065b299be860def461a9cca46a84de15ae6064a1c5db048284d9733d6b57",
+    "https://bcr.bazel.build/modules/openconfig_attestz/0.6.2/MODULE.bazel": "25791773aa78a3398876f7e149071d7a88ad090978ebc541c11c1154190219d1",
+    "https://bcr.bazel.build/modules/openconfig_attestz/0.6.2/source.json": "944e2818caadd1bf75f391c3162fdf89251a4c803034fc8944b33dd84316cf57",
     "https://bcr.bazel.build/modules/openconfig_gnmi/0.14.1/MODULE.bazel": "1965a4108e585c2e9f54350e690ede6d985a3abdf0907a536c89a49dda6a8bbd",
     "https://bcr.bazel.build/modules/openconfig_gnmi/0.14.1/source.json": "a1a91e1fed377ab98c984b04e798ea1845ecd4ccd2c76d4fc17cafd5d33b4ff4",
     "https://bcr.bazel.build/modules/openconfig_gnsi/1.9.0/MODULE.bazel": "0cd8a165612ba5241e40e38e2b2bd629298abfa697354d9605d20b34af87e4f6",
@@ -790,8 +790,8 @@
     },
     "@@rules_python+//python/uv:uv.bzl%uv": {
       "general": {
-        "bzlTransitiveDigest": "Xpqjnjzy6zZ90Es9Wa888ZLHhn7IsNGbph/e6qoxzw8=",
-        "usagesDigest": "4JapxcpS0mL3524k0TZJffAtVyuRjDHZvN9kBRxxF1U=",
+        "bzlTransitiveDigest": "477hS4MXeJ7LqPNLTqL+1ltraV5lqwOw3tEXWqnJRt8=",
+        "usagesDigest": "p80sy6cYQuWxx5jhV3fOTu+N9EyIUFG9+F7UC/nhXic=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -816,6 +816,11 @@
           }
         },
         "recordedRepoMappingEntries": [
+          [
+            "rules_python+",
+            "bazel_tools",
+            "bazel_tools"
+          ],
           [
             "rules_python+",
             "platforms",

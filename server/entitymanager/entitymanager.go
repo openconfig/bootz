@@ -105,15 +105,16 @@ func (m *InMemoryEntityManager) lookupChassis(lookup *types.EntityLookup) (*epb.
 	defer m.mu.Unlock()
 	// Search for the chassis first.
 	for _, chassis := range m.chassisInventory {
-		if chassis.GetManufacturer() == lookup.Manufacturer {
-			if chassis.GetSerialNumber() == lookup.SerialNumber {
+		// Manufacturer isn't always populated, so only match on it if it's set.
+		if lookup.Manufacturer != "" {
+			if chassis.GetManufacturer() == lookup.Manufacturer && chassis.GetSerialNumber() == lookup.SerialNumber {
 				return chassis, nil
 			}
-			// While we're here, try looking up by control card.
-			for _, c := range chassis.GetControllerCards() {
-				if c.GetSerialNumber() == lookup.SerialNumber {
-					return chassis, nil
-				}
+		}
+		// While we're here, try looking up by control card.
+		for _, c := range chassis.GetControllerCards() {
+			if c.GetSerialNumber() == lookup.SerialNumber {
+				return chassis, nil
 			}
 		}
 	}

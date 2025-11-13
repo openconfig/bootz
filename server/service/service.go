@@ -38,45 +38,14 @@ import (
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
-// For test overriding purpose.
-var TPM20Utils biz.TPM20Utils = &biz.DefaultTPM20Utils{}
-
-// buildEntityLookup constructs an EntityLookup object from a bootstrap request.
-func buildEntityLookup(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*types.EntityLookup, error) {
-	peerAddr, err := peerAddressFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	activeControlCardSerial := req.GetControlCardState().GetSerialNumber()
-	if activeControlCardSerial == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "no active control card serial provided")
-	}
-	var partNumber string
-	var modular bool
-	if len(req.GetChassisDescriptor().GetControlCards()) == 0 {
-		modular = false
-		partNumber = req.GetChassisDescriptor().GetPartNumber()
-	} else {
-		modular = true
-		for _, card := range req.GetChassisDescriptor().GetControlCards() {
-			if card.GetSerialNumber() == activeControlCardSerial {
-				partNumber = card.GetPartNumber()
-				break
-			}
-		}
-	}
-	if partNumber == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "active control card with serial %v not found in chassis descriptor", activeControlCardSerial)
-	}
-	lookup := &types.EntityLookup{
-		Manufacturer: req.GetChassisDescriptor().GetManufacturer(),
-		SerialNumber: activeControlCardSerial,
-		PartNumber:   partNumber,
-		IPAddress:    peerAddr,
-		Modular:      modular,
-	}
-	return lookup, nil
-}
+const (
+	stateInitial = iota
+	// TPM 2.0 states
+	stateTPM20ChallengeSent
+	stateTPM20ReauthChallengeSent
+	// Common state
+	stateAttested
+)
 
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
@@ -90,7 +59,8 @@ type EntityManager interface {
 // Service represents the server and entity manager.
 type Service struct {
 	bpb.UnimplementedBootstrapServer
-	em EntityManager
+	em    EntityManager
+	tpm20 biz.TPM20Utils
 }
 
 type streamSession struct {
@@ -98,9 +68,9 @@ type streamSession struct {
 	currentState      int
 	chassis           *types.Chassis // Store chassis info for later stages
 	activeControlCard string
+	clientNonce       string              // client nonce from bootstrap request
 	idevidCert        *x509.Certificate   // For IDevID flow
 	nonce             string              // base64 encoded, for TPM 2.0 nonce challenge
-	clientNonce       string              // client nonce from bootstrap request
 	hmacSensitive     *tpm2.TPMTSensitive // For TPM 2.0 without IDevID
 }
 
@@ -212,148 +182,6 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
 }
 
-const (
-	stateInitial = iota
-	// TPM 2.0 states
-	stateTPM20ChallengeSent
-	stateTPM20ReauthChallengeSent
-	// Common state
-	stateAttested
-)
-
-// buildLookupFromReportStatus constructs an EntityLookup object from a ReportStatusRequest.
-func buildLookupFromReportStatus(ctx context.Context, req *bpb.ReportStatusRequest) (*types.EntityLookup, error) {
-	peerAddr, err := peerAddressFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var ccSerial string
-	if states := req.GetStates(); len(states) > 0 {
-		ccSerial = states[0].GetSerialNumber()
-	}
-	if ccSerial == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "control card serial is missing in ReportStatusRequest")
-	}
-	// Note: ReportStatusRequest doesn't have manufacturer or part number. The lookup is simpler.
-	lu := &types.EntityLookup{
-		SerialNumber: ccSerial,
-		IPAddress:    peerAddr,
-	}
-	return lu, nil
-}
-
-// sendIdevidChallenge contains the logic for parsing an IDevID cert, and sending a nonce challenge.
-func (s *Service) sendIdevidChallenge(session *streamSession, idevidCertB64 string) error {
-	certDER, err := base64.StdEncoding.DecodeString(idevidCertB64)
-	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
-	}
-	cert, err := x509.ParseCertificate(certDER)
-	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
-	}
-
-	if err := s.em.ValidateIDevID(session.stream.Context(), cert, session.chassis); err != nil {
-		return status.Errorf(codes.PermissionDenied, "failed to validate idevid_cert: %v", err)
-	}
-	session.idevidCert = cert
-	log.Infof("Successfully parsed IDevID cert for %s", cert.Subject.CommonName)
-
-	nonceBytes := make([]byte, 32)
-	if _, err := rand.Read(nonceBytes); err != nil {
-		return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
-	}
-	session.nonce = base64.StdEncoding.EncodeToString(nonceBytes)
-
-	challengeResp := &bpb.BootstrapStreamResponse{
-		Type: &bpb.BootstrapStreamResponse_Challenge_{
-			Challenge: &bpb.BootstrapStreamResponse_Challenge{
-				Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
-					Nonce: session.nonce,
-				},
-			},
-		},
-	}
-	if err := session.stream.Send(challengeResp); err != nil {
-		return err
-	}
-	log.Infof("Sent nonce challenge to IDevID device: %s", session.activeControlCard)
-	return nil
-}
-
-// sendHMACChallenge contains the logic for sending an HMAC challenge.
-func (s *Service) sendHMACChallenge(session *streamSession) error {
-	// Generate a restricted HMAC key.
-	hmacPub, hmacSensitive, err := TPM20Utils.GenerateRestrictedHMACKey()
-	if err != nil {
-		return status.Errorf(codes.Internal, "failed to generate restricted HMAC key: %v", err)
-	}
-
-	// Wrap HMAC key to EK/PPK public key.
-	duplicate, inSymSeed, err := TPM20Utils.WrapHMACKeytoRSAPublicKey(session.chassis.PubKey, hmacPub, hmacSensitive)
-	if err != nil {
-		return status.Errorf(codes.Internal, "failed to wrap HMAC key to EK/PPK public key: %v", err)
-	}
-
-	session.hmacSensitive = hmacSensitive
-
-	challengeResp := &bpb.BootstrapStreamResponse{
-		Type: &bpb.BootstrapStreamResponse_Challenge_{
-			Challenge: &bpb.BootstrapStreamResponse_Challenge{
-				Type: &bpb.BootstrapStreamResponse_Challenge_Tpm20HmacChallenge{
-					Tpm20HmacChallenge: &bpb.BootstrapStreamResponse_Challenge_TPM20HMACChallenge{
-						Key: session.chassis.PubKeyType,
-						HmacChallenge: &epb.HMACChallenge{
-							HmacPubKey: tpm2.Marshal(hmacPub),
-							Duplicate:  duplicate,
-							InSymSeed:  inSymSeed,
-						},
-					},
-				},
-			},
-		},
-	}
-	if err := session.stream.Send(challengeResp); err != nil {
-		return err
-	}
-	log.Infof("Sent HMAC challenge to device: %s", session.activeControlCard)
-	return nil
-}
-
-// establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM2.0 with or without IDevID.
-func (s *Service) establishSessionAndSendChallenge(session *streamSession, lookup *types.EntityLookup, identity *bpb.Identity) error {
-	if identity == nil {
-		return status.Errorf(codes.InvalidArgument, "identity field is missing in request")
-	}
-	chassis, err := s.em.ResolveChassis(session.stream.Context(), lookup)
-	if err != nil {
-		return status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
-	}
-	if !chassis.StreamingSupported {
-		return status.Errorf(codes.Unimplemented, "streaming bootstrap is not supported for this device")
-	}
-	session.chassis = chassis
-	session.activeControlCard = lookup.SerialNumber
-	log.Infof("Resolved device for re-authentication: %s, Chassis: %s", session.activeControlCard, session.chassis.Hostname)
-
-	switch idType := identity.Type.(type) {
-	case *bpb.Identity_IdevidCert:
-		log.Infof("Starting sendIdevidChallenge for TPM 2.0 with IDevID flow for %s", session.activeControlCard)
-		if err := s.sendIdevidChallenge(session, idType.IdevidCert); err != nil {
-			return err
-		}
-		return nil
-	case *bpb.Identity_EkPpkPub:
-		log.Infof("Starting sendHMACChallenge for TPM 2.0 without IDevID flow for %s", session.activeControlCard)
-		if err := s.sendHMACChallenge(session); err != nil {
-			return err
-		}
-		return nil
-	default:
-		return status.Errorf(codes.InvalidArgument, "unsupported identity type for re-authentication: %T", idType)
-	}
-}
-
 func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
 	ctx := stream.Context()
 	session := &streamSession{stream: stream, currentState: stateInitial}
@@ -369,29 +197,24 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			return err
 		}
 
-		switch req := in.Type.(type) {
+		switch req := in.GetType().(type) {
 		case *bpb.BootstrapStreamRequest_BootstrapRequest:
 			if session.currentState != stateInitial {
 				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest can only be sent as the first message.")
 			}
 			bootstrapReq := req.BootstrapRequest
-			identity := bootstrapReq.GetIdentity()
 			session.clientNonce = bootstrapReq.GetNonce()
 			log.Infof("Received initial BootstrapRequest: %+v", bootstrapReq)
 
-			if identity == nil {
-				return status.Errorf(codes.InvalidArgument, "identity field is missing in BootstrapRequest")
-			}
-
-			lu, err := buildEntityLookup(ctx, bootstrapReq)
+			lu, err := buildEntityLookup(ctx, in)
 			if err != nil {
 				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
 			}
 
-			switch idType := identity.Type.(type) {
+			switch idType := lu.Identity.GetType().(type) {
 			case *bpb.Identity_IdevidCert, *bpb.Identity_EkPpkPub:
 				log.Infof("Detected TPM 2.0 flow (ID type: %T)", idType)
-				if err := s.establishSessionAndSendChallenge(session, lu, identity); err != nil {
+				if err := s.establishSessionAndSendChallenge(session, lu); err != nil {
 					return err
 				}
 				session.currentState = stateTPM20ChallengeSent
@@ -413,7 +236,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 			challengeResponse := req.Response
 
-			switch challengeType := challengeResponse.Type.(type) {
+			switch challengeType := challengeResponse.GetType().(type) {
 			case *bpb.BootstrapStreamRequest_Response_NonceSigned:
 				if len(session.nonce) == 0 {
 					return status.Errorf(codes.InvalidArgument, "received unexpected nonce challenge response")
@@ -434,11 +257,11 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				hmacResponse := challengeResponse.GetHmacChallengeResponse()
 
 				// Verify HMAC Challenge response.
-				if err = TPM20Utils.VerifyHMAC(hmacResponse.GetIakCertifyInfo(), hmacResponse.GetIakCertifyInfoSignature(), session.hmacSensitive); err != nil {
+				if err = s.tpm20.VerifyHMAC(hmacResponse.GetIakCertifyInfo(), hmacResponse.GetIakCertifyInfoSignature(), session.hmacSensitive); err != nil {
 					return status.Errorf(codes.InvalidArgument, "HMAC verification failed: %v", err)
 				}
 				// Verify IAK public key attributes.
-				iakPubKey, err := TPM20Utils.VerifyIAKAttributes(hmacResponse.GetIakPub())
+				iakPubKey, err := s.tpm20.VerifyIAKAttributes(hmacResponse.GetIakPub())
 				if err != nil {
 					return status.Errorf(codes.InvalidArgument, "IAK public key verification failed: %v", err)
 				}
@@ -447,7 +270,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 					return status.Errorf(codes.InvalidArgument, "IAK certify info unmarshaling failed: %v", err)
 				}
 				// Verify IAK certify info.
-				if err := TPM20Utils.VerifyCertifyInfo(iakCertifyInfo, iakPubKey); err != nil {
+				if err := s.tpm20.VerifyCertifyInfo(iakCertifyInfo, iakPubKey); err != nil {
 					return status.Errorf(codes.InvalidArgument, "IAK certify info verification failed: %v", err)
 				}
 				log.Infof("HMAC challenge verified successfully for %s", session.activeControlCard)
@@ -516,12 +339,12 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 			if session.currentState == stateInitial {
 				log.Info("Received ReportStatusRequest on a new stream. Starting re-authentication...")
-				lu, err := buildLookupFromReportStatus(ctx, req.ReportStatusRequest)
+				lu, err := buildEntityLookup(ctx, in)
 				if err != nil {
 					return err
 				}
 
-				if err := s.establishSessionAndSendChallenge(session, lu, req.ReportStatusRequest.GetIdentity()); err != nil {
+				if err := s.establishSessionAndSendChallenge(session, lu); err != nil {
 					return err
 				}
 
@@ -549,6 +372,115 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 	}
 }
 
+// sendIdevidChallenge contains the logic for parsing an IDevID cert, and sending a nonce challenge.
+func (s *Service) sendIdevidChallenge(session *streamSession, idevidCertB64 string) error {
+	certDER, err := base64.StdEncoding.DecodeString(idevidCertB64)
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
+	}
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
+	}
+
+	if err := s.em.ValidateIDevID(session.stream.Context(), cert, session.chassis); err != nil {
+		return status.Errorf(codes.PermissionDenied, "failed to validate idevid_cert: %v", err)
+	}
+	session.idevidCert = cert
+	log.Infof("Successfully parsed IDevID cert for %s", cert.Subject.CommonName)
+
+	nonceBytes := make([]byte, 32)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
+	}
+	session.nonce = base64.StdEncoding.EncodeToString(nonceBytes)
+
+	challengeResp := &bpb.BootstrapStreamResponse{
+		Type: &bpb.BootstrapStreamResponse_Challenge_{
+			Challenge: &bpb.BootstrapStreamResponse_Challenge{
+				Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
+					Nonce: session.nonce,
+				},
+			},
+		},
+	}
+	if err := session.stream.Send(challengeResp); err != nil {
+		return err
+	}
+	log.Infof("Sent nonce challenge to IDevID device: %s", session.activeControlCard)
+	return nil
+}
+
+// sendHMACChallenge contains the logic for sending an HMAC challenge.
+func (s *Service) sendHMACChallenge(session *streamSession) error {
+	// Generate a restricted HMAC key.
+	hmacPub, hmacSensitive, err := s.tpm20.GenerateRestrictedHMACKey()
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to generate restricted HMAC key: %v", err)
+	}
+
+	// Wrap HMAC key to EK/PPK public key.
+	duplicate, inSymSeed, err := s.tpm20.WrapHMACKeytoRSAPublicKey(session.chassis.PubKey, hmacPub, hmacSensitive)
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to wrap HMAC key to EK/PPK public key: %v", err)
+	}
+
+	session.hmacSensitive = hmacSensitive
+
+	challengeResp := &bpb.BootstrapStreamResponse{
+		Type: &bpb.BootstrapStreamResponse_Challenge_{
+			Challenge: &bpb.BootstrapStreamResponse_Challenge{
+				Type: &bpb.BootstrapStreamResponse_Challenge_Tpm20HmacChallenge{
+					Tpm20HmacChallenge: &bpb.BootstrapStreamResponse_Challenge_TPM20HMACChallenge{
+						Key: session.chassis.PubKeyType,
+						HmacChallenge: &epb.HMACChallenge{
+							HmacPubKey: tpm2.Marshal(hmacPub),
+							Duplicate:  duplicate,
+							InSymSeed:  inSymSeed,
+						},
+					},
+				},
+			},
+		},
+	}
+	if err := session.stream.Send(challengeResp); err != nil {
+		return err
+	}
+	log.Infof("Sent HMAC challenge to device: %s", session.activeControlCard)
+	return nil
+}
+
+// establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM2.0 with or without IDevID.
+func (s *Service) establishSessionAndSendChallenge(session *streamSession, lookup *types.EntityLookup) error {
+	chassis, err := s.em.ResolveChassis(session.stream.Context(), lookup)
+	if err != nil {
+		return status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
+	}
+	if !chassis.StreamingSupported {
+		return status.Errorf(codes.Unimplemented, "streaming bootstrap is not supported for this device")
+	}
+	session.chassis = chassis
+	session.activeControlCard = lookup.SerialNumber
+	log.Infof("Resolved device for re-authentication: %s, Chassis: %s", session.activeControlCard, session.chassis.Hostname)
+
+	switch idType := lookup.Identity.GetType().(type) {
+	case *bpb.Identity_IdevidCert:
+		log.Infof("Starting sendIdevidChallenge for TPM 2.0 with IDevID flow for %s", session.activeControlCard)
+		if err := s.sendIdevidChallenge(session, idType.IdevidCert); err != nil {
+			return err
+		}
+		return nil
+	case *bpb.Identity_EkPpkPub:
+		log.Infof("Starting sendHMACChallenge for TPM 2.0 without IDevID flow for %s", session.activeControlCard)
+		if err := s.sendHMACChallenge(session); err != nil {
+			return err
+		}
+		return nil
+	default:
+		return status.Errorf(codes.InvalidArgument, "unsupported identity type for re-authentication: %T", idType)
+	}
+}
+
 // SetDeviceConfiguration is a public API for allowing the device configuration to be set for each device the
 // will be responsible for configuring.  This will be only available for testing.
 func (s *Service) SetDeviceConfiguration(ctx context.Context) error {
@@ -567,9 +499,48 @@ func peerAddressFromContext(ctx context.Context) (string, error) {
 	return a.IP.String(), nil
 }
 
+// buildEntityLookup constructs an EntityLookup object from a bootstrap request.
+func buildEntityLookup(ctx context.Context, req *bpb.BootstrapStreamRequest) (*types.EntityLookup, error) {
+	peerAddr, err := peerAddressFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// When the request is a ReportStatusRequest, only serial number and identity are available.
+	var cc *bpb.ControlCardState
+	var id *bpb.Identity
+	switch reqType := req.GetType().(type) {
+	case *bpb.BootstrapStreamRequest_BootstrapRequest:
+		cc = reqType.BootstrapRequest.GetControlCardState()
+		id = reqType.BootstrapRequest.GetIdentity()
+	case *bpb.BootstrapStreamRequest_ReportStatusRequest:
+		if ccs := reqType.ReportStatusRequest.GetStates(); len(ccs) > 0 {
+			cc = ccs[0]
+		}
+		id = reqType.ReportStatusRequest.GetIdentity()
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "unexpected request type: %T", reqType)
+	}
+	serialNumber := cc.GetSerialNumber()
+	if serialNumber == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "no active control card serial number provided in the request")
+	}
+	if id == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "no identity provided in the request")
+	}
+
+	log.Infof("Detected identity %+v of device %s from IP %v", id, serialNumber, peerAddr)
+	return &types.EntityLookup{
+		IPAddress:    peerAddr,
+		SerialNumber: serialNumber,
+		Identity:     id,
+	}, nil
+}
+
 // New creates a new service.
-func New(em EntityManager) *Service {
+func New(em EntityManager, tpm20 biz.TPM20Utils) *Service {
 	return &Service{
-		em: em,
+		em:    em,
+		tpm20: tpm20,
 	}
 }

@@ -39,143 +39,11 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	epb "github.com/openconfig/attestz/proto/tpm_enrollz"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
-
-func peerAddressContext(t *testing.T, address string) context.Context {
-	t.Helper()
-	return peer.NewContext(context.Background(), &peer.Peer{
-		Addr: &net.TCPAddr{
-			IP: net.ParseIP(address),
-		},
-	})
-}
-
-func TestBuildEntityLookup(t *testing.T) {
-	tests := []struct {
-		name    string
-		ctx     context.Context
-		req     *bpb.GetBootstrapDataRequest
-		want    *types.EntityLookup
-		wantErr bool
-	}{
-		{
-			name: "Successful fixed-form factor",
-			ctx:  peerAddressContext(t, "1.1.1.1"),
-			req: &bpb.GetBootstrapDataRequest{
-				ChassisDescriptor: &bpb.ChassisDescriptor{
-					Manufacturer: "Cisco",
-					SerialNumber: "1234",
-					PartNumber:   "ABC",
-				},
-				ControlCardState: &bpb.ControlCardState{
-					SerialNumber: "1234",
-				},
-			},
-			want: &types.EntityLookup{
-				Manufacturer: "Cisco",
-				SerialNumber: "1234",
-				PartNumber:   "ABC",
-				IPAddress:    "1.1.1.1",
-				Modular:      false,
-			},
-			wantErr: false,
-		},
-		{
-			name: "Successful modular device",
-			ctx:  peerAddressContext(t, "1.1.1.1"),
-			req: &bpb.GetBootstrapDataRequest{
-				ChassisDescriptor: &bpb.ChassisDescriptor{
-					Manufacturer: "Cisco",
-					ControlCards: []*bpb.ControlCard{
-						{
-							SerialNumber: "1234a",
-							PartNumber:   "ABCa",
-						},
-					},
-				},
-				ControlCardState: &bpb.ControlCardState{
-					SerialNumber: "1234a",
-				},
-			},
-			want: &types.EntityLookup{
-				Manufacturer: "Cisco",
-				SerialNumber: "1234a",
-				PartNumber:   "ABCa",
-				IPAddress:    "1.1.1.1",
-				Modular:      true,
-			},
-			wantErr: false,
-		},
-		{
-			name: "Modular chassis descriptor contains wrong control card",
-			ctx:  peerAddressContext(t, "1.1.1.1"),
-			req: &bpb.GetBootstrapDataRequest{
-				ChassisDescriptor: &bpb.ChassisDescriptor{
-					Manufacturer: "Cisco",
-					ControlCards: []*bpb.ControlCard{
-						{
-							SerialNumber: "1234b",
-							PartNumber:   "ABCb",
-						},
-					},
-				},
-				ControlCardState: &bpb.ControlCardState{
-					SerialNumber: "1234a",
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "Fixed form factor device has no part number",
-			ctx:  peerAddressContext(t, "1.1.1.1"),
-			req: &bpb.GetBootstrapDataRequest{
-				ChassisDescriptor: &bpb.ChassisDescriptor{
-					Manufacturer: "Cisco",
-					SerialNumber: "1234",
-				},
-				ControlCardState: &bpb.ControlCardState{
-					SerialNumber: "12344",
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "Fixed form factor does not set active control card",
-			ctx:  peerAddressContext(t, "1.1.1.1"),
-			req: &bpb.GetBootstrapDataRequest{
-				ChassisDescriptor: &bpb.ChassisDescriptor{
-					Manufacturer: "Cisco",
-					SerialNumber: "1234",
-					PartNumber:   "ABC",
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name:    "No address in context",
-			ctx:     context.Background(),
-			wantErr: true,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := buildEntityLookup(tc.ctx, tc.req)
-			if err != nil {
-				if tc.wantErr {
-					return
-				}
-				t.Fatalf("buildEntityLookup err = %v, want nil", err)
-			}
-			if diff := cmp.Diff(got, tc.want); diff != "" {
-				t.Errorf("buildEntityLookup diff = %v", diff)
-			}
-		})
-	}
-}
 
 // Mock EntityManager for testing purposes.
 type mockEntityManager struct {
@@ -289,11 +157,6 @@ func createTestClient(t *testing.T, addr string, tlsClientCreds credentials.Tran
 }
 
 func TestBootstrapStream(t *testing.T) {
-	TPM20UtilsOriginal := TPM20Utils
-	defer func() {
-		TPM20Utils = TPM20UtilsOriginal
-	}()
-
 	devicePrivKey, goodCertDER := createTestCertificate(t, "test-device", "test-serial-123")
 	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
 	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
@@ -410,13 +273,12 @@ func TestBootstrapStream(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			s := New(test.em)
+			s := New(test.em, test.tpm)
 			srv := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 			bpb.RegisterBootstrapServer(srv, s)
 			addr := startTestServer(t, srv)
 			conn := createTestClient(t, addr, nil)
 			cli := bpb.NewBootstrapClient(conn)
-			TPM20Utils = test.tpm
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -603,6 +465,119 @@ func TestBootstrapStream(t *testing.T) {
 			_, err = stream.Recv()
 			if err != io.EOF {
 				t.Errorf("Expected EOF after final response, got %v", err)
+			}
+		})
+	}
+}
+
+func peerAddressContext(t *testing.T, address string) context.Context {
+	t.Helper()
+	return peer.NewContext(context.Background(), &peer.Peer{
+		Addr: &net.TCPAddr{
+			IP: net.ParseIP(address),
+		},
+	})
+}
+
+func TestBuildEntityLookup(t *testing.T) {
+	ctx := peerAddressContext(t, "1.1.1.1")
+	tests := []struct {
+		name    string
+		ctx     context.Context
+		req     *bpb.BootstrapStreamRequest
+		want    *types.EntityLookup
+		wantErr bool
+	}{
+		{
+			name: "Successful bootstrap_request",
+			ctx:  ctx,
+			req: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+					BootstrapRequest: &bpb.GetBootstrapDataRequest{
+						ControlCardState: &bpb.ControlCardState{
+							SerialNumber: "1234",
+						},
+						Identity: &bpb.Identity{
+							Type: &bpb.Identity_IdevidCert{},
+						},
+					},
+				},
+			},
+			want: &types.EntityLookup{
+				SerialNumber: "1234",
+				IPAddress:    "1.1.1.1",
+				Identity:     &bpb.Identity{Type: &bpb.Identity_IdevidCert{}},
+			},
+		},
+		{
+			name: "Successful report_status_request",
+			ctx:  ctx,
+			req: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{
+					ReportStatusRequest: &bpb.ReportStatusRequest{
+						States: []*bpb.ControlCardState{
+							{SerialNumber: "1234"},
+						},
+						Identity: &bpb.Identity{
+							Type: &bpb.Identity_EkPpkPub{},
+						},
+					},
+				},
+			},
+			want: &types.EntityLookup{
+				SerialNumber: "1234",
+				IPAddress:    "1.1.1.1",
+				Identity:     &bpb.Identity{Type: &bpb.Identity_EkPpkPub{}},
+			},
+		},
+		{
+			name: "Wrong request type",
+			ctx:  ctx,
+			req: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_Response_{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "No serial number",
+			ctx:  ctx,
+			req: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "No identity",
+			ctx:  ctx,
+			req: &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
+					BootstrapRequest: &bpb.GetBootstrapDataRequest{
+						ControlCardState: &bpb.ControlCardState{
+							SerialNumber: "1234",
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:    "No address in context",
+			ctx:     context.Background(),
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := buildEntityLookup(tc.ctx, tc.req)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("buildEntityLookup err = %v, want nil", err)
+			}
+			if err != nil {
+				return
+			}
+			if diff := cmp.Diff(got, tc.want, protocmp.Transform()); diff != "" {
+				t.Errorf("buildEntityLookup diff = %v", diff)
 			}
 		})
 	}
