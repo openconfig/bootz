@@ -161,7 +161,7 @@ func TestBootstrapStream(t *testing.T) {
 	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
 	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
 	em := &mockEntityManager{
-		resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true, PubKey: ekPub, PubKeyType: epb.Key_KEY_EK},
+		resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true, ActivePublicKey: ekPub, ActivePublicKeyType: epb.Key_KEY_EK},
 		getBootstrapDataResp: &bpb.BootstrapDataResponse{
 			BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
 		},
@@ -366,8 +366,8 @@ func TestBootstrapStream(t *testing.T) {
 				if hmac == nil {
 					t.Errorf("Challenge missing HMAC")
 				}
-				if hmac.GetKey() != test.em.resolveChassisResp.PubKeyType {
-					t.Errorf("Unexpected key type in challenge: got %v, want %v", hmac.GetKey(), test.em.resolveChassisResp.PubKeyType)
+				if hmac.GetKey() != test.em.resolveChassisResp.ActivePublicKeyType {
+					t.Errorf("Unexpected key type in challenge: got %v, want %v", hmac.GetKey(), test.em.resolveChassisResp.ActivePublicKeyType)
 				}
 				responseReq = &bpb.BootstrapStreamRequest{
 					Type: &bpb.BootstrapStreamRequest_Response_{

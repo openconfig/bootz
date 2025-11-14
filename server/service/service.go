@@ -420,7 +420,7 @@ func (s *Service) sendHMACChallenge(session *streamSession) error {
 	}
 
 	// Wrap HMAC key to EK/PPK public key.
-	duplicate, inSymSeed, err := s.tpm20.WrapHMACKeytoRSAPublicKey(session.chassis.PubKey, hmacPub, hmacSensitive)
+	duplicate, inSymSeed, err := s.tpm20.WrapHMACKeytoRSAPublicKey(session.chassis.ActivePublicKey, hmacPub, hmacSensitive)
 	if err != nil {
 		return status.Errorf(codes.Internal, "failed to wrap HMAC key to EK/PPK public key: %v", err)
 	}
@@ -432,7 +432,7 @@ func (s *Service) sendHMACChallenge(session *streamSession) error {
 			Challenge: &bpb.BootstrapStreamResponse_Challenge{
 				Type: &bpb.BootstrapStreamResponse_Challenge_Tpm20HmacChallenge{
 					Tpm20HmacChallenge: &bpb.BootstrapStreamResponse_Challenge_TPM20HMACChallenge{
-						Key: session.chassis.PubKeyType,
+						Key: session.chassis.ActivePublicKeyType,
 						HmacChallenge: &epb.HMACChallenge{
 							HmacPubKey: tpm2.Marshal(hmacPub),
 							Duplicate:  duplicate,

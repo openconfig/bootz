@@ -7,12 +7,10 @@ chassis {
     bootloader_password_hash: ""
     controller_cards {
         serial_number: "123A"
-		slot:         1
 		part_number:   "123A"
     }
     controller_cards {
         serial_number: "123B"
-		slot:         2
 		part_number:   "123B"
     }
     software_image {
@@ -21,10 +19,9 @@ chassis {
     boot_mode: BOOT_MODE_INSECURE
     config {
         boot_config {
-
         }
         gnsi_config {
-
         }
     }
+    streaming_supported: true
 }

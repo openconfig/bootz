@@ -49,16 +49,24 @@ type EntityLookup struct {
 	// The reported IP address of the management interface for this control
 	// card or chassis.
 	IPAddress string
-	// The identity presented by the device.
+	// The identity presented by this control card or chassis.
 	Identity *bpb.Identity
 }
 
 // Chassis describes a chassis that has been resolved from an organization's inventory.
 type Chassis struct {
+	// The serial number of the active control card on this chassis.
+	ActiveSerial string
+	// The public key owned by the active control card.
+	ActivePublicKey *rsa.PublicKey
+	// The type of the public key (EK or PPK) owned by the active control card.
+	ActivePublicKeyType epb.Key
 	// The intended hostname of the chassis.
 	Hostname string
 	// The mode this chassis should boot into.
 	BootMode bpb.BootMode
+	// Whether the device supports streaming Bootz.
+	StreamingSupported bool
 	// The intended software image to install on the device.
 	SoftwareImage *bpb.SoftwareImage
 	// The realm this chassis exists in, typically lab or prod.
@@ -76,12 +84,6 @@ type Chassis struct {
 	BootConfig             *bpb.BootConfig
 	Authz                  *apb.UploadRequest
 	BootloaderPasswordHash string
-	// Whether the device supports streaming Bootz.
-	StreamingSupported bool
-	// The public key owned by the device.
-	PubKey *rsa.PublicKey
-	// The type of public key (EK or PPK) owned by the device.
-	PubKeyType epb.Key
 }
 
 // ControlCard describes a control card that exists in a resolved Chassis.

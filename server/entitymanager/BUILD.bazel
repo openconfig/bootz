@@ -26,6 +26,7 @@ go_library(
         "//proto:bootz",
         "//server/entitymanager/proto",
         "@com_github_golang_glog//:glog",
+        "@openconfig_attestz//proto:tpm_enrollz_go",
         "@openconfig_gnsi//authz",
         "@org_golang_google_grpc//codes",
         "@org_golang_google_grpc//status",
