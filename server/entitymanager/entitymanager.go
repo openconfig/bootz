@@ -17,15 +17,18 @@ package entitymanager
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"slices"
 	"strings"
 	"sync"
 
+	log "github.com/golang/glog"
 	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/common/types"
@@ -34,8 +37,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
-	log "github.com/golang/glog"
-
+	tpb "github.com/openconfig/attestz/proto/tpm_enrollz"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 	apb "github.com/openconfig/gnsi/authz"
@@ -48,7 +50,7 @@ const defaultRealm = "prod"
 type InMemoryEntityManager struct {
 	mu sync.Mutex
 	// inventory represents an organization's inventory of owned chassis.
-	chassisInventory []*epb.Chassis
+	chassisInventory []*epb.ChassisInventory
 	// represents the current status of known control cards
 	controlCardStatuses map[string]bpb.ControlCardState_ControlCardStatus
 	// stores the default config such as security artifacts dir.
@@ -65,12 +67,38 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *type
 	if err != nil {
 		return nil, err
 	}
+	var key *rsa.PublicKey
+	var keyType tpb.Key
 	cards := make([]*types.ControlCard, len(chassis.GetControllerCards()))
 	for i, controlCard := range chassis.GetControllerCards() {
 		cards[i] = &types.ControlCard{
-			PartNumber:   controlCard.PartNumber,
+			PartNumber:   controlCard.GetPartNumber(),
 			Manufacturer: chassis.GetManufacturer(),
 			Serial:       controlCard.GetSerialNumber(),
+		}
+	}
+	if _, ok := lookup.Identity.GetType().(*bpb.Identity_EkPpkPub); ok {
+		for _, c := range chassis.GetControllerCards() {
+			if c.GetSerialNumber() == lookup.SerialNumber {
+				block, _ := pem.Decode([]byte(c.GetPublicKey()))
+				if block == nil {
+					return nil, status.Errorf(codes.InvalidArgument, "failed to decode PEM block from public key: %s", c.GetPublicKey())
+				}
+				if block.Type != "PUBLIC KEY" {
+					return nil, status.Errorf(codes.InvalidArgument, "unsupported public key type: %s", block.Type)
+				}
+				pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+				if err != nil {
+					return nil, status.Errorf(codes.InvalidArgument, "failed to parse DER encoded public key: %v", err)
+				}
+				rsaPub, ok := pub.(*rsa.PublicKey)
+				if !ok {
+					return nil, status.Errorf(codes.InvalidArgument, "public key is not of type RSA")
+				}
+				key = rsaPub
+				keyType = c.GetPublicKeyType()
+				break
+			}
 		}
 	}
 	bootCfg, err := populateBootConfig(chassis.GetConfig().GetBootConfig())
@@ -82,22 +110,25 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *type
 		return nil, err
 	}
 	return &types.Chassis{
+		ActiveSerial:           lookup.SerialNumber,
+		ActivePublicKey:        key,
+		ActivePublicKeyType:    keyType,
 		Hostname:               chassis.GetName(),
 		BootMode:               chassis.GetBootMode(),
-		SoftwareImage:          chassis.GetSoftwareImage(),
-		Realm:                  defaultRealm,
+		StreamingSupported:     chassis.GetStreamingSupported(),
 		Manufacturer:           chassis.GetManufacturer(),
 		PartNumber:             chassis.GetPartNumber(),
 		Serial:                 chassis.GetSerialNumber(),
+		SoftwareImage:          chassis.GetSoftwareImage(),
+		BootloaderPasswordHash: chassis.GetBootloaderPasswordHash(),
+		Realm:                  defaultRealm,
 		ControlCards:           cards,
 		BootConfig:             bootCfg,
 		Authz:                  authzConf,
-		BootloaderPasswordHash: chassis.GetBootloaderPasswordHash(),
-		StreamingSupported:     chassis.GetStreamingSupported(),
 	}, nil
 }
 
-func (m *InMemoryEntityManager) lookupChassis(lookup *types.EntityLookup) (*epb.Chassis, error) {
+func (m *InMemoryEntityManager) lookupChassis(lookup *types.EntityLookup) (*epb.ChassisInventory, error) {
 	if lookup.SerialNumber == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "lookup serial number can't be empty")
 	}
@@ -137,7 +168,7 @@ func readOCConfig(path string) ([]byte, error) {
 	return data, nil
 }
 
-func (m *InMemoryEntityManager) populateAuthzConfig(ch *epb.Chassis) (*apb.UploadRequest, error) {
+func (m *InMemoryEntityManager) populateAuthzConfig(ch *epb.ChassisInventory) (*apb.UploadRequest, error) {
 	gnsiConf := ch.GetConfig().GetGnsiConfig()
 	gnsiAuthzReq := gnsiConf.GetAuthzUpload()
 	gnsiAuthzReqFile := gnsiConf.GetAuthzUploadFile()
@@ -319,7 +350,7 @@ func (m *InMemoryEntityManager) AddControlCard(serial string) *InMemoryEntityMan
 func (m *InMemoryEntityManager) AddChassis(bootMode bpb.BootMode, manufacturer string, serial string, streamingSupported bool) *InMemoryEntityManager {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.chassisInventory = append(m.chassisInventory, &epb.Chassis{
+	m.chassisInventory = append(m.chassisInventory, &epb.ChassisInventory{
 		Manufacturer:       manufacturer,
 		SerialNumber:       serial,
 		BootMode:           bootMode,
@@ -330,7 +361,7 @@ func (m *InMemoryEntityManager) AddChassis(bootMode bpb.BootMode, manufacturer s
 }
 
 // GetChassisInventory returns the chassis inventory
-func (m *InMemoryEntityManager) GetChassisInventory() []*epb.Chassis {
+func (m *InMemoryEntityManager) GetChassisInventory() []*epb.ChassisInventory {
 	return m.chassisInventory
 }
 
@@ -363,7 +394,7 @@ func New(chassisConfigFile string, artifacts *types.SecurityArtifacts) (*InMemor
 
 // ReplaceDevice replaces an existing chassis with a new chassis object.
 // If the chassis is not found, it is added to the inventory.
-func (m *InMemoryEntityManager) ReplaceDevice(old *types.EntityLookup, new *epb.Chassis) error {
+func (m *InMemoryEntityManager) ReplaceDevice(old *types.EntityLookup, new *epb.ChassisInventory) error {
 	// Chassis: old device lookup, newChassis: new device
 
 	// todo: Validate before replace
@@ -402,23 +433,23 @@ func (m *InMemoryEntityManager) DeleteDevice(chassis *types.EntityLookup) {
 }
 
 // GetDevice returns a copy of the chassis at the provided lookup.
-func (m *InMemoryEntityManager) GetDevice(chassis *types.EntityLookup) (*epb.Chassis, error) {
+func (m *InMemoryEntityManager) GetDevice(chassis *types.EntityLookup) (*epb.ChassisInventory, error) {
 	ch, err := m.lookupChassis(chassis)
 	if err != nil {
 		return nil, err
 	}
-	return proto.Clone(ch).(*epb.Chassis), nil
+	return proto.Clone(ch).(*epb.ChassisInventory), nil
 }
 
 // GetAll returns a copy of the chassisInventory field.
-func (m *InMemoryEntityManager) GetAll() []*epb.Chassis {
+func (m *InMemoryEntityManager) GetAll() []*epb.ChassisInventory {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	chassisClone := make([]*epb.Chassis, len(m.chassisInventory))
+	chassisClone := make([]*epb.ChassisInventory, len(m.chassisInventory))
 
 	for i, chassis := range m.chassisInventory {
-		chassisClone[i] = proto.Clone(chassis).(*epb.Chassis)
+		chassisClone[i] = proto.Clone(chassis).(*epb.ChassisInventory)
 	}
 
 	return chassisClone

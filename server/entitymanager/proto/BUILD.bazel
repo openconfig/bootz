@@ -11,6 +11,7 @@ proto_library(
     deps = [
         "//proto:bootz_proto",
         "@com_google_protobuf//:struct_proto",
+        "@openconfig_attestz//proto:tpm_enrollz_proto",
         "@openconfig_gnsi//authz:authz_proto",
         "@openconfig_gnsi//certz:certz_proto",
         "@openconfig_gnsi//pathz:pathz_proto",
@@ -27,6 +28,7 @@ go_proto_library(
     proto = ":entity_proto",
     deps = [
         "//proto:bootz",
+        "@openconfig_attestz//proto:tpm_enrollz_go",
         "@openconfig_gnsi//authz",
         "@openconfig_gnsi//certz",
         "@openconfig_gnsi//pathz",

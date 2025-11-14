@@ -51,7 +51,7 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to generate server artifacts: %v", err)
 	}
-	chassis := epb.Chassis{
+	chassis := epb.ChassisInventory{
 		Name:                   "test",
 		SerialNumber:           "123",
 		Manufacturer:           "Cisco",
@@ -85,14 +85,14 @@ func TestNew(t *testing.T) {
 	tests := []struct {
 		desc        string
 		chassisConf string
-		inventory   []*epb.Chassis
+		inventory   []*epb.ChassisInventory
 		defaults    *epb.Options
 		wantErr     string
 	}{
 		{
 			desc:        "Successful new with file",
 			chassisConf: "../../testdata/inventory.prototxt",
-			inventory:   []*epb.Chassis{&chassis},
+			inventory:   []*epb.ChassisInventory{&chassis},
 			defaults: &epb.Options{
 				Bootzserver: "bootzip:....",
 				ArtifactDir: "../../testdata/",
@@ -104,13 +104,11 @@ func TestNew(t *testing.T) {
 		{
 			desc:        "Unsuccessful new with wrong file",
 			chassisConf: "../../testdata/wrong_inventory.prototxt",
-			inventory:   []*epb.Chassis{},
 			wantErr:     "proto:",
 		},
 		{
 			desc:        "Unsuccessful new with wrong file path",
 			chassisConf: "not/valid/path",
-			inventory:   []*epb.Chassis{},
 			wantErr:     "no such file or directory",
 		},
 		{
@@ -127,7 +125,7 @@ func TestNew(t *testing.T) {
 			if err == nil {
 				opts := []cmp.Option{
 					protocmp.Transform(),
-					protocmp.IgnoreMessages(&epb.Chassis{}, &epb.Options{}, &bpb.SoftwareImage{}, &epb.DHCPConfig{}, &epb.GNSIConfig{}, &epb.BootConfig{}, &epb.Config{}, &epb.BootConfig{}, &epb.ControlCard{}),
+					protocmp.IgnoreMessages(&epb.ChassisInventory{}, &epb.Options{}, &bpb.SoftwareImage{}, &epb.DHCPConfig{}, &epb.GNSIConfig{}, &epb.BootConfig{}, &epb.Config{}, &epb.BootConfig{}, &epb.ControlCard{}),
 					cmpopts.IgnoreUnexported(types.EntityLookup{}),
 				}
 				if !cmp.Equal(inv.chassisInventory, test.inventory, opts...) {
@@ -150,7 +148,7 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to generate server artifacts: %v", err)
 	}
-	chassis := epb.Chassis{
+	chassis := epb.ChassisInventory{
 		Name:                   "test",
 		SerialNumber:           "123",
 		Manufacturer:           "Cisco",
@@ -197,7 +195,7 @@ func TestFetchOwnershipVoucher(t *testing.T) {
 	}}
 
 	em, _ := New("", a)
-	em.chassisInventory = []*epb.Chassis{&chassis}
+	em.chassisInventory = []*epb.ChassisInventory{&chassis}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
@@ -226,6 +224,7 @@ func TestResolveChassis(t *testing.T) {
 			Manufacturer: "Cisco",
 		},
 		want: &types.Chassis{
+			ActiveSerial: "123",
 			Hostname:     "test",
 			Manufacturer: "Cisco",
 			Realm:        "prod",
@@ -264,7 +263,6 @@ func TestResolveChassis(t *testing.T) {
 			SerialNumber: "456",
 			Manufacturer: "Cisco",
 		},
-		want:    nil,
 		wantErr: true,
 	},
 	}
@@ -279,7 +277,7 @@ func TestResolveChassis(t *testing.T) {
 			if (err != nil) != test.wantErr {
 				t.Fatalf("ResolveChassis(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
-			if diff := cmp.Diff(got, test.want, protocmp.Transform(), cmpopts.IgnoreFields(types.Chassis{}, "PubKey")); diff != "" {
+			if diff := cmp.Diff(got, test.want, protocmp.Transform(), cmpopts.IgnoreFields(types.Chassis{}, "ActivePublicKey")); diff != "" {
 				t.Errorf("ResolveChassis(%v) diff = %v", test.input, diff)
 			}
 		})
@@ -425,7 +423,7 @@ func TestGetBootstrapData(t *testing.T) {
 	}
 	ctx := context.Background()
 	encodedServerTrustCert := base64.StdEncoding.EncodeToString(a.TrustAnchor.Raw)
-	chassis := epb.Chassis{
+	chassis := epb.ChassisInventory{
 		Name:                   "test",
 		SerialNumber:           "123",
 		Manufacturer:           "Cisco",
@@ -516,7 +514,7 @@ func TestGetBootstrapData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create entitymanager: %v", err)
 	}
-	em.chassisInventory = []*epb.Chassis{&chassis}
+	em.chassisInventory = []*epb.ChassisInventory{&chassis}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
@@ -616,21 +614,21 @@ func TestLoadConfig(t *testing.T) {
 func TestGetDevice(t *testing.T) {
 	tests := []struct {
 		name        string
-		inventory   []*epb.Chassis
+		inventory   []*epb.ChassisInventory
 		lookup      *types.EntityLookup
-		wantChassis *epb.Chassis
+		wantChassis *epb.ChassisInventory
 		wantErr     string
 	}{
 		{
 			name:   "Successfully GetDevice",
 			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
-			inventory: []*epb.Chassis{
+			inventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "1234",
 					Manufacturer: "cisco",
 				},
 			},
-			wantChassis: &epb.Chassis{
+			wantChassis: &epb.ChassisInventory{
 				SerialNumber: "1234",
 				Manufacturer: "cisco",
 			},
@@ -639,7 +637,7 @@ func TestGetDevice(t *testing.T) {
 		{
 			name:   "Unsuccessfully GetDevice",
 			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
-			inventory: []*epb.Chassis{
+			inventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "5678",
 					Manufacturer: "sysco",
@@ -669,12 +667,12 @@ func TestGetDevice(t *testing.T) {
 
 func TestGetAll(t *testing.T) {
 	tests := []struct {
-		inventory []*epb.Chassis
+		inventory []*epb.ChassisInventory
 		name      string
 	}{
 		{
 			name: "Successful GetAll",
-			inventory: []*epb.Chassis{
+			inventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "1234",
 					Manufacturer: "cisco",
@@ -703,27 +701,27 @@ func TestGetAll(t *testing.T) {
 
 func TestReplaceDevice(t *testing.T) {
 	tests := []struct {
-		inventory     []*epb.Chassis
-		wantInventory []*epb.Chassis
+		inventory     []*epb.ChassisInventory
+		wantInventory []*epb.ChassisInventory
 		lookup        *types.EntityLookup
 		name          string
-		newChassis    *epb.Chassis
+		newChassis    *epb.ChassisInventory
 		wantErr       string
 	}{
 		{
 			name: "Successfully ReplaceDevice",
-			inventory: []*epb.Chassis{
+			inventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "1234",
 					Manufacturer: "cisco",
 				},
 			},
 			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
-			newChassis: &epb.Chassis{
+			newChassis: &epb.ChassisInventory{
 				SerialNumber: "5678",
 				Manufacturer: "cisco",
 			},
-			wantInventory: []*epb.Chassis{
+			wantInventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "5678",
 					Manufacturer: "cisco",
@@ -753,32 +751,32 @@ func TestReplaceDevice(t *testing.T) {
 
 func TestDeleteDevice(t *testing.T) {
 	tests := []struct {
-		inventory     []*epb.Chassis
-		wantInventory []*epb.Chassis
+		inventory     []*epb.ChassisInventory
+		wantInventory []*epb.ChassisInventory
 		lookup        *types.EntityLookup
 		name          string
 	}{
 		{
 			name: "Successfully DeleteDevice",
-			inventory: []*epb.Chassis{
+			inventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "1234",
 					Manufacturer: "cisco",
 				},
 			},
 			lookup:        &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
-			wantInventory: []*epb.Chassis{},
+			wantInventory: []*epb.ChassisInventory{},
 		},
 		{
 			name: "DeleteDevice nonexistent",
-			inventory: []*epb.Chassis{
+			inventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "5678",
 					Manufacturer: "cisco",
 				},
 			},
 			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
-			wantInventory: []*epb.Chassis{
+			wantInventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "5678",
 					Manufacturer: "cisco",

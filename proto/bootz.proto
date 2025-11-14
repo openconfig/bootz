@@ -52,10 +52,32 @@ service Bootstrap {
   // This bypasses the need to require the IDevID cert to be sent as part of
   // the initial gRPC TLS handshake.
   // The workflow should follow:
+  //
+  // - For TPM 2.0 with IDevID:
   //    BootstrapStreamRequest.bootstrap_request
-  //    BootstrapStreamResponse.(nonce | nonce_encrypted)
-  //    BootstrapStreamRequest.(nonce_signed | nonce)
+  //    BootstrapStreamResponse.challenge.nonce
+  //    BootstrapStreamRequest.response.nonce_signed
   //    BootstrapStreamResponse.bootstrap_response
+  //    BootstrapStreamRequest.report_status_request
+  //    BootstrapStreamResponse.report_status_response
+  //
+  // - For TPM 2.0 without IDevID:
+  //    BootstrapStreamRequest.bootstrap_request
+  //    BootstrapStreamResponse.challenge.tpm20_hmac_challenge
+  //    BootstrapStreamRequest.response.hmac_challenge_response
+  //    BootstrapStreamResponse.bootstrap_response
+  //    BootstrapStreamRequest.report_status_request
+  //    BootstrapStreamResponse.report_status_response
+  //
+  // - For TPM 1.2:
+  //    BootstrapStreamRequest.bootstrap_request
+  //    BootstrapStreamResponse.challenge.ca_pub
+  //    BootstrapStreamRequest.response.ek_identity_request
+  //    BootstrapStreamResponse.ek_identity_response
+  //    BootstrapStreamRequest.response.nonce
+  //    BootstrapStreamResponse.bootstrap_response
+  //    BootstrapStreamRequest.report_status_request
+  //    BootstrapStreamResponse.report_status_response
   //
   rpc BootstrapStream(stream BootstrapStreamRequest)
       returns (stream BootstrapStreamResponse) {}
@@ -118,9 +140,9 @@ message GetBootstrapDataRequest {
 message BootstrapStreamRequest {
   message Response {
     oneof type {
-      // Nonce to be signed with IAK from the device for IDevID based systems.
+      // Nonce signed with IAK from the device for TPM 2.0 IDevID based systems.
       bytes nonce_signed = 1;
-      // For TPM 1.2 systems the nonce will be decrypted via EK.
+      // Nonce decrypted via EK for TPM 1.2 systems.
       string nonce = 2;
       // HMAC challenge response for TPM 2.0 no-IDevID systems.
       openconfig.attestz.HMACChallengeResponse hmac_challenge_response = 3;
@@ -128,7 +150,7 @@ message BootstrapStreamRequest {
   }
 
   message EKIdentityRequest {
-    // TPM 1.2 EK Public Request
+    // TPM 1.2 DER-encoded EK RSA public key.
     bytes ek_pub = 1;
     // 'prgbTCPAIdentityReq' argument of Tspi_TPM_CollateIdentityRequest
     // defined in TCG Software Stack (TSS) Specification Version 1.2 Level 1
@@ -184,11 +206,11 @@ message BootstrapStreamResponse {
     }
 
     oneof type {
-      // nonce will be returned for IDevID based system for signing by IAK.
+      // The nonce to be signed by IAK for TPM 2.0 IDevID based systems.
       string nonce = 1;
       // DEPRECATED. Do NOT use.
       bytes nonce_encrypted = 2 [deprecated = true];
-      // TPM 1.2 EK CA public cert
+      // Bootz server self-signed CA public cert for TPM 1.2 systems.
       bytes ca_pub = 3;
       // DEPRECATED. Do NOT use.
       TPM20CsrRequest tpm20_csr_request = 4 [deprecated = true];
