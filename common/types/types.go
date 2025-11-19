@@ -40,22 +40,29 @@ type SecurityArtifacts struct {
 // EntityLookup is used to resolve the fields of an active control card to a chassis.
 // For fixed form factor devices, the active control card is the chassis itself.
 type EntityLookup struct {
-	// The manufacturer of this control card or chassis.
+	// All the serial numbers that need bootstrapping for this chassis.
+	// For fixed form factor devices, it only contains the serial number of this chassis itself.
+	// For modular devices, it contains the serial numbers of all control cards in this chassis.
+	Serials []string
+	// The active serial number that sent the bootstrap request.
+	ActiveSerial string
+	// The manufacturer of this chassis.
 	Manufacturer string
-	// The serial number of this control card or chassis.
-	SerialNumber string
-	// The hardware model/part number of this control card or chassis.
+	// The hardware model/part number of this chassis.
 	PartNumber string
-	// The reported IP address of the management interface for this control
-	// card or chassis.
+	// The reported IP address of the management interface that sent the bootstrap request.
 	IPAddress string
-	// The identity presented by this control card or chassis.
+	// The identity presented by this chassis.
 	Identity *bpb.Identity
 }
 
 // Chassis describes a chassis that has been resolved from an organization's inventory.
 type Chassis struct {
-	// The serial number of the active control card on this chassis.
+	// All the serial numbers that need bootstrapping for this chassis.
+	// For fixed form factor devices, it only contains the serial number of this chassis itself.
+	// For modular devices, it contains the serial numbers of all control cards in this chassis.
+	Serials []string
+	// The active serial number that sent the bootstrap request.
 	ActiveSerial string
 	// The public key owned by the active control card.
 	ActivePublicKey *rsa.PublicKey
@@ -75,20 +82,9 @@ type Chassis struct {
 	Manufacturer string
 	// The part number of this chassis.
 	PartNumber string
-	// The serial number of this chassis.
-	Serial string
-	// Describes the control cards that exist in this chassis.
-	ControlCards []*ControlCard
 	// The below fields are normally unset and are primarily used for
 	// cases where this data should be hardcoded e.g. for testing.
 	BootConfig             *bpb.BootConfig
 	Authz                  *apb.UploadRequest
 	BootloaderPasswordHash string
-}
-
-// ControlCard describes a control card that exists in a resolved Chassis.
-type ControlCard struct {
-	Manufacturer string
-	PartNumber   string
-	Serial       string
 }
