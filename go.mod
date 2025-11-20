@@ -3,19 +3,19 @@ module github.com/openconfig/bootz
 go 1.23.0
 
 require (
-	github.com/coredhcp/coredhcp v0.0.0-20250806070228-f7e98e4e350b
+	github.com/coredhcp/coredhcp d2ed887fca9b
 	github.com/golang/glog v1.2.5
 	github.com/google/go-cmp v0.7.0
-	github.com/google/go-tpm v0.9.6
+	github.com/google/go-tpm v0.9.7
 	github.com/h-fam/errdiff v1.0.2
-	github.com/insomniacslk/dhcp v0.0.0-20250919081422-f80a1952f48e
+	github.com/insomniacslk/dhcp 175e84fbb167
 	github.com/openconfig/attestz v0.6.2
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnsi v1.9.0
 	go.mozilla.org/pkcs7 v0.9.0
-	google.golang.org/grpc v1.75.1
+	google.golang.org/grpc v1.77.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1
-	google.golang.org/protobuf v1.36.9
+	google.golang.org/protobuf v1.36.10
 )
 
 require (
