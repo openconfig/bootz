@@ -52,7 +52,7 @@ type EntityManager interface {
 	ResolveChassis(context.Context, *types.EntityLookup) (*types.Chassis, error)
 	GetBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error)
 	SetStatus(context.Context, *bpb.ReportStatusRequest) error
-	Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis, string) error
+	Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis) error
 	ValidateIDevID(context.Context, *x509.Certificate, *types.Chassis) error
 }
 
@@ -64,14 +64,13 @@ type Service struct {
 }
 
 type streamSession struct {
-	stream            bpb.Bootstrap_BootstrapStreamServer
-	currentState      int
-	chassis           *types.Chassis // Store chassis info for later stages
-	activeControlCard string
-	clientNonce       string              // client nonce from bootstrap request
-	idevidCert        *x509.Certificate   // For IDevID flow
-	nonce             string              // base64 encoded, for TPM 2.0 nonce challenge
-	hmacSensitive     *tpm2.TPMTSensitive // For TPM 2.0 without IDevID
+	stream        bpb.Bootstrap_BootstrapStreamServer
+	currentState  int
+	chassis       *types.Chassis      // Store chassis info for later stages
+	clientNonce   string              // client nonce from bootstrap request
+	idevidCert    *x509.Certificate   // For IDevID flow
+	nonce         string              // base64 encoded, for TPM 2.0 nonce challenge
+	hmacSensitive *tpm2.TPMTSensitive // For TPM 2.0 without IDevID HMAC challenge
 }
 
 func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*bpb.GetBootstrapDataResponse, error) {
@@ -83,15 +82,20 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		return nil, err
 	}
 	log.Infof("Received GetBootstrapData request(%+v) from %v", req, peerAddr)
-	fixedChassis := true
+	var serials []string
 	chassisDesc := req.GetChassisDescriptor()
-	if len(chassisDesc.GetControlCards()) >= 1 {
-		fixedChassis = false
+	if len(chassisDesc.GetControlCards()) > 0 { // Modular chassis
+		for _, v := range chassisDesc.GetControlCards() {
+			serials = append(serials, v.GetSerialNumber())
+		}
+	} else { // Fixed form factor chassis
+		serials = append(serials, chassisDesc.GetSerialNumber())
 	}
 	log.Infof("Requesting for %v chassis %v", chassisDesc.GetManufacturer(), chassisDesc.GetSerialNumber())
 	lookup := &types.EntityLookup{
+		Serials:      serials,
+		ActiveSerial: req.GetControlCardState().GetSerialNumber(),
 		Manufacturer: chassisDesc.GetManufacturer(),
-		SerialNumber: chassisDesc.GetSerialNumber(),
 		PartNumber:   chassisDesc.GetPartNumber(),
 		IPAddress:    peerAddr,
 	}
@@ -114,19 +118,11 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("==================== Fetching data for each control card ====================")
 	log.Infof("=============================================================================")
 	var responses []*bpb.BootstrapDataResponse
-	for _, v := range chassisDesc.GetControlCards() {
-		bootdata, err := s.em.GetBootstrapData(ctx, chassis, v.GetSerialNumber())
+	for _, v := range serials {
+		bootdata, err := s.em.GetBootstrapData(ctx, chassis, v)
 		if err != nil {
 			errs.Add(err)
-			log.Infof("Error occurred while retrieving data for Serial Number %v", v.SerialNumber)
-		}
-		responses = append(responses, bootdata)
-	}
-	if fixedChassis {
-		bootdata, err := s.em.GetBootstrapData(ctx, chassis, chassisDesc.GetSerialNumber())
-		if err != nil {
-			errs.Add(err)
-			log.Infof("Error occurred while retrieving data for fixed chassis with serail number %v", lookup.SerialNumber)
+			log.Infof("Error occurred while retrieving data for serial number %v", v)
 		}
 		responses = append(responses, bootdata)
 	}
@@ -161,7 +157,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		log.Infof("=============================================================================")
 		log.Infof("====================== Signing the response with nonce ======================")
 		log.Infof("=============================================================================")
-		if err := s.em.Sign(ctx, resp, chassis, req.GetControlCardState().GetSerialNumber()); err != nil {
+		if err := s.em.Sign(ctx, resp, chassis); err != nil {
 			return nil, err
 		}
 		log.Infof("Signed with nonce")
@@ -184,12 +180,12 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 
 func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
 	ctx := stream.Context()
-	session := &streamSession{stream: stream, currentState: stateInitial}
+	session := &streamSession{stream: stream, currentState: stateInitial, chassis: &types.Chassis{}}
 
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
-			log.Infof("Stream closed by client: %s", session.activeControlCard)
+			log.Infof("Stream closed by client: %s", session.chassis.ActiveSerial)
 			return nil
 		}
 		if err != nil {
@@ -213,14 +209,14 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 			switch idType := lu.Identity.GetType().(type) {
 			case *bpb.Identity_IdevidCert, *bpb.Identity_EkPpkPub:
-				log.Infof("Detected TPM 2.0 flow (ID type: %T)", idType)
+				log.Infof("Detected TPM 2.0 flow (ID type: %T) for device %s", idType, lu.ActiveSerial)
 				if err := s.establishSessionAndSendChallenge(session, lu); err != nil {
 					return err
 				}
 				session.currentState = stateTPM20ChallengeSent
 
 			case *bpb.Identity_EkPub:
-				log.Infof("Detected TPM 1.2 flow (EK only) for %s", session.activeControlCard)
+				log.Infof("Detected TPM 1.2 flow (EK only) for device %s", lu.ActiveSerial)
 				// TODO: logic to send the ca_pub challenge
 				return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not fully implemented")
 
@@ -229,11 +225,10 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 
 		case *bpb.BootstrapStreamRequest_Response_:
-			log.Infof("Received Response from %s", session.activeControlCard)
 			if session.currentState != stateTPM20ChallengeSent && session.currentState != stateTPM20ReauthChallengeSent {
-				return status.Errorf(codes.InvalidArgument, "unexpected state %v for device %s, expecting challenge response", session.currentState, session.activeControlCard)
+				return status.Errorf(codes.InvalidArgument, "unexpected challenge response")
 			}
-
+			log.Infof("Received Response from device %s", session.chassis.ActiveSerial)
 			challengeResponse := req.Response
 
 			switch challengeType := challengeResponse.GetType().(type) {
@@ -245,10 +240,10 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				signedNonceB64 := base64.StdEncoding.EncodeToString(challengeResponse.GetNonceSigned())
 				// The device signs the base64-encoded nonce string.
 				if err := signature.Verify(session.idevidCert, []byte(session.nonce), signedNonceB64); err != nil {
-					log.Errorf("Nonce signature verification failed for device %s. Signature: %s, Error: %v", session.activeControlCard, signedNonceB64, err)
+					log.Errorf("Nonce signature verification failed for device %s. Signature: %s, Error: %v", session.chassis.ActiveSerial, signedNonceB64, err)
 					return status.Errorf(codes.InvalidArgument, "nonce signature verification failed: %v", err)
 				}
-				log.Infof("Nonce signature verified successfully for %s", session.activeControlCard)
+				log.Infof("Nonce signature verified successfully for device %s", session.chassis.ActiveSerial)
 
 			case *bpb.BootstrapStreamRequest_Response_HmacChallengeResponse:
 				if session.hmacSensitive == nil {
@@ -273,10 +268,10 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				if err := s.tpm20.VerifyCertifyInfo(iakCertifyInfo, iakPubKey); err != nil {
 					return status.Errorf(codes.InvalidArgument, "IAK certify info verification failed: %v", err)
 				}
-				log.Infof("HMAC challenge verified successfully for %s", session.activeControlCard)
+				log.Infof("HMAC challenge verified successfully for device %s", session.chassis.ActiveSerial)
 
 			case *bpb.BootstrapStreamRequest_Response_Nonce:
-				log.Infof("received TPM 1.2 nonce challenge response for %s", session.activeControlCard)
+				log.Infof("received TPM 1.2 nonce challenge response for %s", session.chassis.ActiveSerial)
 				// TODO: logic to verify the nonce challenge
 				return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not fully implemented")
 
@@ -285,7 +280,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 
 			if session.currentState == stateTPM20ReauthChallengeSent {
-				log.Infof("Acknowledging status report for %s after re-authentication", session.activeControlCard)
+				log.Infof("Acknowledging status report after re-authentication for device %s", session.chassis.ActiveSerial)
 				resp := &bpb.BootstrapStreamResponse{
 					Type: &bpb.BootstrapStreamResponse_ReportStatusResponse{
 						ReportStatusResponse: &bpb.EmptyResponse{},
@@ -294,19 +289,23 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				if err := session.stream.Send(resp); err != nil {
 					return err
 				}
-				log.Infof("Acknowledged status report from %s", session.activeControlCard)
+				log.Infof("Acknowledged status report for device %s", session.chassis.ActiveSerial)
 				session.currentState = stateAttested
 				continue
 			}
 
 			// If verification is successful, fetch and send the bootstrap data.
-			log.Infof("Fetching bootstrap data for %s", session.activeControlCard)
-			bootdata, err := s.em.GetBootstrapData(ctx, session.chassis, session.activeControlCard)
-			if err != nil {
-				return status.Errorf(codes.Internal, "failed to get bootstrap data: %v", err)
+			var responses []*bpb.BootstrapDataResponse
+			for _, v := range session.chassis.Serials {
+				log.Infof("Fetching bootstrap data for serial number %s", v)
+				bootdata, err := s.em.GetBootstrapData(ctx, session.chassis, v)
+				if err != nil {
+					return status.Errorf(codes.Internal, "failed to get bootstrap data for serial number %s: %v", v, err)
+				}
+				responses = append(responses, bootdata)
 			}
 			serializedSignedData, err := proto.Marshal(&bpb.BootstrapDataSigned{
-				Responses: []*bpb.BootstrapDataResponse{bootdata},
+				Responses: responses,
 				Nonce:     session.clientNonce,
 			})
 			if err != nil {
@@ -315,7 +314,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			bootstrapRespForSigning := &bpb.GetBootstrapDataResponse{
 				SerializedBootstrapData: serializedSignedData,
 			}
-			if err := s.em.Sign(ctx, bootstrapRespForSigning, session.chassis, session.activeControlCard); err != nil {
+			if err := s.em.Sign(ctx, bootstrapRespForSigning, session.chassis); err != nil {
 				return status.Errorf(codes.Internal, "failed to sign bootstrap data: %v", err)
 			}
 
@@ -328,14 +327,14 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			if err := session.stream.Send(finalStreamResp); err != nil {
 				return err
 			}
-			log.Infof("Successfully sent bootstrap data to %s", session.activeControlCard)
+			log.Infof("Successfully sent bootstrap data to device %s", session.chassis.ActiveSerial)
 			session.currentState = stateAttested
 
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
 			log.Infof("=============================================================================")
 			log.Infof("====================== Stream status report received ======================")
 			log.Infof("=============================================================================")
-			log.Infof("Received ReportStatusRequest from %s: %+v", session.activeControlCard, req.ReportStatusRequest)
+			log.Infof("Received ReportStatusRequest from %s: %+v", session.chassis.ActiveSerial, req.ReportStatusRequest)
 
 			if session.currentState == stateInitial {
 				log.Info("Received ReportStatusRequest on a new stream. Starting re-authentication...")
@@ -351,10 +350,10 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				session.currentState = stateTPM20ReauthChallengeSent
 			} else {
 				if err := s.em.SetStatus(ctx, req.ReportStatusRequest); err != nil {
-					log.Errorf("Failed to set status for device %s: %v", session.activeControlCard, err)
+					log.Errorf("Failed to set status for device %s: %v", session.chassis.ActiveSerial, err)
 					return status.Errorf(codes.Internal, "failed to set status: %v", err)
 				}
-				log.Infof("Successfully set status for device %s", session.activeControlCard)
+				log.Infof("Successfully set status for device %s", session.chassis.ActiveSerial)
 
 				resp := &bpb.BootstrapStreamResponse{
 					Type: &bpb.BootstrapStreamResponse_ReportStatusResponse{
@@ -364,7 +363,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				if err := stream.Send(resp); err != nil {
 					return err
 				}
-				log.Infof("Acknowledged status report from %s", session.activeControlCard)
+				log.Infof("Acknowledged status report from %s", session.chassis.ActiveSerial)
 			}
 		default:
 			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
@@ -407,7 +406,7 @@ func (s *Service) sendIdevidChallenge(session *streamSession, idevidCertB64 stri
 	if err := session.stream.Send(challengeResp); err != nil {
 		return err
 	}
-	log.Infof("Sent nonce challenge to IDevID device: %s", session.activeControlCard)
+	log.Infof("Sent nonce challenge to IDevID device %s", session.chassis.ActiveSerial)
 	return nil
 }
 
@@ -446,7 +445,7 @@ func (s *Service) sendHMACChallenge(session *streamSession) error {
 	if err := session.stream.Send(challengeResp); err != nil {
 		return err
 	}
-	log.Infof("Sent HMAC challenge to device: %s", session.activeControlCard)
+	log.Infof("Sent HMAC challenge to device %s", session.chassis.ActiveSerial)
 	return nil
 }
 
@@ -460,18 +459,17 @@ func (s *Service) establishSessionAndSendChallenge(session *streamSession, looku
 		return status.Errorf(codes.Unimplemented, "streaming bootstrap is not supported for this device")
 	}
 	session.chassis = chassis
-	session.activeControlCard = lookup.SerialNumber
-	log.Infof("Resolved device for re-authentication: %s, Chassis: %s", session.activeControlCard, session.chassis.Hostname)
+	log.Infof("Resolved device %s to hostname %s", chassis.ActiveSerial, chassis.Hostname)
 
 	switch idType := lookup.Identity.GetType().(type) {
 	case *bpb.Identity_IdevidCert:
-		log.Infof("Starting sendIdevidChallenge for TPM 2.0 with IDevID flow for %s", session.activeControlCard)
+		log.Infof("Starting sendIdevidChallenge for TPM 2.0 with IDevID flow for device %s", chassis.ActiveSerial)
 		if err := s.sendIdevidChallenge(session, idType.IdevidCert); err != nil {
 			return err
 		}
 		return nil
 	case *bpb.Identity_EkPpkPub:
-		log.Infof("Starting sendHMACChallenge for TPM 2.0 without IDevID flow for %s", session.activeControlCard)
+		log.Infof("Starting sendHMACChallenge for TPM 2.0 without IDevID flow for device%s", chassis.ActiveSerial)
 		if err := s.sendHMACChallenge(session); err != nil {
 			return err
 		}
@@ -509,30 +507,42 @@ func buildEntityLookup(ctx context.Context, req *bpb.BootstrapStreamRequest) (*t
 	// When the request is a ReportStatusRequest, only serial number and identity are available.
 	var cc *bpb.ControlCardState
 	var id *bpb.Identity
+	var serials []string
 	switch reqType := req.GetType().(type) {
 	case *bpb.BootstrapStreamRequest_BootstrapRequest:
 		cc = reqType.BootstrapRequest.GetControlCardState()
 		id = reqType.BootstrapRequest.GetIdentity()
+		if cards := reqType.BootstrapRequest.GetChassisDescriptor().GetControlCards(); len(cards) > 0 { // Modular chassis
+			for _, v := range cards {
+				serials = append(serials, v.GetSerialNumber())
+			}
+		} else { // Fixed form factor chassis
+			serials = append(serials, reqType.BootstrapRequest.GetChassisDescriptor().GetSerialNumber())
+		}
 	case *bpb.BootstrapStreamRequest_ReportStatusRequest:
 		if ccs := reqType.ReportStatusRequest.GetStates(); len(ccs) > 0 {
-			cc = ccs[0]
+			cc = ccs[0] // Assume the first control card is the active one.
+			for _, v := range ccs {
+				serials = append(serials, v.GetSerialNumber())
+			}
 		}
 		id = reqType.ReportStatusRequest.GetIdentity()
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unexpected request type: %T", reqType)
 	}
-	serialNumber := cc.GetSerialNumber()
-	if serialNumber == "" {
+	activeSerial := cc.GetSerialNumber()
+	if activeSerial == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "no active control card serial number provided in the request")
 	}
 	if id == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "no identity provided in the request")
 	}
 
-	log.Infof("Detected identity %+v of device %s from IP %v", id, serialNumber, peerAddr)
+	log.Infof("Detected identity %+v of device %s from IP %v", id, activeSerial, peerAddr)
 	return &types.EntityLookup{
+		Serials:      serials,
+		ActiveSerial: activeSerial,
 		IPAddress:    peerAddr,
-		SerialNumber: serialNumber,
 		Identity:     id,
 	}, nil
 }

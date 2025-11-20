@@ -64,7 +64,7 @@ func (m *mockEntityManager) GetBootstrapData(context.Context, *types.Chassis, st
 func (m *mockEntityManager) SetStatus(context.Context, *bpb.ReportStatusRequest) error {
 	return m.setStatusErr
 }
-func (m *mockEntityManager) Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis, string) error {
+func (m *mockEntityManager) Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis) error {
 	return m.signErr
 }
 func (m *mockEntityManager) ValidateIDevID(context.Context, *x509.Certificate, *types.Chassis) error {
@@ -161,7 +161,7 @@ func TestBootstrapStream(t *testing.T) {
 	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
 	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
 	em := &mockEntityManager{
-		resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true, ActivePublicKey: ekPub, ActivePublicKeyType: epb.Key_KEY_EK},
+		resolveChassisResp: &types.Chassis{Serials: []string{"test-serial-123"}, ActiveSerial: "test-serial-123", StreamingSupported: true, ActivePublicKey: ekPub, ActivePublicKeyType: epb.Key_KEY_EK},
 		getBootstrapDataResp: &bpb.BootstrapDataResponse{
 			BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
 		},
@@ -237,7 +237,7 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow with Failing Status Report",
 			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serial: "test-serial-123", StreamingSupported: true},
+				resolveChassisResp: &types.Chassis{Serials: []string{"test-serial-123"}, ActiveSerial: "test-serial-123", StreamingSupported: true},
 				getBootstrapDataResp: &bpb.BootstrapDataResponse{
 					BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
 				},
@@ -494,6 +494,9 @@ func TestBuildEntityLookup(t *testing.T) {
 			req: &bpb.BootstrapStreamRequest{
 				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
 					BootstrapRequest: &bpb.GetBootstrapDataRequest{
+						ChassisDescriptor: &bpb.ChassisDescriptor{
+							SerialNumber: "1234",
+						},
 						ControlCardState: &bpb.ControlCardState{
 							SerialNumber: "1234",
 						},
@@ -504,7 +507,8 @@ func TestBuildEntityLookup(t *testing.T) {
 				},
 			},
 			want: &types.EntityLookup{
-				SerialNumber: "1234",
+				Serials:      []string{"1234"},
+				ActiveSerial: "1234",
 				IPAddress:    "1.1.1.1",
 				Identity:     &bpb.Identity{Type: &bpb.Identity_IdevidCert{}},
 			},
@@ -525,7 +529,8 @@ func TestBuildEntityLookup(t *testing.T) {
 				},
 			},
 			want: &types.EntityLookup{
-				SerialNumber: "1234",
+				Serials:      []string{"1234"},
+				ActiveSerial: "1234",
 				IPAddress:    "1.1.1.1",
 				Identity:     &bpb.Identity{Type: &bpb.Identity_EkPpkPub{}},
 			},

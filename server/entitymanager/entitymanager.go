@@ -24,7 +24,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"sync"
 
@@ -69,17 +68,9 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *type
 	}
 	var key *rsa.PublicKey
 	var keyType tpb.Key
-	cards := make([]*types.ControlCard, len(chassis.GetControllerCards()))
-	for i, controlCard := range chassis.GetControllerCards() {
-		cards[i] = &types.ControlCard{
-			PartNumber:   controlCard.GetPartNumber(),
-			Manufacturer: chassis.GetManufacturer(),
-			Serial:       controlCard.GetSerialNumber(),
-		}
-	}
 	if _, ok := lookup.Identity.GetType().(*bpb.Identity_EkPpkPub); ok {
 		for _, c := range chassis.GetControllerCards() {
-			if c.GetSerialNumber() == lookup.SerialNumber {
+			if c.GetSerialNumber() == lookup.ActiveSerial {
 				block, _ := pem.Decode([]byte(c.GetPublicKey()))
 				if block == nil {
 					return nil, status.Errorf(codes.InvalidArgument, "failed to decode PEM block from public key: %s", c.GetPublicKey())
@@ -110,7 +101,8 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *type
 		return nil, err
 	}
 	return &types.Chassis{
-		ActiveSerial:           lookup.SerialNumber,
+		Serials:                lookup.Serials,
+		ActiveSerial:           lookup.ActiveSerial,
 		ActivePublicKey:        key,
 		ActivePublicKeyType:    keyType,
 		Hostname:               chassis.GetName(),
@@ -118,33 +110,28 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *type
 		StreamingSupported:     chassis.GetStreamingSupported(),
 		Manufacturer:           chassis.GetManufacturer(),
 		PartNumber:             chassis.GetPartNumber(),
-		Serial:                 chassis.GetSerialNumber(),
 		SoftwareImage:          chassis.GetSoftwareImage(),
 		BootloaderPasswordHash: chassis.GetBootloaderPasswordHash(),
 		Realm:                  defaultRealm,
-		ControlCards:           cards,
 		BootConfig:             bootCfg,
 		Authz:                  authzConf,
 	}, nil
 }
 
 func (m *InMemoryEntityManager) lookupChassis(lookup *types.EntityLookup) (*epb.ChassisInventory, error) {
-	if lookup.SerialNumber == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "lookup serial number can't be empty")
+	if lookup.ActiveSerial == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "lookup active serial number can't be empty")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// Search for the chassis first.
 	for _, chassis := range m.chassisInventory {
-		// Manufacturer isn't always populated, so only match on it if it's set.
-		if lookup.Manufacturer != "" {
-			if chassis.GetManufacturer() == lookup.Manufacturer && chassis.GetSerialNumber() == lookup.SerialNumber {
-				return chassis, nil
-			}
+		// Search for the chassis serial number first.
+		if chassis.GetSerialNumber() == lookup.ActiveSerial {
+			return chassis, nil
 		}
 		// While we're here, try looking up by control card.
 		for _, c := range chassis.GetControllerCards() {
-			if c.GetSerialNumber() == lookup.SerialNumber {
+			if c.GetSerialNumber() == lookup.ActiveSerial {
 				return chassis, nil
 			}
 		}
@@ -258,7 +245,7 @@ func (m *InMemoryEntityManager) SetStatus(ctx context.Context, req *bpb.ReportSt
 }
 
 // Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
-func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrapDataResponse, chassis *types.Chassis, controllerCard string) error {
+func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrapDataResponse, chassis *types.Chassis) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// Check if security artifacts are provided for signing.
@@ -276,7 +263,7 @@ func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrap
 	resp.ResponseSignature = sig
 
 	// Populate the OV
-	ov, err := m.fetchOwnershipVoucher(controllerCard)
+	ov, err := m.fetchOwnershipVoucher(chassis.ActiveSerial)
 	if err != nil {
 		return err
 	}
@@ -306,14 +293,14 @@ func (em *InMemoryEntityManager) ValidateIDevID(ctx context.Context, cert *x509.
 
 	certSerial := getCertSerialNumber(cert.Subject.SerialNumber)
 
-	if !strings.EqualFold(certSerial, chassis.Serial) {
-		if !slices.ContainsFunc(chassis.ControlCards, func(cc *types.ControlCard) bool { return strings.EqualFold(certSerial, cc.Serial) }) {
-			return fmt.Errorf("serial number from certificate (%q) does not match chassis serial (%q) or any control card serials", strings.ToUpper(certSerial), strings.ToUpper(chassis.Serial))
+	for _, v := range chassis.Serials {
+		if strings.EqualFold(certSerial, v) {
+			log.InfoContextf(ctx, "Successfully validated IDevID for chassis %q", certSerial)
+			return nil
 		}
 	}
 
-	log.InfoContextf(ctx, "Successfully validated IDevID for chassis with serial %q", chassis.Serial)
-	return nil
+	return fmt.Errorf("serial number from certificate (%v) does not match chassis (%+v)", certSerial, chassis.Serials)
 }
 
 // getCertSerialNumber extracts the serial number from the cert subject serial number.
@@ -400,18 +387,18 @@ func (m *InMemoryEntityManager) ReplaceDevice(old *types.EntityLookup, new *epb.
 	// todo: Validate before replace
 	// todo: Forward error from validateConfig
 
-	if old == nil || old.SerialNumber == "" {
-		return status.Error(codes.InvalidArgument, "chassis serial must be set")
+	if old == nil || old.ActiveSerial == "" {
+		return status.Error(codes.InvalidArgument, "lookup active serial must be set")
 	}
 
 	if new == nil || new.SerialNumber == "" {
-		return status.Error(codes.InvalidArgument, "chassis config or serial can not be nil")
+		return status.Error(codes.InvalidArgument, "new chassis or serial can not be nil")
 	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for i, ch := range m.chassisInventory {
-		if ch.GetManufacturer() == old.Manufacturer && ch.GetSerialNumber() == old.SerialNumber {
+		if ch.GetManufacturer() == old.Manufacturer && ch.GetSerialNumber() == old.ActiveSerial {
 			m.chassisInventory[i] = new
 			return nil
 		}
@@ -426,7 +413,7 @@ func (m *InMemoryEntityManager) DeleteDevice(chassis *types.EntityLookup) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for i, ch := range m.chassisInventory {
-		if ch.GetManufacturer() == chassis.Manufacturer && ch.GetSerialNumber() == chassis.SerialNumber {
+		if ch.GetManufacturer() == chassis.Manufacturer && ch.GetSerialNumber() == chassis.ActiveSerial {
 			m.chassisInventory = append(m.chassisInventory[:i], m.chassisInventory[i+1:]...)
 		}
 	}

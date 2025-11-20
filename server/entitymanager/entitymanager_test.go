@@ -220,15 +220,13 @@ func TestResolveChassis(t *testing.T) {
 	}{{
 		desc: "Default device",
 		input: &types.EntityLookup{
-			SerialNumber: "123",
-			Manufacturer: "Cisco",
+			ActiveSerial: "123",
 		},
 		want: &types.Chassis{
 			ActiveSerial: "123",
 			Hostname:     "test",
 			Manufacturer: "Cisco",
 			Realm:        "prod",
-			Serial:       "123",
 			BootMode:     bpb.BootMode_BOOT_MODE_INSECURE,
 			SoftwareImage: &bpb.SoftwareImage{
 				HashAlgorithm: "ietf-sztp-conveyed-info:sha-256",
@@ -236,18 +234,6 @@ func TestResolveChassis(t *testing.T) {
 				OsImageHash:   "e9:c0:f8:b5:75:cb:fc:b4:2a:b3:b7:8e:cc:87:ef:a3:b0:11:d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5",
 				Url:           "https://path/to/image",
 				Version:       "1.0",
-			},
-			ControlCards: []*types.ControlCard{
-				{
-					Manufacturer: "Cisco",
-					PartNumber:   "123A",
-					Serial:       "123A",
-				},
-				{
-					Manufacturer: "Cisco",
-					PartNumber:   "123B",
-					Serial:       "123B",
-				},
 			},
 			BootConfig: &bpb.BootConfig{},
 			Authz: &apb.UploadRequest{
@@ -260,8 +246,7 @@ func TestResolveChassis(t *testing.T) {
 	}, {
 		desc: "Chassis Not Found",
 		input: &types.EntityLookup{
-			SerialNumber: "456",
-			Manufacturer: "Cisco",
+			ActiveSerial: "456",
 		},
 		wantErr: true,
 	},
@@ -300,17 +285,8 @@ func TestSign(t *testing.T) {
 	}{{
 		desc: "Success",
 		chassis: types.Chassis{
-			Manufacturer: "Cisco",
-			Serial:       "123",
-			ControlCards: []*types.ControlCard{
-				{
-					Serial:       "123A",
-					Manufacturer: "Cisco",
-					PartNumber:   "123A",
-				},
-			},
+			ActiveSerial: "123A",
 		},
-		serial: "123A",
 		resp: &bpb.GetBootstrapDataResponse{
 			SerializedBootstrapData: MustMarshalBootstrapDataSigned(t, &bpb.BootstrapDataSigned{
 				Responses: []*bpb.BootstrapDataResponse{
@@ -334,7 +310,7 @@ func TestSign(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			err = em.Sign(ctx, test.resp, &test.chassis, test.serial)
+			err = em.Sign(ctx, test.resp, &test.chassis)
 			if err != nil {
 				if test.wantErr {
 					t.Skip()
@@ -346,8 +322,8 @@ func TestSign(t *testing.T) {
 			if err != nil {
 				t.Errorf("Verify() err == %v, want %v", err, test.wantErr)
 			}
-			if !bytes.Equal(test.resp.GetOwnershipVoucher(), a.OV[test.serial]) {
-				t.Errorf("Sign() ov = %v, want %v", test.resp.GetOwnershipVoucher(), a.OV[test.serial])
+			if !bytes.Equal(test.resp.GetOwnershipVoucher(), a.OV[test.chassis.ActiveSerial]) {
+				t.Errorf("Sign() ov = %v, want %v", test.resp.GetOwnershipVoucher(), a.OV[test.chassis.ActiveSerial])
 			}
 			wantOC, err := ownercertificate.GenerateCMS(a.OwnerCert, a.OwnerCertPrivateKey)
 			if err != nil {
@@ -465,7 +441,7 @@ func TestGetBootstrapData(t *testing.T) {
 		desc:              "Success",
 		controlCardSerial: "123",
 		chassis: &types.Chassis{
-			Serial: "123",
+			ActiveSerial: "123",
 			SoftwareImage: &bpb.SoftwareImage{
 				Name:          "Default Image",
 				Version:       "1.0",
@@ -621,7 +597,7 @@ func TestGetDevice(t *testing.T) {
 	}{
 		{
 			name:   "Successfully GetDevice",
-			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
+			lookup: &types.EntityLookup{ActiveSerial: "1234", Manufacturer: "cisco"},
 			inventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "1234",
@@ -636,7 +612,7 @@ func TestGetDevice(t *testing.T) {
 		},
 		{
 			name:   "Unsuccessfully GetDevice",
-			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
+			lookup: &types.EntityLookup{ActiveSerial: "1234", Manufacturer: "cisco"},
 			inventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "5678",
@@ -716,7 +692,7 @@ func TestReplaceDevice(t *testing.T) {
 					Manufacturer: "cisco",
 				},
 			},
-			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
+			lookup: &types.EntityLookup{ActiveSerial: "1234", Manufacturer: "cisco"},
 			newChassis: &epb.ChassisInventory{
 				SerialNumber: "5678",
 				Manufacturer: "cisco",
@@ -764,7 +740,7 @@ func TestDeleteDevice(t *testing.T) {
 					Manufacturer: "cisco",
 				},
 			},
-			lookup:        &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
+			lookup:        &types.EntityLookup{ActiveSerial: "1234", Manufacturer: "cisco"},
 			wantInventory: []*epb.ChassisInventory{},
 		},
 		{
@@ -775,7 +751,7 @@ func TestDeleteDevice(t *testing.T) {
 					Manufacturer: "cisco",
 				},
 			},
-			lookup: &types.EntityLookup{SerialNumber: "1234", Manufacturer: "cisco"},
+			lookup: &types.EntityLookup{ActiveSerial: "1234", Manufacturer: "cisco"},
 			wantInventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "5678",
