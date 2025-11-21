@@ -66,11 +66,12 @@ type Service struct {
 type streamSession struct {
 	stream        bpb.Bootstrap_BootstrapStreamServer
 	currentState  int
-	chassis       *types.Chassis      // Store chassis info for later stages
-	clientNonce   string              // client nonce from bootstrap request
-	idevidCert    *x509.Certificate   // For IDevID flow
-	nonce         string              // base64 encoded, for TPM 2.0 nonce challenge
-	hmacSensitive *tpm2.TPMTSensitive // For TPM 2.0 without IDevID HMAC challenge
+	chassis       *types.Chassis           // Store chassis info for later stages
+	status        *bpb.ReportStatusRequest // Store status for later stages
+	clientNonce   string                   // client nonce from bootstrap request
+	idevidCert    *x509.Certificate        // For IDevID flow
+	nonce         string                   // base64 encoded, for TPM 2.0 nonce challenge
+	hmacSensitive *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
 }
 
 func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*bpb.GetBootstrapDataResponse, error) {
@@ -281,15 +282,10 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 			if session.currentState == stateTPM20ReauthChallengeSent {
 				log.Infof("Acknowledging status report after re-authentication for device %s", session.chassis.ActiveSerial)
-				resp := &bpb.BootstrapStreamResponse{
-					Type: &bpb.BootstrapStreamResponse_ReportStatusResponse{
-						ReportStatusResponse: &bpb.EmptyResponse{},
-					},
-				}
-				if err := session.stream.Send(resp); err != nil {
+				if err := s.updateStatusAndSendAcknowledgement(session); err != nil {
 					return err
 				}
-				log.Infof("Acknowledged status report for device %s", session.chassis.ActiveSerial)
+
 				session.currentState = stateAttested
 				continue
 			}
@@ -335,6 +331,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			log.Infof("====================== Stream status report received ======================")
 			log.Infof("=============================================================================")
 			log.Infof("Received ReportStatusRequest from %s: %+v", session.chassis.ActiveSerial, req.ReportStatusRequest)
+			session.status = req.ReportStatusRequest
 
 			if session.currentState == stateInitial {
 				log.Info("Received ReportStatusRequest on a new stream. Starting re-authentication...")
@@ -348,23 +345,13 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				}
 
 				session.currentState = stateTPM20ReauthChallengeSent
-			} else {
-				if err := s.em.SetStatus(ctx, req.ReportStatusRequest); err != nil {
-					log.Errorf("Failed to set status for device %s: %v", session.chassis.ActiveSerial, err)
-					return status.Errorf(codes.Internal, "failed to set status: %v", err)
-				}
-				log.Infof("Successfully set status for device %s", session.chassis.ActiveSerial)
-
-				resp := &bpb.BootstrapStreamResponse{
-					Type: &bpb.BootstrapStreamResponse_ReportStatusResponse{
-						ReportStatusResponse: &bpb.EmptyResponse{},
-					},
-				}
-				if err := stream.Send(resp); err != nil {
-					return err
-				}
-				log.Infof("Acknowledged status report from %s", session.chassis.ActiveSerial)
+				continue
 			}
+
+			if err := s.updateStatusAndSendAcknowledgement(session); err != nil {
+				return err
+			}
+
 		default:
 			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
 		}
@@ -477,6 +464,26 @@ func (s *Service) establishSessionAndSendChallenge(session *streamSession, looku
 	default:
 		return status.Errorf(codes.InvalidArgument, "unsupported identity type for re-authentication: %T", idType)
 	}
+}
+
+func (s *Service) updateStatusAndSendAcknowledgement(session *streamSession) error {
+	if err := s.em.SetStatus(session.stream.Context(), session.status); err != nil {
+		log.Errorf("Failed to set status for device %s: %v", session.chassis.ActiveSerial, err)
+		return status.Errorf(codes.Internal, "failed to set status: %v", err)
+	}
+	log.Infof("Successfully set status for device %s", session.chassis.ActiveSerial)
+
+	resp := &bpb.BootstrapStreamResponse{
+		Type: &bpb.BootstrapStreamResponse_ReportStatusResponse{
+			ReportStatusResponse: &bpb.EmptyResponse{},
+		},
+	}
+	if err := session.stream.Send(resp); err != nil {
+		return err
+	}
+	log.Infof("Acknowledged status report from device %s", session.chassis.ActiveSerial)
+
+	return nil
 }
 
 // SetDeviceConfiguration is a public API for allowing the device configuration to be set for each device the
