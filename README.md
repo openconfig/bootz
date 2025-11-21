@@ -344,6 +344,8 @@ the ownership voucher and ownership certificate.
       `GetBootstrapDataResponse`.
    4. "`server_trust_cert`" plays the same role as "trust-anchor" in the sZTP
       RFC (i.e. allows the device to verify the identity of the server).
+   5. The TLS connection **MUST** be secured on the client-side with the
+      IDevID of the active control card.
 5. At this point, the device has a minimal set of configuration, enabling it to
    receive gRPC calls. Depending on the operator's security policies, an
    attestation-verification or an enrollment step may be performed.
