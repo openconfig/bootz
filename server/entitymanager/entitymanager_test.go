@@ -325,13 +325,21 @@ func TestSign(t *testing.T) {
 			if !bytes.Equal(test.resp.GetOwnershipVoucher(), a.OV[test.chassis.ActiveSerial]) {
 				t.Errorf("Sign() ov = %v, want %v", test.resp.GetOwnershipVoucher(), a.OV[test.chassis.ActiveSerial])
 			}
-			wantOC, err := ownercertificate.GenerateCMS(a.OwnerCert, a.OwnerCertPrivateKey)
-			if err != nil {
-				t.Fatalf("unable to generate OC CMS: %v", err)
-			}
 			if test.wantOC {
-				if !bytes.Equal(test.resp.GetOwnershipCertificate(), wantOC) {
-					t.Errorf("Sign() oc = %v, want %v", test.resp.GetOwnershipCertificate(), a.OwnerCert.Raw)
+				wantOC, err := ownercertificate.GenerateCMS(a.OwnerCert, a.OwnerCertPrivateKey)
+				if err != nil {
+					t.Fatalf("unable to generate OC CMS: %v", err)
+				}
+				wantCert, err := ownercertificate.Verify(wantOC, nil)
+				if err != nil {
+					t.Fatalf("unable to parse OC CMS message: %v", err)
+				}
+				gotCert, err := ownercertificate.Verify(test.resp.GetOwnershipCertificate(), nil)
+				if err != nil {
+					t.Fatalf("unable to parse OC CMS message: %v", err)
+				}
+				if !wantCert.Equal(gotCert) {
+					t.Errorf("Sign() got OC = %v, want %v", string(gotCert.Raw), string(wantCert.Raw))
 				}
 			}
 		})
