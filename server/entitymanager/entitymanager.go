@@ -256,7 +256,7 @@ func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrap
 		return status.Errorf(codes.InvalidArgument, "empty serialized bootstrap data")
 	}
 
-	sig, err := signature.Sign(m.secArtifacts.OwnerCertPrivateKey, resp.GetSerializedBootstrapData())
+	sig, err := signature.Sign(m.secArtifacts.OwnerCertPrivateKey, m.secArtifacts.OwnerCert.SignatureAlgorithm, resp.GetSerializedBootstrapData())
 	if err != nil {
 		return err
 	}
