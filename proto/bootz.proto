@@ -92,7 +92,8 @@ message Identity {
     // idevid_cert will be validated via OVGS (Ownership Voucher gRPC Service)
     // and the vendor CA bundle.
     // Additionally it will be used to validate the nonce_signed.
-    // The format is a base64 encoding of an x509 DER certificate.
+    // The format is either base64 encoding of a single x509 DER certificate
+    // or a PEM-encoded chain of certs.
     string idevid_cert = 1;
     // One of the key types must be set for non-IDevID based systems.
     // The public keys will be used to encrypt the nonce and validate
