@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"io"
 	"net"
 
@@ -360,10 +361,19 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 // sendIdevidChallenge contains the logic for parsing an IDevID cert, and sending a nonce challenge.
 func (s *Service) sendIdevidChallenge(session *streamSession, idevidCertB64 string) error {
-	certDER, err := base64.StdEncoding.DecodeString(idevidCertB64)
+	var certDER []byte
+	var err error
+	certDER, err = base64.StdEncoding.DecodeString(idevidCertB64)
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "failed to decode idevid_cert: %v", err)
+		// If we can't base64 decode the cert, it might be a PEM-encoded string.
+		// Find the first (leaf) cert in the PEM block, then decode it to a DER string.
+		pemBlock, _ := pem.Decode([]byte(idevidCertB64))
+		if pemBlock == nil {
+			return status.Errorf(codes.InvalidArgument, "idevid_cert is not a valid PEM block or base64 string: %v", idevidCertB64)
+		}
+		certDER = pemBlock.Bytes
 	}
+
 	cert, err := x509.ParseCertificate(certDER)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
