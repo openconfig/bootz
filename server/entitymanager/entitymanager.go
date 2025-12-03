@@ -280,12 +280,18 @@ func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrap
 	return nil
 }
 
-// ValidateIDevID verifies the authenticity and authorization of a device
-// by validating its IDevID certificate.
-func (em *InMemoryEntityManager) ValidateIDevID(ctx context.Context, cert *x509.Certificate, chassis *types.Chassis) error {
+// ValidateIDevID verifies the authenticity and authorization of a device by validating its IDevID certificate.
+// The PEM encoded intermediate certificate chain is optional.
+func (em *InMemoryEntityManager) ValidateIDevID(ctx context.Context, cert *x509.Certificate, intermediates []byte, chassis *types.Chassis) error {
 	opts := x509.VerifyOptions{
 		Roots:     em.vendorCAPool,
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	}
+	if len(intermediates) > 0 {
+		opts.Intermediates = x509.NewCertPool()
+		if !opts.Intermediates.AppendCertsFromPEM(intermediates) {
+			return fmt.Errorf("failed to parse PEM encoded intermediate certificates: %v", intermediates)
+		}
 	}
 	if _, err := cert.Verify(opts); err != nil {
 		return fmt.Errorf("IDevID certificate chain validation failed: %w", err)
