@@ -67,7 +67,7 @@ func (m *mockEntityManager) SetStatus(context.Context, *bpb.ReportStatusRequest)
 func (m *mockEntityManager) Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis) error {
 	return m.signErr
 }
-func (m *mockEntityManager) ValidateIDevID(context.Context, *x509.Certificate, *types.Chassis) error {
+func (m *mockEntityManager) ValidateIDevID(context.Context, *x509.Certificate, []byte, *types.Chassis) error {
 	return m.signErr
 }
 
