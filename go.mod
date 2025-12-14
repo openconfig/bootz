@@ -11,13 +11,13 @@ require (
 	github.com/google/go-tpm v0.9.7
 	github.com/h-fam/errdiff v1.0.2
 	github.com/insomniacslk/dhcp v0.0.0-20251020182700-175e84fbb167
-	github.com/openconfig/attestz v0.6.3
+	github.com/openconfig/attestz v0.6.4
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnsi v1.9.0
 	go.mozilla.org/pkcs7 v0.9.0
 	google.golang.org/grpc v1.77.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.0
-	google.golang.org/protobuf v1.36.10
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
