@@ -15,25 +15,81 @@
 package signature
 
 import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
 	"testing"
-
-	artifacts "github.com/openconfig/bootz/testdata"
+	"time"
 )
 
-func TestCreateAndVerify(t *testing.T) {
-	oc, ocPrivateKey, err := artifacts.NewCertificateAuthority("Owner Certificate", "Google", "localhost")
-	if err != nil {
-		t.Fatalf("unable to generate test OC: %v", err)
+func newCertificateAuthority(t *testing.T, priv crypto.PrivateKey, pub crypto.PublicKey) *x509.Certificate {
+	t.Helper()
+	ca := &x509.Certificate{
+		SerialNumber: big.NewInt(int64(time.Now().Year())),
+		Subject: pkix.Name{
+			CommonName: "Test CA",
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(10, 0, 0),
+		IsCA:                  true,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
 	}
+
+	// Generate the self-signed cert.
+	certBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, pub, priv)
+	if err != nil {
+		t.Fatalf("unable to create certificate: %v", err)
+	}
+
+	cert, err := x509.ParseCertificate(certBytes)
+	if err != nil {
+		t.Fatalf("unable to parse certificate: %v", err)
+	}
+	return cert
+}
+
+func TestCreateAndVerifyRSA(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		t.Fatalf("unable to generate test key: %v", err)
+	}
+	cert := newCertificateAuthority(t, key, &key.PublicKey)
 	input := []byte("input_data")
 
 	// Sign the signature
-	sig, err := Sign(ocPrivateKey, input)
+	sig, err := Sign(key, cert.SignatureAlgorithm, input)
 	if err != nil {
 		t.Fatalf("unable to sign signature: %v", err)
 	}
 	// Verify the signature
-	err = Verify(oc, input, sig)
+	err = Verify(cert, input, sig)
+	if err != nil {
+		t.Errorf("unable to verify signature: %v", err)
+	}
+}
+
+func TestCreateAndVerifyECDSA(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		t.Fatalf("unable to generate test key: %v", err)
+	}
+	cert := newCertificateAuthority(t, key, &key.PublicKey)
+	input := []byte("input_data")
+
+	// Sign the signature
+	sig, err := Sign(key, cert.SignatureAlgorithm, input)
+	if err != nil {
+		t.Fatalf("unable to sign signature: %v", err)
+	}
+	// Verify the signature
+	err = Verify(cert, input, sig)
 	if err != nil {
 		t.Errorf("unable to verify signature: %v", err)
 	}

@@ -67,7 +67,7 @@ func (m *mockEntityManager) SetStatus(context.Context, *bpb.ReportStatusRequest)
 func (m *mockEntityManager) Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis) error {
 	return m.signErr
 }
-func (m *mockEntityManager) ValidateIDevID(context.Context, *x509.Certificate, *types.Chassis) error {
+func (m *mockEntityManager) ValidateIDevID(context.Context, *x509.Certificate, []byte, *types.Chassis) error {
 	return m.signErr
 }
 
@@ -85,6 +85,9 @@ func (m *mockTPM20Utils) WrapHMACKeytoRSAPublicKey(rsaPub *rsa.PublicKey, hmacPu
 }
 func (m *mockTPM20Utils) ParseTCGCSRIDevIDContent(csrBytes []byte) (*biz.TCGCSRIDevIDContents, error) {
 	return nil, nil
+}
+func (m *mockTPM20Utils) TPMTPublicToPEM(pubKey *tpm2.TPMTPublic) (string, error) {
+	return "", nil
 }
 func (m *mockTPM20Utils) RSAEKPublicKeyToTPMTPublic(rsaPublicKey *rsa.PublicKey) (*tpm2.TPMTPublic, error) {
 	return nil, nil

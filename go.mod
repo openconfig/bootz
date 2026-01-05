@@ -2,22 +2,22 @@ module github.com/openconfig/bootz
 
 go 1.24.0
 
-toolchain go1.25.4
+toolchain go1.25.5
 
 require (
 	github.com/coredhcp/coredhcp v0.0.0-20250927164030-d2ed887fca9b
 	github.com/golang/glog v1.2.5
 	github.com/google/go-cmp v0.7.0
-	github.com/google/go-tpm v0.9.7
+	github.com/google/go-tpm v0.9.8
 	github.com/h-fam/errdiff v1.0.2
 	github.com/insomniacslk/dhcp v0.0.0-20251020182700-175e84fbb167
-	github.com/openconfig/attestz v0.6.2
+	github.com/openconfig/attestz v0.6.5
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnsi v1.9.0
 	go.mozilla.org/pkcs7 v0.9.0
-	google.golang.org/grpc v1.77.0
-	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1
-	google.golang.org/protobuf v1.36.10
+	google.golang.org/grpc v1.78.0
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.0
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
@@ -49,7 +49,7 @@ require (
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20251022142026-3a174f9686a8 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -13,6 +13,8 @@ import (
 	"math/big"
 	"net"
 	"time"
+
+	log "github.com/golang/glog"
 )
 
 // Opts define all parameters needed to generate a Bootz server TLS config.
@@ -28,6 +30,20 @@ type Opts struct {
 	ClientCAs *x509.CertPool
 	// The server cert's subject.
 	ServerCertSubject *pkix.Name
+}
+
+// LogPeerTLSCertificate prints details about the peer's TLS certificate for debugging.
+func LogPeerTLSCertificate(state tls.ConnectionState) error {
+	certs := state.PeerCertificates
+	if len(certs) == 0 {
+		log.Infof("Client provided no TLS certificates")
+		return nil
+	}
+	log.Infof("Client provided %d TLS certificate(s)", len(certs))
+	for i, cert := range certs {
+		log.Infof("Cert %d:\nIssuer=%v\nSubject=%v\nSerial=%v", i, cert.Issuer.String(), cert.Subject.String(), cert.SerialNumber.String())
+	}
+	return nil
 }
 
 // TLSConfiguration generates a TLS config for Bootz server.
@@ -97,10 +113,11 @@ func TLSConfiguration(opts *Opts) (*tls.Config, error) {
 
 	// 5. Create the final TLS server config.
 	return &tls.Config{
-		Certificates: []tls.Certificate{*tlsCert},
-		RootCAs:      rootCAs,
-		ServerName:   opts.IPAddress.String(),
-		ClientCAs:    opts.ClientCAs,
-		ClientAuth:   tls.VerifyClientCertIfGiven,
+		Certificates:     []tls.Certificate{*tlsCert},
+		RootCAs:          rootCAs,
+		ServerName:       opts.IPAddress.String(),
+		ClientCAs:        opts.ClientCAs,
+		VerifyConnection: LogPeerTLSCertificate,
+		ClientAuth:       tls.VerifyClientCertIfGiven,
 	}, nil
 }
