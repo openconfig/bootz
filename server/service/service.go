@@ -253,18 +253,22 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				}
 				hmacResponse := challengeResponse.GetHmacChallengeResponse()
 
+				tpm2BAttest, err := tpm2.Unmarshal[tpm2.TPM2BAttest](hmacResponse.GetIakCertifyInfo())
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to unmarshal IAK Certify Info into TPM2B_ATTEST: %v", err)
+				}
+				iakCertifyInfo, err := tpm2BAttest.Contents()
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to get IAK Certify Info contents: %v", err)
+				}
 				// Verify HMAC Challenge response.
-				if err = s.tpm20.VerifyHMAC(hmacResponse.GetIakCertifyInfo(), hmacResponse.GetIakCertifyInfoSignature(), session.hmacSensitive); err != nil {
+				if err = s.tpm20.VerifyHMAC(tpm2.Marshal(iakCertifyInfo), hmacResponse.GetIakCertifyInfoSignature(), session.hmacSensitive); err != nil {
 					return status.Errorf(codes.InvalidArgument, "HMAC verification failed: %v", err)
 				}
 				// Verify IAK public key attributes.
 				iakPubKey, err := s.tpm20.VerifyIAKAttributes(hmacResponse.GetIakPub())
 				if err != nil {
 					return status.Errorf(codes.InvalidArgument, "IAK public key verification failed: %v", err)
-				}
-				iakCertifyInfo, err := tpm2.Unmarshal[tpm2.TPMSAttest](hmacResponse.GetIakCertifyInfo())
-				if err != nil {
-					return status.Errorf(codes.InvalidArgument, "IAK certify info unmarshaling failed: %v", err)
 				}
 				// Verify IAK certify info.
 				if err := s.tpm20.VerifyCertifyInfo(iakCertifyInfo, iakPubKey); err != nil {
