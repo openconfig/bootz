@@ -5,13 +5,13 @@ go 1.24.0
 toolchain go1.25.5
 
 require (
-	github.com/coredhcp/coredhcp v0.0.0-20250927164030-d2ed887fca9b
+	github.com/coredhcp/coredhcp v0.0.0-20260110195901-da62c7b1bd56
 	github.com/golang/glog v1.2.5
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-tpm v0.9.8
 	github.com/h-fam/errdiff v1.0.2
 	github.com/insomniacslk/dhcp v0.0.0-20251020182700-175e84fbb167
-	github.com/openconfig/attestz v0.6.5
+	github.com/openconfig/attestz v0.6.6
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnsi v1.9.0
 	go.mozilla.org/pkcs7 v0.9.0
@@ -38,9 +38,8 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
-	github.com/spf13/pflag v1.0.7 // indirect
+	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/spf13/viper v1.20.1 // indirect
-	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
