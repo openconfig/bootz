@@ -3,8 +3,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/chappjc/logrus-prefix v0.0.0-20180227015900-3a1d64819adb h1:aZTKxMminKeQWHtzJBbV8TttfTxzdJ+7iEJFE6FmUzg=
 github.com/chappjc/logrus-prefix v0.0.0-20180227015900-3a1d64819adb/go.mod h1:xzXc1S/L+64uglB3pw54o8kqyM6KFYpTeC9Q6+qZIu8=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
-github.com/coredhcp/coredhcp v0.0.0-20260110195901-da62c7b1bd56 h1:WVjSaYtFOruq3WarV1w9XVOS2BmAsWSoGeRDg4dRT1U=
-github.com/coredhcp/coredhcp v0.0.0-20260110195901-da62c7b1bd56/go.mod h1:QkWb/GuIul+Dm8vpB+oHJKb7b12cUE+1l69OEt2D0Ng=
+github.com/coredhcp/coredhcp v0.0.0-20260112190756-6b627b2954a2 h1:RzufYRF+yKe0d/N5qK2jVItY2Cp2oHD2NUjVRAzO83o=
+github.com/coredhcp/coredhcp v0.0.0-20260112190756-6b627b2954a2/go.mod h1:QkWb/GuIul+Dm8vpB+oHJKb7b12cUE+1l69OEt2D0Ng=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
