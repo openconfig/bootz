@@ -435,9 +435,9 @@ func (s *Service) sendHMACChallenge(session *streamSession) error {
 					Tpm20HmacChallenge: &bpb.BootstrapStreamResponse_Challenge_TPM20HMACChallenge{
 						Key: session.chassis.ActivePublicKeyType,
 						HmacChallenge: &epb.HMACChallenge{
-							HmacPubKey: tpm2.Marshal(hmacPub),
-							Duplicate:  duplicate,
-							InSymSeed:  inSymSeed,
+							HmacPubKey: tpm2.Marshal(tpm2.New2B(*hmacPub)),
+							Duplicate:  tpm2.Marshal(&tpm2.TPM2BPrivate{Buffer: duplicate}),
+							InSymSeed:  tpm2.Marshal(&tpm2.TPM2BEncryptedSecret{Buffer: inSymSeed}),
 						},
 					},
 				},
