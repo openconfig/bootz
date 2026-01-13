@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.25.5
 
 require (
-	github.com/coredhcp/coredhcp v0.0.0-20260110195901-da62c7b1bd56
+	github.com/coredhcp/coredhcp v0.0.0-20260112190756-6b627b2954a2
 	github.com/golang/glog v1.2.5
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-tpm v0.9.8
