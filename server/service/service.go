@@ -197,6 +197,9 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 		switch req := in.GetType().(type) {
 		case *bpb.BootstrapStreamRequest_BootstrapRequest:
+			log.Infof("=============================================================================")
+			log.Infof("====================== Stream bootstrap request received ====================")
+			log.Infof("=============================================================================")
 			if session.currentState != stateInitial {
 				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest can only be sent as the first message.")
 			}
@@ -227,6 +230,9 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 
 		case *bpb.BootstrapStreamRequest_Response_:
+			log.Infof("=============================================================================")
+			log.Infof("====================== Stream challenge response received ===================")
+			log.Infof("=============================================================================")
 			if session.currentState != stateTPM20ChallengeSent && session.currentState != stateTPM20ReauthChallengeSent {
 				return status.Errorf(codes.InvalidArgument, "unexpected challenge response")
 			}
@@ -333,7 +339,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
 			log.Infof("=============================================================================")
-			log.Infof("====================== Stream status report received ======================")
+			log.Infof("====================== Stream status report received ========================")
 			log.Infof("=============================================================================")
 			log.Infof("Received ReportStatusRequest from %s: %+v", session.chassis.ActiveSerial, req.ReportStatusRequest)
 			session.status = req.ReportStatusRequest
@@ -471,7 +477,7 @@ func (s *Service) establishSessionAndSendChallenge(session *streamSession, looku
 		}
 		return nil
 	case *bpb.Identity_EkPpkPub:
-		log.Infof("Starting sendHMACChallenge for TPM 2.0 without IDevID flow for device%s", chassis.ActiveSerial)
+		log.Infof("Starting sendHMACChallenge for TPM 2.0 without IDevID flow for device %s", chassis.ActiveSerial)
 		if err := s.sendHMACChallenge(session); err != nil {
 			return err
 		}
