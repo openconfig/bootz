@@ -33,6 +33,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Check spelling of Codebase
-        uses: crate-ci/typos@bb4666ad77b539a6b4ce4eda7ebb6de553704021 # v1.42.0
+        uses: crate-ci/typos@06d010dfe4c84fdab1a25ea02b57b3585018ba80 # v1.42.3
         with:
           config: ./.github/typos.toml
