@@ -264,14 +264,14 @@ func validateChassisDescriptor(chassis *bpb.ChassisDescriptor) {
 	if chassis.GetManufacturer() == "" || chassis.GetPartNumber() == "" {
 		log.Exitf("Chassis validation error: chassis %v does not have required fields", chassis)
 	}
-	populatedSlots := make(map[int32]bool)
+	populatedSlots := make(map[string]bool)
 	if len(chassis.GetControlCards()) > 0 {
 		for _, cc := range chassis.GetControlCards() {
-			slotPopulated := populatedSlots[cc.GetSlot()]
+			slotPopulated := populatedSlots[cc.GetSlotId()]
 			if slotPopulated {
-				log.Exitf("Chassis validation error: slot %d already populated by another control card", cc.GetSlot())
+				log.Exitf("Chassis validation error: slot %s already populated by another control card", cc.GetSlotId())
 			}
-			populatedSlots[cc.GetSlot()] = true
+			populatedSlots[cc.GetSlotId()] = true
 			if cc.GetPartNumber() == "" || cc.GetSerialNumber() == "" {
 				log.Exitf("Chassis validation error: control card %v does not have required fields", cc)
 			}

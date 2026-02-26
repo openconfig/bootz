@@ -378,10 +378,10 @@ func TestBootstrapStream(t *testing.T) {
 							Type: &bpb.BootstrapStreamRequest_Response_HmacChallengeResponse{
 								HmacChallengeResponse: &epb.HMACChallengeResponse{
 									IakPub: []byte("IAKPub"),
-									IakCertifyInfo: tpm2.Marshal(tpm2.TPMSAttest{
+									IakCertifyInfo: tpm2.Marshal(tpm2.New2B(tpm2.TPMSAttest{
 										Type:     tpm2.TPMSTAttestCertify,
 										Attested: tpm2.NewTPMUAttest(tpm2.TPMSTAttestCertify, &tpm2.TPMSCertifyInfo{}),
-									}),
+									})),
 									IakCertifyInfoSignature: []byte("IAKCertifySignature"),
 								},
 							},

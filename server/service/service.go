@@ -17,7 +17,9 @@ package service
 
 import (
 	"context"
+	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -47,6 +49,36 @@ const (
 	// Common state
 	stateAttested
 )
+
+// ArtifactManager is an interface for providing security artifacts to the Bootz service. These artifacts are
+// associated either with the Bootz server itself (e.g. the Bootz server trust anchor keypair), or with a specific
+// control card in a chassis (e.g. Ownership Vouchers, EK/PPK keys).
+type ArtifactManager interface {
+	// BootzServerTrustAnchorKeyPair returns the Bootz server trust anchor. This is the keypair that will generate
+	// the server's TLS certificate.
+	BootzServerTrustAnchorKeyPair() (crypto.PrivateKey, *x509.Certificate)
+	// OwnershipVoucher returns the ownership voucher for the given serial number and vendor.
+	OwnershipVoucher(ctx context.Context, serial string, vendor string) ([]byte, error)
+	// OwnershipCertificateKeypair returns the ownership certificate keypair for signing the bootstrap response.
+	OwnershipCertificateKeyPair() (crypto.PrivateKey, *x509.Certificate)
+	// PublicKey retrieves the EK or PPK public key for use in the BootstrapStream HMAC challenge.
+	PublicKey(ctx context.Context, serial string, vendor string) (*rsa.PublicKey, epb.Key, error)
+	// Returns the pool of certificates that the server should use to validate the provided IDevID TLS certificates.
+	VendorCABundle() *x509.CertPool
+}
+
+// ChassisManager is an interface for managing the chassis in an organization's inventory. Chassis in an inventory are
+// identified by the IP address they use to communicate with Bootz server. The data provided by this interface relates
+// to the chassis as a whole, and not specific to any individual control card in the chassis.
+type ChassisManager interface {
+	// Resolve fetches details about a chassis with the given IP address.
+	Resolve(ctx context.Context, addr net.IP) (*types.Chassis, error)
+	// Update updates the status of a chassis in its bootstrapping lifecycle based on the provided status report.
+	Update(ctx context.Context, addr net.IP, req *bpb.ReportStatusRequest) error
+	// GenerateBootstrapData generates the bootstrap data (Boot Config, Credz, Certz, Authz, Pathz policies) for the
+	// given chassis.
+	GenerateBootstrapData(ctx context.Context, chassis *types.Chassis) (*bpb.BootstrapDataResponse, error)
+}
 
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
@@ -197,6 +229,9 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 		switch req := in.GetType().(type) {
 		case *bpb.BootstrapStreamRequest_BootstrapRequest:
+			log.Infof("=============================================================================")
+			log.Infof("====================== Stream bootstrap request received ====================")
+			log.Infof("=============================================================================")
 			if session.currentState != stateInitial {
 				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest can only be sent as the first message.")
 			}
@@ -227,6 +262,9 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 
 		case *bpb.BootstrapStreamRequest_Response_:
+			log.Infof("=============================================================================")
+			log.Infof("====================== Stream challenge response received ===================")
+			log.Infof("=============================================================================")
 			if session.currentState != stateTPM20ChallengeSent && session.currentState != stateTPM20ReauthChallengeSent {
 				return status.Errorf(codes.InvalidArgument, "unexpected challenge response")
 			}
@@ -253,18 +291,22 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				}
 				hmacResponse := challengeResponse.GetHmacChallengeResponse()
 
+				tpm2BAttest, err := tpm2.Unmarshal[tpm2.TPM2BAttest](hmacResponse.GetIakCertifyInfo())
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to unmarshal IAK Certify Info into TPM2B_ATTEST: %v", err)
+				}
+				iakCertifyInfo, err := tpm2BAttest.Contents()
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to get IAK Certify Info contents: %v", err)
+				}
 				// Verify HMAC Challenge response.
-				if err = s.tpm20.VerifyHMAC(hmacResponse.GetIakCertifyInfo(), hmacResponse.GetIakCertifyInfoSignature(), session.hmacSensitive); err != nil {
+				if err = s.tpm20.VerifyHMAC(tpm2.Marshal(iakCertifyInfo), hmacResponse.GetIakCertifyInfoSignature(), session.hmacSensitive); err != nil {
 					return status.Errorf(codes.InvalidArgument, "HMAC verification failed: %v", err)
 				}
 				// Verify IAK public key attributes.
 				iakPubKey, err := s.tpm20.VerifyIAKAttributes(hmacResponse.GetIakPub())
 				if err != nil {
 					return status.Errorf(codes.InvalidArgument, "IAK public key verification failed: %v", err)
-				}
-				iakCertifyInfo, err := tpm2.Unmarshal[tpm2.TPMSAttest](hmacResponse.GetIakCertifyInfo())
-				if err != nil {
-					return status.Errorf(codes.InvalidArgument, "IAK certify info unmarshaling failed: %v", err)
 				}
 				// Verify IAK certify info.
 				if err := s.tpm20.VerifyCertifyInfo(iakCertifyInfo, iakPubKey); err != nil {
@@ -329,7 +371,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 		case *bpb.BootstrapStreamRequest_ReportStatusRequest:
 			log.Infof("=============================================================================")
-			log.Infof("====================== Stream status report received ======================")
+			log.Infof("====================== Stream status report received ========================")
 			log.Infof("=============================================================================")
 			log.Infof("Received ReportStatusRequest from %s: %+v", session.chassis.ActiveSerial, req.ReportStatusRequest)
 			session.status = req.ReportStatusRequest
@@ -431,9 +473,9 @@ func (s *Service) sendHMACChallenge(session *streamSession) error {
 					Tpm20HmacChallenge: &bpb.BootstrapStreamResponse_Challenge_TPM20HMACChallenge{
 						Key: session.chassis.ActivePublicKeyType,
 						HmacChallenge: &epb.HMACChallenge{
-							HmacPubKey: tpm2.Marshal(hmacPub),
-							Duplicate:  duplicate,
-							InSymSeed:  inSymSeed,
+							HmacPubKey: tpm2.Marshal(tpm2.New2B(*hmacPub)),
+							Duplicate:  tpm2.Marshal(&tpm2.TPM2BPrivate{Buffer: duplicate}),
+							InSymSeed:  tpm2.Marshal(&tpm2.TPM2BEncryptedSecret{Buffer: inSymSeed}),
 						},
 					},
 				},
@@ -467,7 +509,7 @@ func (s *Service) establishSessionAndSendChallenge(session *streamSession, looku
 		}
 		return nil
 	case *bpb.Identity_EkPpkPub:
-		log.Infof("Starting sendHMACChallenge for TPM 2.0 without IDevID flow for device%s", chassis.ActiveSerial)
+		log.Infof("Starting sendHMACChallenge for TPM 2.0 without IDevID flow for device %s", chassis.ActiveSerial)
 		if err := s.sendHMACChallenge(session); err != nil {
 			return err
 		}

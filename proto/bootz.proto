@@ -107,15 +107,12 @@ message Identity {
     // TPM 1.2
     bool ek_pub = 2;
 
-    // Deprecated: Use ek_ppk_pub instead.
-    bool ppk_pub = 3 [deprecated = true];
-
-    // Deprecated: Use ek_ppk_pub instead.
-    bytes ppk_csr = 4 [deprecated = true];
-
     // TPM 2.0 without IDevId. Device supports both EK and PPK.
     bool ek_ppk_pub = 5;
   }
+
+  // Deprecated fields. Do not reuse.
+  reserved 3, 4;
 }
 
 // Initial request from device to the bootz-server. Contains a detailed
@@ -164,30 +161,15 @@ message BootstrapStreamRequest {
     bytes identity_request = 2;
   }
 
-  // Deprecated: Do NOT use.
-  message EKCSRIdentityRequest {
-    option deprecated = true;
-    // TPM 2.0 without IDevId EK CSR request
-    bytes ek_csr = 1;
-  }
-
-  // Deprecated: Do NOT use.
-  message PPKCSRIdentityRequest {
-    option deprecated = true;
-    // TPM 2.0 without IDevId PPK CSR request
-    bytes ppk_csr = 1;
-  }
-
   oneof type {
     GetBootstrapDataRequest bootstrap_request = 1;
     Response response = 2;
     ReportStatusRequest report_status_request = 3;
     EKIdentityRequest ek_identity_request = 4;
-    // DEPRECATED. Do NOT use.
-    EKCSRIdentityRequest ek_csr_identity_request = 5 [deprecated = true];
-    // DEPRECATED. Do NOT use.
-    PPKCSRIdentityRequest ppk_csr_identity_request = 6 [deprecated = true];
   }
+
+  // Deprecated fields. Do not reuse.
+  reserved 5, 6;
 }
 
 // BootstrapStreamResponse will be returned based on the request from the
@@ -195,14 +177,6 @@ message BootstrapStreamRequest {
 // the initial GetBootstrapDataRequest message.
 message BootstrapStreamResponse {
   message Challenge {
-    // DEPRECATED. Do NOT use.
-    enum TPM20CsrRequest {
-      option deprecated = true;
-      TPM2_0_CSR_REQUEST_UNSPECIFIED = 0;
-      TPM2_0_CSR_REQUEST_EK = 1;
-      TPM2_0_CSR_REQUEST_PPK = 2;
-    }
-
     message TPM20HMACChallenge {
       // The public key to be used, which can be either EK or PPK.
       openconfig.attestz.Key key = 1;
@@ -213,15 +187,14 @@ message BootstrapStreamResponse {
     oneof type {
       // The nonce to be signed by IAK for TPM 2.0 IDevID based systems.
       string nonce = 1;
-      // DEPRECATED. Do NOT use.
-      bytes nonce_encrypted = 2 [deprecated = true];
       // Bootz server self-signed CA public cert for TPM 1.2 systems.
       bytes ca_pub = 3;
-      // DEPRECATED. Do NOT use.
-      TPM20CsrRequest tpm20_csr_request = 4 [deprecated = true];
       // HMAC challenge for TPM 2.0 no-IDevID systems.
       TPM20HMACChallenge tpm20_hmac_challenge = 5;
     }
+
+    // Deprecated fields. Do not reuse.
+    reserved 2, 4;
   }
 
   message EKIdentityResponse {
@@ -256,8 +229,10 @@ message ChassisDescriptor {
 message ControlCard {
   string part_number = 1;
   string serial_number = 2;
-  int32 slot = 3 [deprecated = true];
   string slot_id = 4;
+
+  // Deprecated fields. Do not reuse.
+  reserved 3;
 }
 
 // ControlCardState indicates if the bootstrap process has
@@ -309,8 +284,10 @@ message BootstrapDataResponse {
   Credentials credentials = 6;
   gnsi.pathz.v1.UploadRequest pathz = 7;
   gnsi.authz.v1.UploadRequest authz = 8;
-  gnsi.certz.v1.UploadRequest certificates = 9 [deprecated = true];
   CertzProfiles certz_profiles = 10;
+
+  // Deprecated fields. Do not reuse.
+  reserved 9;
 }
 
 // CertzProfiles contains the Certz profiles and entities to create.
@@ -341,6 +318,8 @@ message GetBootstrapDataResponse {
   // Contains the signed bootstrap response. Deserialization of this
   // field is not stable so the response_signature should not be used
   // to verify this.
+  // TODO(gmcfarlane): Remove this field once we verify that all devices are
+  // using serialized_bootstrap_data.
   BootstrapDataSigned signed_response = 1 [deprecated = true];
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field

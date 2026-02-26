@@ -5,4 +5,11 @@ default.extend-ignore-re = [
 ]
 
 [files]
-extend-exclude = ["testdata/cisco.cfg"]
+extend-exclude = [
+  "testdata/cisco.cfg",
+  ".bazelversion",
+  "MODULE.bazel",
+  "MODULE.bazel.lock",
+  "go.mod",
+  "go.sum"
+]

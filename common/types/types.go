@@ -87,4 +87,6 @@ type Chassis struct {
 	BootConfig             *bpb.BootConfig
 	Authz                  *apb.UploadRequest
 	BootloaderPasswordHash string
+	// The identity presented by this chassis.
+	Identity *bpb.Identity
 }
