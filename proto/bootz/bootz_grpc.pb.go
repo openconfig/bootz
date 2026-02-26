@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Bootstrap_GetBootstrapData_FullMethodName = "/bootz.Bootstrap/GetBootstrapData"
-	Bootstrap_ReportStatus_FullMethodName     = "/bootz.Bootstrap/ReportStatus"
-	Bootstrap_BootstrapStream_FullMethodName  = "/bootz.Bootstrap/BootstrapStream"
+	Bootstrap_GetBootstrapData_FullMethodName  = "/bootz.Bootstrap/GetBootstrapData"
+	Bootstrap_ReportStatus_FullMethodName      = "/bootz.Bootstrap/ReportStatus"
+	Bootstrap_BootstrapStream_FullMethodName   = "/bootz.Bootstrap/BootstrapStream"
+	Bootstrap_BootstrapStreamV1_FullMethodName = "/bootz.Bootstrap/BootstrapStreamV1"
 )
 
 // BootstrapClient is the client API for Bootstrap service.
@@ -31,6 +32,7 @@ type BootstrapClient interface {
 	GetBootstrapData(ctx context.Context, in *GetBootstrapDataRequest, opts ...grpc.CallOption) (*GetBootstrapDataResponse, error)
 	ReportStatus(ctx context.Context, in *ReportStatusRequest, opts ...grpc.CallOption) (*EmptyResponse, error)
 	BootstrapStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[BootstrapStreamRequest, BootstrapStreamResponse], error)
+	BootstrapStreamV1(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[BootstrapStreamRequestV1, BootstrapStreamResponseV1], error)
 }
 
 type bootstrapClient struct {
@@ -74,6 +76,19 @@ func (c *bootstrapClient) BootstrapStream(ctx context.Context, opts ...grpc.Call
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Bootstrap_BootstrapStreamClient = grpc.BidiStreamingClient[BootstrapStreamRequest, BootstrapStreamResponse]
 
+func (c *bootstrapClient) BootstrapStreamV1(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[BootstrapStreamRequestV1, BootstrapStreamResponseV1], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Bootstrap_ServiceDesc.Streams[1], Bootstrap_BootstrapStreamV1_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[BootstrapStreamRequestV1, BootstrapStreamResponseV1]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Bootstrap_BootstrapStreamV1Client = grpc.BidiStreamingClient[BootstrapStreamRequestV1, BootstrapStreamResponseV1]
+
 // BootstrapServer is the server API for Bootstrap service.
 // All implementations should embed UnimplementedBootstrapServer
 // for forward compatibility.
@@ -81,6 +96,7 @@ type BootstrapServer interface {
 	GetBootstrapData(context.Context, *GetBootstrapDataRequest) (*GetBootstrapDataResponse, error)
 	ReportStatus(context.Context, *ReportStatusRequest) (*EmptyResponse, error)
 	BootstrapStream(grpc.BidiStreamingServer[BootstrapStreamRequest, BootstrapStreamResponse]) error
+	BootstrapStreamV1(grpc.BidiStreamingServer[BootstrapStreamRequestV1, BootstrapStreamResponseV1]) error
 }
 
 // UnimplementedBootstrapServer should be embedded to have
@@ -98,6 +114,9 @@ func (UnimplementedBootstrapServer) ReportStatus(context.Context, *ReportStatusR
 }
 func (UnimplementedBootstrapServer) BootstrapStream(grpc.BidiStreamingServer[BootstrapStreamRequest, BootstrapStreamResponse]) error {
 	return status.Error(codes.Unimplemented, "method BootstrapStream not implemented")
+}
+func (UnimplementedBootstrapServer) BootstrapStreamV1(grpc.BidiStreamingServer[BootstrapStreamRequestV1, BootstrapStreamResponseV1]) error {
+	return status.Error(codes.Unimplemented, "method BootstrapStreamV1 not implemented")
 }
 func (UnimplementedBootstrapServer) testEmbeddedByValue() {}
 
@@ -162,6 +181,13 @@ func _Bootstrap_BootstrapStream_Handler(srv interface{}, stream grpc.ServerStrea
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Bootstrap_BootstrapStreamServer = grpc.BidiStreamingServer[BootstrapStreamRequest, BootstrapStreamResponse]
 
+func _Bootstrap_BootstrapStreamV1_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(BootstrapServer).BootstrapStreamV1(&grpc.GenericServerStream[BootstrapStreamRequestV1, BootstrapStreamResponseV1]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Bootstrap_BootstrapStreamV1Server = grpc.BidiStreamingServer[BootstrapStreamRequestV1, BootstrapStreamResponseV1]
+
 // Bootstrap_ServiceDesc is the grpc.ServiceDesc for Bootstrap service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -182,6 +208,12 @@ var Bootstrap_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "BootstrapStream",
 			Handler:       _Bootstrap_BootstrapStream_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "BootstrapStreamV1",
+			Handler:       _Bootstrap_BootstrapStreamV1_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

@@ -35,7 +35,7 @@ service Bootstrap {
   // configuration.
   // The device must use its IDevID certificate in the gRPC TLS handshake.
   rpc GetBootstrapData(GetBootstrapDataRequest)
-      returns (GetBootstrapDataResponse) {}
+  returns (GetBootstrapDataResponse) {}
 
   // This RPC is used by the device to indicate successful application of
   // BootstrappingData. The Bootz system will proceed to the next step if
@@ -45,42 +45,28 @@ service Bootstrap {
   // The device must use its IDevID certificate in the gRPC TLS handshake.
   rpc ReportStatus(ReportStatusRequest) returns (EmptyResponse) {}
 
-  // BootstrapStream provides the streaming implementation of the Bootz
+  // Deprecated. Use BootstrapStreamV1 RPC below instead.
+  rpc BootstrapStream(stream BootstrapStreamRequest)
+  returns (stream BootstrapStreamResponse) {}
+
+  // Streaming Bootz v1.0 protocol.
+  // This PRC provides the streaming implementation of the Bootz
   // service. This flow allows for both server and client validation via
-  // nonces and certificate validation. This allows the service to start with
-  // non owner signed certificates and build a trust relationship.
-  // This bypasses the need to require the IDevID cert to be sent as part of
-  // the initial gRPC TLS handshake.
+  // IDevID or HMAC validation, which bypasses the need of the device
+  // presenting the IDevID certificate during the initial gRPC TLS handshake.
   // The workflow should follow:
   //
-  // - For TPM 2.0 with IDevID:
-  //    BootstrapStreamRequest.bootstrap_request
-  //    BootstrapStreamResponse.challenge.nonce
-  //    BootstrapStreamRequest.response.nonce_signed
-  //    BootstrapStreamResponse.bootstrap_response
-  //    BootstrapStreamRequest.report_status_request
-  //    BootstrapStreamResponse.report_status_response
+  //   (Device to Bootz) BootstrapStreamRequestV1.bootstrap_request
+  //   (Bootz to Device) BootstrapStreamResponseV1.challenge_request
+  //   (Device to Bootz) BootstrapStreamRequestV1.challenge_response
+  //   (Bootz to Device) BootstrapStreamResponseV1.bootstrap_response
+  //   (Device to Bootz) BootstrapStreamRequestV1.report_status_request
+  //   (Bootz to Device) BootstrapStreamResponseV1.report_status_response
   //
-  // - For TPM 2.0 without IDevID:
-  //    BootstrapStreamRequest.bootstrap_request
-  //    BootstrapStreamResponse.challenge.tpm20_hmac_challenge
-  //    BootstrapStreamRequest.response.hmac_challenge_response
-  //    BootstrapStreamResponse.bootstrap_response
-  //    BootstrapStreamRequest.report_status_request
-  //    BootstrapStreamResponse.report_status_response
-  //
-  // - For TPM 1.2:
-  //    BootstrapStreamRequest.bootstrap_request
-  //    BootstrapStreamResponse.challenge.ca_pub
-  //    BootstrapStreamRequest.response.ek_identity_request
-  //    BootstrapStreamResponse.ek_identity_response
-  //    BootstrapStreamRequest.response.nonce
-  //    BootstrapStreamResponse.bootstrap_response
-  //    BootstrapStreamRequest.report_status_request
-  //    BootstrapStreamResponse.report_status_response
-  //
-  rpc BootstrapStream(stream BootstrapStreamRequest)
-      returns (stream BootstrapStreamResponse) {}
+  // NOTE: The device can send multiple report_status_request by keeping
+  // updating the real time status until the bootstrap is finished or failed.
+  rpc BootstrapStreamV1(stream BootstrapStreamRequestV1)
+  returns (stream BootstrapStreamResponseV1) {}
 }
 
 // Identity describes how the device will prove its identity to the Bootstrap
@@ -98,17 +84,23 @@ message Identity {
     // the IDevID cert itself); while the rest PEM encoded certificates in
     // the chain (if any) must be the intermediate certificates.
     string idevid_cert = 1;
-
-    // One of the key types must be set for non-IDevID based systems.
-    // The public keys will be used to encrypt the nonce and validate
-    // that the keys match the data in OVGS. The decrypted
-    // nonce will be returned to validate the device identity.
+    // EK public key in ASN.1 DER endocding for TPM 2.0 without IDevID systems.
+    // NOTE: The content in this field only serves as a reference for debugging.
+    // The actual EK public key will be retrieved from OVGS database.
+    bytes tpm20_ek_pub = 6;
+    // PPK public key in ASN.1 DER endocding for TPM 2.0 without IDevID systems.
+    // NOTE: The content in this field only serves as a reference for debugging.
+    // The actual PPK public key will be retrieved from OVGS database.
+    bytes tpm20_ppk_pub = 7;
+    // EK public key in ASN.1 DER encoding for TPM 1.2 systems.
+    // NOTE: The content in this field only serves as a reference for debugging.
+    // The actual EK public key will be retrieved from OVGS database.
+    bytes tpm12_ek_pub = 8;
 
     // TPM 1.2
-    bool ek_pub = 2;
-
+    bool ek_pub = 2 [deprecated = true];
     // TPM 2.0 without IDevId. Device supports both EK and PPK.
-    bool ek_ppk_pub = 5;
+    bool ek_ppk_pub = 5 [deprecated = true];
   }
 
   // Deprecated fields. Do not reuse.
@@ -125,15 +117,22 @@ message GetBootstrapDataRequest {
   ControlCardState control_card_state = 2;
   // A nonce that the bootstrap server should use when signing the response.
   // Not setting this field indicates that the device is configured not to
-  // check for ownership voucher.
+  // check for ownership voucher (for testing only).
+  // NOTE: Bootz server rejects an unset nonce in production, and the device
+  // must validate the ownership voucher, the bootstrap data signature and
+  // the nonce inside the BootstrapDataSigned message for production releases.
   string nonce = 1001;
-
   // Identity will contain information used to validate the identity
   // of the device.
   // For systems which support IDevID that will be the preferred method.
   // If identity is set, one of the types must be set or an error is
   // returned.
   Identity identity = 1003;
+  // The SHA1 digest over the placeholder AIK public key, while the
+  // placeholder AIK public key itself (which is a TPM_PUBKEY structure)
+  // is generated by the device invoking TPM_MakeIdentity command.
+  // NOTE: This field is only populated for TPM 1.2 systems.
+  bytes aik_pub_digest = 1004;
 }
 
 // BootstrapStreamRequest is used to both send chassis information
@@ -341,9 +340,15 @@ message GetBootstrapDataResponse {
   // The field is a base64-encoding of a signature generated using PKCS1v15
   // with SHA256 as the hashing algorithm.
   string response_signature = 103;
-  // Contains the wire format encoding of the BootstrapDataSigned
-  // message. This field should be verified with the response_signature
-  // before unmarshalling.
+  // For Unary Bootz (GetBootstrapData RPC):
+  //   This field contains a serialized (in wire format encoding) yet
+  //   unencrypted BootstrapDataSigned message. This field should be verified
+  //   against the response_signature before unmarshalling.
+  // For Streaming Bootz v1.0 (BootstrapStreamV1 RPC):
+  //   This field contains a serialized (in wire format encoding)
+  //   BootstrapDataSigned message encrypted to the HPKE cipher suite.
+  //   After signature verification against response_signature, the device must
+  //   decrypt this field before unmarshalling.
   bytes serialized_bootstrap_data = 104;
 }
 
@@ -455,4 +460,108 @@ enum BootMode {
   BOOT_MODE_UNSPECIFIED = 0;
   BOOT_MODE_INSECURE = 1;
   BOOT_MODE_SECURE = 2;
+}
+
+// The hybrid public key encryption cipher suite.
+enum HPKECipherSuite {
+  // Unspecified or invalid encryption. Do NOT use.
+  UNSPECIFIED = 0;
+	// No encryption (for testing only).
+  // NOTE: Bootz server rejects this in production.
+  NONE = 1;
+	// A non-PQC cipher suite.
+  // - Key Encapsulation Mechanism: DHKEM(X25519, HKDF-SHA256)
+  // - Key Derivation Function: HKDF-SHA256
+  // - AEAD: AES-256-GCM
+  X25519_HKDF_SHA256_HKDF_SHA256_AES_256_GCM = 2;
+}
+
+// The transport key for encrypting bootstrap data.
+message TransportKey {
+  // The cipher suite in use.
+  HPKECipherSuite cipher_suite = 1;
+  // The output of SerializePublicKey() according to HPKE RFC9180.
+  bytes public_key = 2;
+	// The nonce copied from the challenge request, if applicable. Otherwise, not populated.
+  bytes nonce = 3;
+}
+
+// BootstrapStreamRequestV1 is sent from the device to Bootz server for conveying
+// chassis information, responding to challenge request and reporting status.
+message BootstrapStreamRequestV1 {
+  message ChallengeResponse {
+    message ChallengeResponseTPM20IDevID {
+      // A serialized TransportKey message with nonce field copied from the challenge request.
+      bytes serialized_transport_key = 1;
+      // The signature over (0x00 || serialized_transport_key), signed by IDevID.
+      bytes signature = 2;
+    }
+    message ChallengeResponseTPM20HMAC {
+      // A serialized TransportKey message with nonce field not populated.
+      bytes serialized_transport_key = 1;
+      // The certify info generated by invoking TPM2_Certify command with the imported HMAC key.
+      // IMPORTANT: When invoking TPM2_Certify command, the qualifyingData argument must be set
+      // to the SHA256 hash over (0x00 || serialized_transport_key).
+      openconfig.attestz.HMACChallengeResponse hmac = 2;
+    }
+    message ChallengeResponseTPM12EK {
+      // A serialized TransportKey message with nonce field not populated.
+      bytes serialized_transport_key = 1;
+      // The hash over (0x00 || serialized_transport_key), generated by HMAC-SHA256.
+      bytes hash = 2;
+    }
+
+    oneof type {
+      // IDevID challenge response for TPM 2.0 with IDevID systems.
+      ChallengeResponseTPM20IDevID tpm20_idevid = 1;
+      // HMAC challenge response for TPM 2.0 without IDevID systems.
+      ChallengeResponseTPM20HMAC tpm20_hmac = 2;
+      // EK challenge response for TPM 1.2 systems.
+      ChallengeResponseTPM12EK tpm12_ek = 3;
+    }
+  }
+
+  oneof type {
+    GetBootstrapDataRequest bootstrap_request = 1;
+    ChallengeResponse challenge_response = 2;
+    ReportStatusRequest report_status_request = 3;
+  }
+}
+
+// BootstrapStreamResponseV1 is sent from Bootz server to the device for creating the
+// challenge request, conveying the bootstrap data and acknowledging the status report.
+message BootstrapStreamResponseV1 {
+  message ChallengeRequest {
+    message ChallengeRequestTPM20IDevID {
+      // The nonce that should be copied into the TransportKey message inside the challenge response.
+      bytes nonce = 1;
+    }
+    message ChallengeRequestTPM20HMAC {
+      // The HMAC key encrypted to EK/PPK.
+      // The device should invoke TPM2_Import command to import this HMAC key into the TPM.
+      // NOTE: Whether it is encrypted to EK or PPK is decided by the identity (tpm20_ek_pub or tpm20_ppk_pub) presented by the device.
+      openconfig.attestz.HMACChallenge hmac_encrypted = 2;
+    }
+    message ChallengeRequestTPM12EK {
+      // The blob (a TPM_ASYM_CA_CONTENTS structure whose sessionKey field contains an HMAC-SHA256 key) encrypted to the EK.
+      // The device should invoke TPM_ActivateIdentity command using this blob. 
+      bytes blob_encrypted = 1;
+    }
+
+    oneof type {
+      // IDevID challenge request for TPM 2.0 with IDevID systems.
+      ChallengeRequestTPM20IDevID tpm20_idevid = 1;
+      // HMAC challenge request for TPM 2.0 without IDevID systems.
+      ChallengeRequestTPM20HMAC tpm20_hmac = 2;
+      // EK challenge request for TPM 1.2 systems.
+      ChallengeRequestTPM12EK tpm12_ek = 3;
+    }
+  }
+
+  oneof type {
+    ChallengeRequest challenge_request = 1;
+    // IMPORTANT: The serialized_bootstrap_data field in the GetBootstrapDataResponse message is encrypted to the HPKE cypher suite.
+    GetBootstrapDataResponse bootstrap_response = 2;
+    EmptyResponse report_status_response = 3;
+  }
 }
