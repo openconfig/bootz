@@ -26,7 +26,7 @@ A gRPC service interface is defined for each of the SUT components and each test
 must provide an implementation that satisfies this interface. Example
 implementations of these components are provided in this directory but test
 runners are expected to fork and maintain their own SUT component
-implementations. 
+implementations.
 
 Below is a sequence diagram describing the integration test process:
 
