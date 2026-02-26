@@ -1,0 +1,55 @@
+load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+
+package(default_visibility = ["//visibility:public"])
+
+proto_library(
+    name = "test_proto",
+    srcs = ["test.proto"],
+    import_prefix = "github.com/openconfig/bootz",
+    deps = [
+        "//proto:bootz_proto",
+        "@openconfig_gnsi//authz:authz_proto",
+        "@openconfig_gnsi//pathz:pathz_proto",
+    ],
+)
+
+proto_library(
+    name = "sut_proto",
+    srcs = ["sut.proto"],
+    import_prefix = "github.com/openconfig/bootz",
+)
+
+##############################################################################
+# Go
+##############################################################################
+
+go_proto_library(
+    name = "test_go_proto",
+    importpath = "github.com/openconfig/bootz/tests/proto/test",
+    proto = ":test_proto",
+    deps = [
+        "//proto:bootz",
+        "@openconfig_gnsi//authz",
+        "@openconfig_gnsi//pathz",
+    ],
+)
+
+go_proto_library(
+    name = "sut_go_proto",
+    importpath = "github.com/openconfig/bootz/tests/proto/sut",
+    proto = ":sut_proto",
+)
+
+go_library(
+    name = "sut",
+    embed = [":sut_go_proto"],
+    importpath = "github.com/openconfig/bootz/tests/proto/sut",
+)
+
+go_library(
+    name = "test",
+    embed = [":test_go_proto"],
+    importpath = "github.com/openconfig/bootz/tests/proto/test",
+)

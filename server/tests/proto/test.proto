@@ -1,0 +1,176 @@
+// Copyright 2026 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package bootz;
+
+import "github.com/openconfig/bootz/proto/bootz.proto";
+import "github.com/openconfig/gnsi/authz/authz.proto";
+import "github.com/openconfig/gnsi/pathz/pathz.proto";
+
+// Top level message that contains all the parameters for a Bootz test. This
+// message is used to configure the Bootz SUT and the DUT.
+message TestParameters {
+  // The hostname of the DUT. This uniquely identifies the DUT.
+  string hostname = 1;
+
+  // The OS image that should be installed on the DUT.
+  OSImage os_image = 2;
+
+  // The bootstrap data that should be returned to the DUT by the Bootz SUT.
+  BootstrapData bootstrap_data = 3;
+
+  // The security artifacts that the Bootz SUT should use during bootstrapping.
+  SecurityArtifacts security_artifacts = 4;
+
+  // Information about the DUT's interfaces for use during DHCP and Bootz.
+  InterfaceInfo interface_info = 5;
+
+  // The boot mode that the Bootz SUT should use during bootstrapping. If set to
+  // SECURE, the SUT must be configured with ownership vouchers and an ownership
+  // certificate to provide to the DUT. If unset, the test will use SECURE
+  // mode.
+  .bootz.BootMode boot_mode = 6;
+
+  // The expected state of the DUT after bootstrapping.
+  BootzState want_bootz_state = 7;
+}
+
+// Contains information about an OS image on the DUT.
+message OSImage {
+  // The name of the OS.
+  string name = 1;
+
+  // The version of the OS.
+  string version = 2;
+
+  // The location of the OS image. This can be an HTTP URL or any other type of
+  // URI that can be used to download the OS image.
+  string download_uri = 3;
+
+  // If true, the SUT will fetch the OS image from this location, load it to
+  // memory and make it available to the DUT via an HTTP URL. This is useful
+  // for cases where the above download_uri is not accessible to the DUT, but
+  // is accessible to the SUT.
+  bool reupload_to_sut = 4;
+
+  // The hash of the OS image. The format of this field is a
+  // `hex-string`, identified in RFC6991 as "A hexadecimal string with
+  // octets represented as hex digits separated by colons.
+  // The canonical representation uses lowercase characters."
+  // E.g.: "d9:a5:d1:0b:09:fa:4e:96:f2:40:bf:6a:82:f5"
+  string os_image_hash = 5;
+
+  // The identity of the hash algorithm used. These hash identities are
+  // defined in sZTP RFC 8572. There is currently only one hash algorithm
+  // defined in this spec:
+  // `ietf-sztp-conveyed-info:sha-256` for the SHA 256 algorithm.
+  string hash_algorithm = 6;
+}
+
+// Contains information about the bootstrap data that the Bootz SUT should
+// return to the DUT.
+message BootstrapData {
+  // The boot config to be returned to the DUT by the Bootz SUT.
+  .bootz.BootConfig boot_config = 1;
+
+  // The credentials to be returned to the DUT by the Bootz SUT.
+  .bootz.Credentials credentials = 2;
+
+  // The pathz policy to be returned to the DUT by the Bootz SUT.
+  gnsi.pathz.v1.UploadRequest pathz = 3;
+
+  // The authz policy to be returned to the DUT by the Bootz SUT.
+  gnsi.authz.v1.UploadRequest authz = 4;
+
+  // The certz profiles to be returned to the DUT by the Bootz SUT.
+  .bootz.CertzProfiles certz_profiles = 5;
+}
+
+// Contains information about the security artifacts that the Bootz SUT should
+// use during bootstrapping. If not provided in this message, the Bootz SUT
+// must attempt to fetch them from another source (e.g. a secure database). It
+// is the responsibility of the test runner to ensure these artifacts are
+// stored and handled securely.
+message SecurityArtifacts {
+  // A mapping of control card serial number to Ownership Voucher that the Bootz
+  // SUT should use during bootstrapping. The format of the value in this map is
+  // a CMS message (RFC 5652).
+  map<string, bytes> ownership_vouchers = 1;
+
+  // A mapping of control card serial number to TPM Endorsement Key (EK)
+  // for use in the BootstrapStream HMAC challenge. The format of the value in
+  // this map is a PEM-encoded RSA public key.
+  map<string, bytes> eks = 2;
+
+  // A mapping of control card serial number to TPM Platform Primary Key (PPK)
+  // for use in the BootstrapStream HMAC challenge. The format of the value
+  // in this map is a PEM-encoded RSA public key.
+  map<string, bytes> ppks = 3;
+
+  // The x509 certificate that the Bootz SUT should use to sign bootstrap
+  // responses. This certificate must have a chain of trust leading up to the
+  // Pinned Domain Cert that exists within the Ownership Voucher. The format of
+  // this field is a PEM-encoded x509 certificate.
+  string oc_cert = 4;
+
+  // The corresponding private key for the above OC certificate.
+  // The format of this field is a PEM-encoded private key.
+  string oc_private_key = 5;
+
+  // A certificate that corresponds to the CA that signed the DUT's
+  // IDevID certificate. This field should contain the CA that directly signed
+  // the DUT's IDevID and not necessarily the Root CA. The format of this
+  // field is a PEM-encoded x509 certificate.
+  string idevid_ca = 6;
+}
+
+// Contains information about the DUT's interfaces for use during DHCP and
+// Bootz.
+message InterfaceInfo {
+  // The address to assign to the DUT for the DHCP lease. For example,
+  // "192.168.1.100" or "2001:db8::2".
+  string dhcp_address = 1;
+
+  // The default gateway for the DUT's management interface.
+  // This will be provided in the DHCP lease. For example,
+  // "192.168.1.1" or "2001:db8::1".
+  string default_gateway = 2;
+
+  // The mask length for the DUT's management interface.
+  // This will be provided in the DHCP lease. For example, "24" for IPv4 or
+  // "120" for IPv6.
+  int32 mask_length = 3;
+
+  // Additional addresses (excluding the DHCP address) that the DUT may use to
+  // communicate with the Bootz SUT. These are addresses that may be used for
+  // subsequent gRPC connections to Bootz server after the initial connection.
+  // For example, the DUT may use DHCP address `192.168.1.100` to make the
+  // initial gRPC connection to Bootz server but the boot config may specify a
+  // different address `192.168.1.200`. Either of these may be used by the
+  // device to make the gRPC connection.
+  repeated string additional_addresses = 4;
+
+  // Name of out of band management interface(s) on the DUT. These will be used
+  // to discover the MAC addresses to be used in the DHCP lease.
+  repeated string management_interface_names = 5;
+}
+
+// Contains the expected state of the DUT after bootstrapping.
+message BootzState {
+  // The expected last status of the SUT after Bootz. For positive test cases
+  // this should be "BOOTZ_OK".
+  string status = 1;
+}
