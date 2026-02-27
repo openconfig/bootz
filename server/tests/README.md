@@ -57,6 +57,7 @@ sequenceDiagram
     BC-->>DUT: Bootz gRPC response;
     DUT->>I: Download OS image;
     DUT->>BC: Finish bootstrapping, status report;
+    BC-->>DUT: Status report ack;
     BC-->>B: Notify test of successful status report;
     M->>D: Stop component;
     M->>I: Stop component;
