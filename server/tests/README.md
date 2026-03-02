@@ -28,6 +28,43 @@ implementations of these components are provided in this directory but test
 runners are expected to fork and maintain their own SUT component
 implementations.
 
+Below is a sequence diagram describing the integration test process:
+
+```mermaid
+sequenceDiagram
+    participant User;
+    participant B as Bootz Integration Test;
+    participant M as Monax SUT Manager;
+    participant D as DHCP Server Component;
+    participant I as Image Server Component;
+    participant BC as Bootz Controller Component;
+    participant DUT;
+    User->>B: Bootz, runtime  parameters, library, abstract SUT, testbed;
+    B->>M: Runtime parameters, concrete library, abstract SUT;
+    M->>D: Start component;
+    M->>I: Start component;
+    M->>BC: Start component;
+    B->>DUT: Fetch management interface MAC addresses over gNMI;
+    B->>D: Create DHCP lease for DUT;
+    B->>I: Upload OS image for DUT;
+    I-->>B: OS image download URL;
+    B->>BC: Set bootstrap data, security artifacts, interface info, image info;
+    B->>BC: Start listening for updates from controller;
+    B->>DUT: gNOI Factory Reset;
+    DUT->>D: DHCP Request;
+    D-->>DUT: DHCP Response;
+    DUT->>BC: Bootz gRPC request;
+    BC-->>DUT: Bootz gRPC response;
+    DUT->>I: Download OS image;
+    DUT->>BC: Finish bootstrapping, status report;
+    BC-->>DUT: Status report ack;
+    BC-->>B: Notify test of successful status report;
+    M->>D: Stop component;
+    M->>I: Stop component;
+    M->>BC: Stop component;
+    B-->>User: Test complete;
+```
+
 ## Implementing SUT components
 
 The integration test expects exactly 4 gRPC components to be implemented and
