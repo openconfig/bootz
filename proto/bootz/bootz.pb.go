@@ -1420,6 +1420,7 @@ type ReportStatusRequest struct {
 	StatusMessage string                              `protobuf:"bytes,2,opt,name=status_message,json=statusMessage,proto3" json:"status_message,omitempty"`
 	States        []*ControlCardState                 `protobuf:"bytes,3,rep,name=states,proto3" json:"states,omitempty"`
 	Identity      *Identity                           `protobuf:"bytes,4,opt,name=identity,proto3" json:"identity,omitempty"`
+	AikPubDigest  []byte                              `protobuf:"bytes,5,opt,name=aik_pub_digest,json=aikPubDigest,proto3" json:"aik_pub_digest,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1478,6 +1479,13 @@ func (x *ReportStatusRequest) GetStates() []*ControlCardState {
 func (x *ReportStatusRequest) GetIdentity() *Identity {
 	if x != nil {
 		return x.Identity
+	}
+	return nil
+}
+
+func (x *ReportStatusRequest) GetAikPubDigest() []byte {
+	if x != nil {
+		return x.AikPubDigest
 	}
 	return nil
 }
@@ -2805,12 +2813,13 @@ const file_github_com_openconfig_bootz_proto_bootz_proto_rawDesc = "" +
 	"\toc_config\x18\x03 \x01(\fR\bocConfig\x122\n" +
 	"\x15dynamic_vendor_config\x18\x05 \x01(\fR\x13dynamicVendorConfig\x12*\n" +
 	"\x11dynamic_oc_config\x18\x06 \x01(\fR\x0fdynamicOcConfig\x12D\n" +
-	"\x11bootloader_config\x18\x04 \x01(\v2\x17.google.protobuf.StructR\x10bootloaderConfig\"\xf0\x02\n" +
+	"\x11bootloader_config\x18\x04 \x01(\v2\x17.google.protobuf.StructR\x10bootloaderConfig\"\x96\x03\n" +
 	"\x13ReportStatusRequest\x12B\n" +
 	"\x06status\x18\x01 \x01(\x0e2*.bootz.ReportStatusRequest.BootstrapStatusR\x06status\x12%\n" +
 	"\x0estatus_message\x18\x02 \x01(\tR\rstatusMessage\x12/\n" +
 	"\x06states\x18\x03 \x03(\v2\x17.bootz.ControlCardStateR\x06states\x12+\n" +
-	"\bidentity\x18\x04 \x01(\v2\x0f.bootz.IdentityR\bidentity\"\x8f\x01\n" +
+	"\bidentity\x18\x04 \x01(\v2\x0f.bootz.IdentityR\bidentity\x12$\n" +
+	"\x0eaik_pub_digest\x18\x05 \x01(\fR\faikPubDigest\"\x8f\x01\n" +
 	"\x0fBootstrapStatus\x12 \n" +
 	"\x1cBOOTSTRAP_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18BOOTSTRAP_STATUS_SUCCESS\x10\x01\x12\x1c\n" +
