@@ -335,23 +335,36 @@ the ownership voucher and ownership certificate.
    6. The `GetBootstrapData` gRPC can be performed as many times as
       required (i.e. it is idempotent).
 4. ReportStatus
-   1. This gRPC method is used by the device to inform the bootz server that
-      the bootstrapping process is complete. Success or failure is indicated
-      using an enum.
-   2. In case of failure, the device should retry this process from Step 1.
-   3. When making this gRPC, the device should verify the identity of the
+   1. This gRPC method is used by the device to inform the Bootz server that
+      the bootstrapping process is complete. The device sends a
+      `ReportStatusRequest` message to the bootz-server.
+       - If bootstrapping is successful, the device should set `status` to
+        `BOOTSTRAP_STATUS_SUCCESS`.
+         - In a modular chassis, the device MUST populate `states` with
+         `CONTROL_CARD_STATUS_INITIALIZED` for two control cards. For example,
+         a `BOOTSTRAP_STATUS_SUCCESS` report for a modular chassis with one
+         state set to `CONTROL_CARD_STATUS_INITIALIZED` and one state set to
+         `CONTROL_CARD_STATUS_NOT_INITIALIZED` will be ignored by bootz-server.
+         - In a fixed form factor chassis, the device MUST populate `states`
+         with `CONTROL_CARD_STATUS_INITIALIZED` for the single chassis.
+       - If bootstrapping is in-progress, the device _may_ set `status`
+         to `BOOTSTRAP_STATUS_INITIATED` as many times as needed.
+       - If bootstrapping is not successful, the device _may_ set `status` to
+        `BOOTSTRAP_STATUS_FAILURE` and then should restart the process from
+        Step 1.
+   2. When making this gRPC, the device should verify the identity of the
       server using the "`server_trust_cert`" certificate obtained from
       `GetBootstrapDataResponse`.
-   4. "`server_trust_cert`" plays the same role as "trust-anchor" in the sZTP
+   3. "`server_trust_cert`" plays the same role as "trust-anchor" in the sZTP
       RFC (i.e. allows the device to verify the identity of the server).
-   5. The TLS connection **MUST** be secured on the client-side with the
+   4. The TLS connection **MUST** be secured on the client-side with the
       IDevID of the active control card.
-5. At this point, the device has a minimal set of configuration, enabling it to
+6. At this point, the device has a minimal set of configuration, enabling it to
    receive gRPC calls. Depending on the operator's security policies, an
    attestation-verification or an enrollment step may be performed.
    1. At Google, we plan to always require enrollment and
       attestation-verification.
-6. TpmEnrollment
+7. TpmEnrollment
    1. The enrollment API doc is the authoritative reference for this API. The
       API is reproduced here for convenience.
    2. This step allows the owner organization to install an owner IAK
@@ -363,7 +376,7 @@ the ownership voucher and ownership certificate.
       the Attestation Key certificate matches the serial number on the IDevID
       certificate, and validate both certificates with the appropriate trust
       bundle.
-7. Attestation
+8. Attestation
    1. The attestation API doc is the authoritative reference for this API. The
       API is reproduced here for convenience.
    2. This step allows the owner to obtain cryptographic evidence for the
@@ -385,7 +398,7 @@ the ownership voucher and ownership certificate.
          active control card must check that the standby's TPM-backed IDevID.
          For example, it may request the IDevID cert, then issue a decrypt
          challenge to the standby control card.
-8. Final state:
+9. Final state:
    1. At this point, the device has an initial configuration and user
       accounts. We have validated the identity and integrity of the device and
       its software components. It is ready to serve traffic.
