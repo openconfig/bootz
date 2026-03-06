@@ -43,9 +43,9 @@ import (
 
 const (
 	stateInitial = iota
-	// TPM 2.0 states
-	stateTPM20ChallengeSent
-	stateTPM20ReauthChallengeSent
+	// Challenge states
+	stateChallengeSent
+	stateReauthChallengeSent
 	// Common state
 	stateAttested
 )
@@ -104,6 +104,17 @@ type streamSession struct {
 	clientNonce   string                   // client nonce from bootstrap request
 	idevidCert    *x509.Certificate        // For IDevID flow
 	nonce         string                   // base64 encoded, for TPM 2.0 nonce challenge
+	hmacSensitive *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
+}
+
+type streamSessionV1 struct {
+	stream        bpb.Bootstrap_BootstrapStreamV1Server
+	currentState  int
+	chassis       *types.Chassis           // Store chassis info for later stages
+	status        *bpb.ReportStatusRequest // Store status for later stages
+	clientNonce   string                   // client nonce from bootstrap request
+	idevidCert    *x509.Certificate        // For IDevID flow
+	nonce         []byte                   // For TPM 2.0 with IDevID nonce challenge
 	hmacSensitive *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
 }
 
@@ -239,7 +250,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			session.clientNonce = bootstrapReq.GetNonce()
 			log.Infof("Received initial BootstrapRequest: %+v", bootstrapReq)
 
-			lu, err := buildEntityLookup(ctx, in)
+			lu, err := buildEntityLookup(ctx, bootstrapReq)
 			if err != nil {
 				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
 			}
@@ -250,12 +261,12 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				if err := s.establishSessionAndSendChallenge(session, lu); err != nil {
 					return err
 				}
-				session.currentState = stateTPM20ChallengeSent
+				session.currentState = stateChallengeSent
 
 			case *bpb.Identity_EkPub:
 				log.Infof("Detected TPM 1.2 flow (EK only) for device %s", lu.ActiveSerial)
 				// TODO: logic to send the ca_pub challenge
-				return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not fully implemented")
+				return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not implemented")
 
 			default:
 				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
@@ -265,7 +276,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			log.Infof("=============================================================================")
 			log.Infof("====================== Stream challenge response received ===================")
 			log.Infof("=============================================================================")
-			if session.currentState != stateTPM20ChallengeSent && session.currentState != stateTPM20ReauthChallengeSent {
+			if session.currentState != stateChallengeSent && session.currentState != stateReauthChallengeSent {
 				return status.Errorf(codes.InvalidArgument, "unexpected challenge response")
 			}
 			log.Infof("Received Response from device %s", session.chassis.ActiveSerial)
@@ -323,7 +334,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				return status.Errorf(codes.InvalidArgument, "unsupported challenge response type: %T", challengeType)
 			}
 
-			if session.currentState == stateTPM20ReauthChallengeSent {
+			if session.currentState == stateReauthChallengeSent {
 				log.Infof("Acknowledging status report after re-authentication for device %s", session.chassis.ActiveSerial)
 				if err := s.updateStatusAndSendAcknowledgement(session); err != nil {
 					return err
@@ -378,7 +389,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 			if session.currentState == stateInitial {
 				log.Info("Received ReportStatusRequest on a new stream. Starting re-authentication...")
-				lu, err := buildEntityLookup(ctx, in)
+				lu, err := buildEntityLookup(ctx, req.ReportStatusRequest)
 				if err != nil {
 					return err
 				}
@@ -387,13 +398,120 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 					return err
 				}
 
-				session.currentState = stateTPM20ReauthChallengeSent
+				session.currentState = stateReauthChallengeSent
 				continue
 			}
 
 			if err := s.updateStatusAndSendAcknowledgement(session); err != nil {
 				return err
 			}
+
+		default:
+			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
+		}
+	}
+}
+
+func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server) error {
+	ctx := stream.Context()
+	session := &streamSessionV1{stream: stream, currentState: stateInitial, chassis: &types.Chassis{}}
+
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF {
+			log.Infof("Stream closed by client: %s", session.chassis.ActiveSerial)
+			return nil
+		}
+		if err != nil {
+			log.Errorf("Error receiving message: %v", err)
+			return err
+		}
+
+		switch req := in.GetType().(type) {
+		case *bpb.BootstrapStreamRequestV1_BootstrapRequest:
+			log.Infof("=============================================================================")
+			log.Infof("===================== StreamV1 bootstrap request received ===================")
+			log.Infof("=============================================================================")
+			if session.currentState != stateInitial {
+				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest can only be sent as the first message.")
+			}
+			bootstrapRequest := req.BootstrapRequest
+			session.clientNonce = bootstrapRequest.GetNonce()
+			log.Infof("Received initial BootstrapRequest: %+v", bootstrapRequest)
+
+			lu, err := buildEntityLookup(ctx, bootstrapRequest)
+			if err != nil {
+				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
+			}
+
+			switch idType := lu.Identity.GetType().(type) {
+			case *bpb.Identity_IdevidCert:
+				log.Infof("Detected TPM 2.0 IDevID flow for device %s", lu.ActiveSerial)
+				// TODO: logic to send the challenge
+				return status.Errorf(codes.Unimplemented, "TPM 2.0 IDevID flow not fully implemented")
+
+			case *bpb.Identity_Tpm20EkPub, *bpb.Identity_Tpm20PpkPub:
+				log.Infof("Detected TPM 2.0 EK/PPK flow for device %s", lu.ActiveSerial)
+				// TODO: logic to send the challenge
+				return status.Errorf(codes.Unimplemented, "TPM 2.0 EK/PPK flow not fully implemented")
+
+			case *bpb.Identity_Tpm12EkPub:
+				log.Infof("Detected TPM 1.2 EK flow for device %s", lu.ActiveSerial)
+				// TODO: logic to send the challenge
+				return status.Errorf(codes.Unimplemented, "TPM 1.2 EK flow not fully implemented")
+
+			default:
+				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
+			}
+
+		case *bpb.BootstrapStreamRequestV1_ChallengeResponse_:
+			log.Infof("=============================================================================")
+			log.Infof("===================== StreamV1 challenge response received ==================")
+			log.Infof("=============================================================================")
+			if session.currentState != stateChallengeSent && session.currentState != stateReauthChallengeSent {
+				return status.Errorf(codes.InvalidArgument, "unexpected challenge response")
+			}
+			log.Infof("Received ChallengeResponse from device %s", session.chassis.ActiveSerial)
+			challengeResponse := req.ChallengeResponse
+
+			switch challengeType := challengeResponse.GetType().(type) {
+			case *bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm20Idevid:
+				if len(session.nonce) == 0 {
+					return status.Errorf(codes.InvalidArgument, "received unexpected TPM20IDevID challenge response")
+				}
+				// TODO: logic to verify the challenge response
+				return status.Errorf(codes.Unimplemented, "Not yet implemented")
+
+			case *bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm20Hmac:
+				if session.hmacSensitive == nil {
+					return status.Errorf(codes.InvalidArgument, "received unexpected TPM20HMAC challenge response")
+				}
+				// TODO: logic to verify the challenge response
+				return status.Errorf(codes.Unimplemented, "Not yet implemented")
+
+			case *bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm12Ek:
+				// TODO: logic to verify the challenge response
+				return status.Errorf(codes.Unimplemented, "Not yet implemented")
+
+			default:
+				return status.Errorf(codes.InvalidArgument, "unsupported challenge response type: %T", challengeType)
+			}
+
+		case *bpb.BootstrapStreamRequestV1_ReportStatusRequest:
+			log.Infof("=============================================================================")
+			log.Infof("===================== StreamV1 status report received =======================")
+			log.Infof("=============================================================================")
+			log.Infof("Received ReportStatusRequest from %s: %+v", session.chassis.ActiveSerial, req.ReportStatusRequest)
+			session.status = req.ReportStatusRequest
+
+			if session.currentState == stateInitial {
+				log.Info("Received ReportStatusRequest on a new stream. Starting re-authentication...")
+				// TODO: logic to send challenge again
+				return status.Errorf(codes.Unimplemented, "Not yet implemented")
+			}
+
+			// TODO: logic to update status
+			return status.Errorf(codes.Unimplemented, "Not yet implemented")
 
 		default:
 			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
@@ -557,8 +675,8 @@ func peerAddressFromContext(ctx context.Context) (string, error) {
 	return a.IP.String(), nil
 }
 
-// buildEntityLookup constructs an EntityLookup object from a bootstrap request.
-func buildEntityLookup(ctx context.Context, req *bpb.BootstrapStreamRequest) (*types.EntityLookup, error) {
+// buildEntityLookup constructs an EntityLookup object from a proto message.
+func buildEntityLookup(ctx context.Context, msg proto.Message) (*types.EntityLookup, error) {
 	peerAddr, err := peerAddressFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -568,27 +686,27 @@ func buildEntityLookup(ctx context.Context, req *bpb.BootstrapStreamRequest) (*t
 	var cc *bpb.ControlCardState
 	var id *bpb.Identity
 	var serials []string
-	switch reqType := req.GetType().(type) {
-	case *bpb.BootstrapStreamRequest_BootstrapRequest:
-		cc = reqType.BootstrapRequest.GetControlCardState()
-		id = reqType.BootstrapRequest.GetIdentity()
-		if cards := reqType.BootstrapRequest.GetChassisDescriptor().GetControlCards(); len(cards) > 0 { // Modular chassis
+	switch m := msg.(type) {
+	case *bpb.GetBootstrapDataRequest:
+		cc = m.GetControlCardState()
+		id = m.GetIdentity()
+		if cards := m.GetChassisDescriptor().GetControlCards(); len(cards) > 0 { // Modular chassis
 			for _, v := range cards {
 				serials = append(serials, v.GetSerialNumber())
 			}
 		} else { // Fixed form factor chassis
-			serials = append(serials, reqType.BootstrapRequest.GetChassisDescriptor().GetSerialNumber())
+			serials = append(serials, m.GetChassisDescriptor().GetSerialNumber())
 		}
-	case *bpb.BootstrapStreamRequest_ReportStatusRequest:
-		if ccs := reqType.ReportStatusRequest.GetStates(); len(ccs) > 0 {
+	case *bpb.ReportStatusRequest:
+		if ccs := m.GetStates(); len(ccs) > 0 {
 			cc = ccs[0] // Assume the first control card is the active one.
 			for _, v := range ccs {
 				serials = append(serials, v.GetSerialNumber())
 			}
 		}
-		id = reqType.ReportStatusRequest.GetIdentity()
+		id = m.GetIdentity()
 	default:
-		return nil, status.Errorf(codes.InvalidArgument, "unexpected request type: %T", reqType)
+		return nil, status.Errorf(codes.InvalidArgument, "unexpected message type: %T", m)
 	}
 	activeSerial := cc.GetSerialNumber()
 	if activeSerial == "" {

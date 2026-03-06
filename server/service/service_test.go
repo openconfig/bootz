@@ -487,26 +487,22 @@ func TestBuildEntityLookup(t *testing.T) {
 	tests := []struct {
 		name    string
 		ctx     context.Context
-		req     *bpb.BootstrapStreamRequest
+		msg     proto.Message
 		want    *types.EntityLookup
 		wantErr bool
 	}{
 		{
 			name: "Successful bootstrap_request",
 			ctx:  ctx,
-			req: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
-					BootstrapRequest: &bpb.GetBootstrapDataRequest{
-						ChassisDescriptor: &bpb.ChassisDescriptor{
-							SerialNumber: "1234",
-						},
-						ControlCardState: &bpb.ControlCardState{
-							SerialNumber: "1234",
-						},
-						Identity: &bpb.Identity{
-							Type: &bpb.Identity_IdevidCert{},
-						},
-					},
+			msg: &bpb.GetBootstrapDataRequest{
+				ChassisDescriptor: &bpb.ChassisDescriptor{
+					SerialNumber: "1234",
+				},
+				ControlCardState: &bpb.ControlCardState{
+					SerialNumber: "1234",
+				},
+				Identity: &bpb.Identity{
+					Type: &bpb.Identity_IdevidCert{},
 				},
 			},
 			want: &types.EntityLookup{
@@ -519,16 +515,12 @@ func TestBuildEntityLookup(t *testing.T) {
 		{
 			name: "Successful report_status_request",
 			ctx:  ctx,
-			req: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{
-					ReportStatusRequest: &bpb.ReportStatusRequest{
-						States: []*bpb.ControlCardState{
-							{SerialNumber: "1234"},
-						},
-						Identity: &bpb.Identity{
-							Type: &bpb.Identity_EkPpkPub{},
-						},
-					},
+			msg: &bpb.ReportStatusRequest{
+				States: []*bpb.ControlCardState{
+					{SerialNumber: "1234"},
+				},
+				Identity: &bpb.Identity{
+					Type: &bpb.Identity_EkPpkPub{},
 				},
 			},
 			want: &types.EntityLookup{
@@ -539,31 +531,22 @@ func TestBuildEntityLookup(t *testing.T) {
 			},
 		},
 		{
-			name: "Wrong request type",
-			ctx:  ctx,
-			req: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_Response_{},
-			},
+			name:    "Invalid request",
+			ctx:     ctx,
 			wantErr: true,
 		},
 		{
-			name: "No serial number",
-			ctx:  ctx,
-			req: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{},
-			},
+			name:    "No serial number",
+			ctx:     ctx,
+			msg:     &bpb.GetBootstrapDataRequest{},
 			wantErr: true,
 		},
 		{
 			name: "No identity",
 			ctx:  ctx,
-			req: &bpb.BootstrapStreamRequest{
-				Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
-					BootstrapRequest: &bpb.GetBootstrapDataRequest{
-						ControlCardState: &bpb.ControlCardState{
-							SerialNumber: "1234",
-						},
-					},
+			msg: &bpb.GetBootstrapDataRequest{
+				ControlCardState: &bpb.ControlCardState{
+					SerialNumber: "1234",
 				},
 			},
 			wantErr: true,
@@ -577,7 +560,7 @@ func TestBuildEntityLookup(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := buildEntityLookup(tc.ctx, tc.req)
+			got, err := buildEntityLookup(tc.ctx, tc.msg)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("buildEntityLookup err = %v, want nil", err)
 			}
