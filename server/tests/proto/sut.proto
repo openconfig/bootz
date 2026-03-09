@@ -16,14 +16,17 @@ syntax = "proto3";
 
 package bootz;
 
+import "github.com/openconfig/bootz/server/tests/proto/test.proto";
+import "github.com/openconfig/bootz/proto/bootz.proto";
+
 // DHCP Service
 // The DHCP service is responsible for managing DHCP leases for the DUT and
 // responding to DHCP requests.
 service DHCPService {
   // CreateLease creates a DHCP lease for the DUT.
-  rpc CreateLease(CreateLeaseRequest) returns(CreateLeaseResponse);
+  rpc CreateLease(CreateLeaseRequest) returns(CreateLeaseResponse) {}
   // RemoveLease deletes a DHCP lease for the DUT.
-  rpc RemoveLease(RemoveLeaseRequest) returns(RemoveLeaseResponse);
+  rpc RemoveLease(RemoveLeaseRequest) returns(RemoveLeaseResponse) {}
 }
 
 message CreateLeaseRequest {
@@ -61,9 +64,27 @@ message RemoveLeaseRequest {
 message RemoveLeaseResponse {}
 
 // Image Service
-// The Image Service provides an interface to upload and download images.
+// The Image Service provides an interface to upload images.
 service ImageService {
+  // Upload makes the provided OS image available to the Bootz SUT for
+  // download during the Bootz test.
+  rpc Upload(UploadRequest) returns(UploadResponse) {}
+}
 
+message UploadRequest {
+  // Details about the OS to be made available to the DUT. If `reupload_to_sut`
+  // is true, the service should fetch the image from the provided URL and make
+  // it available on a URL that the DUT can access. This final URL should be
+  // included in the `image.url` field of the response. If `reupload_to_sut` is
+  // false, the provided URL will be used directly in the `image.url` field of
+  // the response.
+  .bootz.OSImage image = 1;
+}
+
+message UploadResponse {
+  // The final Bootz SoftwareImage that the Bootz controller SUT should provide
+  // to the DUT during the Bootz test.
+  .bootz.SoftwareImage image = 1;
 }
 
 // BootzController Service
@@ -71,6 +92,4 @@ service ImageService {
 // that will be returned by the Bootz SUT. Ideally, this RPC service is hosted
 // on the same SUT as the device-facing Bootz service but that is not a
 // requirement.
-service BootzController {
-    
-}
+service BootzController {}

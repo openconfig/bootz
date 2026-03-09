@@ -20,6 +20,10 @@ proto_library(
     name = "sut_proto",
     srcs = ["sut.proto"],
     import_prefix = "github.com/openconfig/bootz",
+    deps = [
+        ":test_proto",
+        "//proto:bootz_proto",
+    ],
 )
 
 ##############################################################################
