@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package bootz;
 
+import "google/protobuf/duration.proto";
+
 import "github.com/openconfig/bootz/proto/bootz.proto";
 import "github.com/openconfig/gnsi/authz/authz.proto";
 import "github.com/openconfig/gnsi/pathz/pathz.proto";
@@ -29,7 +31,12 @@ message TestParameters {
   // The OS image that should be installed on the DUT.
   OSImage os_image = 2;
 
-  // The bootstrap data that should be returned to the DUT by the Bootz SUT.
+  // The bootstrap data that should be returned to the DUT by the Bootz SUT
+  // as part of the test. This may be a valid config (for use in positive
+  // test cases) or it may be an invalid config (for use in negative test
+  // cases). If the latter, the test should include recovery bootstrap data
+  // to allow the DUT to be recovered after the test. See the
+  // `recovery_data` field below for more details.
   BootstrapData bootstrap_data = 3;
 
   // The security artifacts that the Bootz SUT should use during bootstrapping.
@@ -46,6 +53,42 @@ message TestParameters {
 
   // The expected state of the DUT after bootstrapping.
   BootzState want_bootz_state = 7;
+
+  // Bootstrap data for use in recovering the DUT after a test. If this field
+  // is set, the Bootz SUT will load this as the next bootstrap response to
+  // provide to the DUT after receiving the final expected status from the DUT,
+  // or after the test timeout is reached, whichever comes first. This allows
+  // the DUT to be recovered after a test that leaves the device in a
+  // non-operational state as long as the DUT continues to enter the ZTP loop
+  // after a Bootz failure.
+
+  // If this field is not set, the Bootz SUT will not provide any additional
+  // bootstrap data after the test, and it will be the responsibility of the
+  // test runner to recover the DUT through other means.
+  DUTRecoveryData recovery_data = 8;
+
+  // The duration of the test. If the DUT has not reported the expected final
+  // status by the time this duration has elapsed, the test will be marked as
+  // failed and the Bootz SUT will provide the `recovery_data` if it
+  // is set.
+  google.protobuf.Duration timeout = 9;
+}
+
+// Contains data used for recovering the DUT after a test. Any fields set
+// in these messages will overwrite the existing DUT data for the test. Fields
+// that are unset will be ignored and the existing DUT data for those fields
+// will be retained. For example, if the `recovery_data` field is set with a
+// `BootstrapData` message that has only the `boot_config` field set, then only
+// the boot config will be overwritten on the DUT and the credentials, pathz
+// policy, authz policy and certz profiles from the original `bootstrap_data`
+// will be retained.
+message DUTRecoveryData {
+  // Recovery bootstrap data.
+  BootstrapData recovery_bootstrap_data = 1;
+  // Recovery OS image data.
+  OSImage recovery_os_image = 2;
+  // Recovery security artifact data.
+  SecurityArtifacts recovery_security_artifacts = 3;
 }
 
 // Contains information about an OS image on the DUT.
