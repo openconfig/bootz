@@ -22,6 +22,8 @@ import "github.com/openconfig/bootz/proto/bootz.proto";
 import "github.com/openconfig/gnsi/authz/authz.proto";
 import "github.com/openconfig/gnsi/pathz/pathz.proto";
 
+option go_package = "github.com/openconfig/bootz/server/tests/proto/test";
+
 // Top level message that contains all the parameters for a Bootz test. This
 // message is used to configure the Bootz SUT and the DUT.
 message TestParameters {

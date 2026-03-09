@@ -20,6 +20,10 @@ proto_library(
     name = "sut_proto",
     srcs = ["sut.proto"],
     import_prefix = "github.com/openconfig/bootz",
+    deps = [
+        ":test_proto",
+        "//proto:bootz_proto",
+    ],
 )
 
 ##############################################################################
@@ -31,7 +35,7 @@ go_proto_library(
     importpath = "github.com/openconfig/bootz/tests/proto/test",
     proto = ":test_proto",
     deps = [
-        "//proto:bootz",
+        "//proto:bootz_go_proto",
         "@openconfig_gnsi//authz",
         "@openconfig_gnsi//pathz",
     ],
@@ -41,6 +45,10 @@ go_proto_library(
     name = "sut_go_proto",
     importpath = "github.com/openconfig/bootz/tests/proto/sut",
     proto = ":sut_proto",
+    deps = [
+        ":test_go_proto",
+        "//proto:bootz_go_proto",
+    ],
 )
 
 go_library(

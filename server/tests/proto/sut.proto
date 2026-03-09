@@ -16,17 +16,81 @@ syntax = "proto3";
 
 package bootz;
 
+import "github.com/openconfig/bootz/proto/bootz.proto";
+import "github.com/openconfig/bootz/server/tests/proto/test.proto";
+
+option go_package = "github.com/openconfig/bootz/server/tests/proto/sut";
+
 // DHCP Service
 // The DHCP service is responsible for managing DHCP leases for the DUT and
 // responding to DHCP requests.
 service DHCPService {
+  // CreateLease creates a DHCP lease for the DUT.
+  rpc CreateLease(CreateLeaseRequest) returns(CreateLeaseResponse) {}
+  // RemoveLease deletes a DHCP lease for the DUT.
+  rpc RemoveLease(RemoveLeaseRequest) returns(RemoveLeaseResponse) {}
+}
+
+message CreateLeaseRequest {
+  // MAC addresses to associate with this DHCP lease. For modular devices, this
+  // allows either control card to acquire the lease.
+  repeated string mac_addresses = 1;
+
+  // The IP address to associate with this lease. Note, for a modular chassis
+  // only the active control card will acquire the lease, so only one IP
+  // address should be provided.
+  // For example, "192.168.1.100" or "2001:db8::2".
+  string ip_address = 2;
+
+  // The mask length of the lease IP address. For example, "24" for IPv4 or
+  // "120" for IPv6.
+  int32 mask_len = 3;
+
+  // The gateway IP address. For example,"192.168.1.1" or "2001:db8::1".
+  string gateway = 4;
+
+  // The address of the Bootz server to be included in the DHCP response. It
+  // should have the format: bootz://<server_address>:<port>. For example:
+  // * IPv6: bootz://[2001:db8::1]:12345
+  // * IPv4: bootz://192.168.1.1:12345
+  string bootz_server_address = 5;
+}
+
+message CreateLeaseResponse {
+
+}
+
+message RemoveLeaseRequest {
+  // The MAC addresses to remove the DHCP lease for.
+  repeated string mac_addresses = 1;
+}
+
+message RemoveLeaseResponse {
 
 }
 
 // Image Service
-// The Image Service provides an interface to upload and download images.
+// The Image Service provides an interface to upload images.
 service ImageService {
+  // Upload makes the provided OS image available to the Bootz SUT for
+  // download during the Bootz test.
+  rpc Upload(UploadRequest) returns(UploadResponse) {}
+}
 
+message UploadRequest {
+  // Details about the OS to be made available to the DUT. If `reupload_to_sut`
+  // is true, the service should fetch the image from the provided URL and make
+  // it available on a URL that the DUT can access. This final URL should be
+  // included in the `image.url` field of the response. If `reupload_to_sut` is
+  // false, the provided URL will be used directly in the `image.url` field of
+  // the response.
+  .bootz.OSImage image = 1;
+}
+
+message UploadResponse {
+  // The final Bootz SoftwareImage that the Bootz controller SUT should provide
+  // to the DUT during the Bootz test.
+  .bootz.SoftwareImage image = 1;
 }
 
 // BootzController Service
@@ -35,5 +99,81 @@ service ImageService {
 // on the same SUT as the device-facing Bootz service but that is not a
 // requirement.
 service BootzController {
-    
+  // Sets the bootstrap data that the Bootz SUT should use during the Bootz test
+  // when replying to the DUT.
+  rpc SetBootstrapData(SetBootstrapDataRequest)
+      returns(SetBootstrapDataResponse) {}
+
+  // Sets the security artifacts that the Bootz SUT should use during the Bootz
+  // test when replying to the DUT.
+  rpc SetSecurityArtifacts(SetSecurityArtifactsRequest)
+      returns(SetSecurityArtifactsResponse) {}
+
+  // SetRecoveryData sets the recovery data that the Bootz SUT should use after
+  // the test is complete.
+  rpc SetRecoveryData(SetRecoveryDataRequest) returns(SetRecoveryDataResponse) {
+  }
+
+  // Returns the Bootz URL that the DUT should use to contact the Bootz SUT.
+  rpc GetBootzURL(GetBootzURLRequest) returns(GetBootzURLResponse) {}
+
+  // Subscribe allows the test to subscribe to events from the Bootz SUT.
+  rpc Subscribe(SubscribeRequest) returns(stream SubscribeResponse) {}
+}
+
+message SetBootstrapDataRequest {
+  // The data to be used by the Bootz SUT during the Bootz test.
+  .bootz.BootstrapData bootstrap_data = 1;
+}
+
+message SetBootstrapDataResponse {
+
+}
+
+message SetSecurityArtifactsRequest {
+  // The security artifacts to be used by the Bootz SUT during the Bootz test.
+  .bootz.SecurityArtifacts security_artifacts = 1;
+}
+
+message SetSecurityArtifactsResponse {
+
+}
+
+message GetBootzURLRequest {
+
+}
+
+message GetBootzURLResponse {
+  // The Bootz URL that the DUT should use to contact the Bootz SUT.
+  // This URL will be of the format: bootz://<server_address>:<port>. For
+  // example:
+  // * IPv6: bootz://[2001:db8::1]:12345
+  // * IPv4: bootz://192.168.1.1:12345
+  string bootz_url = 1;
+}
+
+message SubscribeRequest {
+
+}
+
+message SubscribeResponse {
+  oneof event {
+    // The GetBootstrapDataRequest that the DUT sends to the Bootz SUT.
+    .bootz.GetBootstrapDataRequest get_bootstrap_data_request = 1;
+
+    // The ReportStatusRequest that the DUT sends to the Bootz SUT.
+    .bootz.ReportStatusRequest report_status_request = 2;
+  }
+
+  // The error, if any, that was returned to the DUT in response to this event.
+  string error = 3;
+}
+
+message SetRecoveryDataRequest {
+  // The recovery data to be used by the Bootz SUT after the test is complete.
+  .bootz.DUTRecoveryData recovery_data = 1;
+}
+
+message SetRecoveryDataResponse {
+
 }
