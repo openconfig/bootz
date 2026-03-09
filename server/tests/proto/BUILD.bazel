@@ -10,6 +10,7 @@ proto_library(
     import_prefix = "github.com/openconfig/bootz",
     deps = [
         "//proto:bootz_proto",
+        "@com_google_protobuf//:duration_proto",
         "@openconfig_gnsi//authz:authz_proto",
         "@openconfig_gnsi//pathz:pathz_proto",
     ],
