@@ -16,8 +16,8 @@ syntax = "proto3";
 
 package bootz;
 
-import "github.com/openconfig/bootz/server/tests/proto/test.proto";
 import "github.com/openconfig/bootz/proto/bootz.proto";
+import "github.com/openconfig/bootz/server/tests/proto/test.proto";
 
 option go_package = "github.com/openconfig/bootz/server/tests/proto/sut";
 
@@ -56,14 +56,18 @@ message CreateLeaseRequest {
   string bootz_server_address = 5;
 }
 
-message CreateLeaseResponse {}
+message CreateLeaseResponse {
+
+}
 
 message RemoveLeaseRequest {
   // The MAC addresses to remove the DHCP lease for.
   repeated string mac_addresses = 1;
 }
 
-message RemoveLeaseResponse {}
+message RemoveLeaseResponse {
+
+}
 
 // Image Service
 // The Image Service provides an interface to upload images.
@@ -122,16 +126,22 @@ message SetBootstrapDataRequest {
   .bootz.BootstrapData bootstrap_data = 1;
 }
 
-message SetBootstrapDataResponse {}
+message SetBootstrapDataResponse {
+
+}
 
 message SetSecurityArtifactsRequest {
   // The security artifacts to be used by the Bootz SUT during the Bootz test.
   .bootz.SecurityArtifacts security_artifacts = 1;
 }
 
-message SetSecurityArtifactsResponse {}
+message SetSecurityArtifactsResponse {
 
-message GetBootzURLRequest {}
+}
+
+message GetBootzURLRequest {
+
+}
 
 message GetBootzURLResponse {
   // The Bootz URL that the DUT should use to contact the Bootz SUT.
@@ -142,7 +152,9 @@ message GetBootzURLResponse {
   string bootz_url = 1;
 }
 
-message SubscribeRequest {}
+message SubscribeRequest {
+
+}
 
 message SubscribeResponse {
   oneof event {
@@ -162,4 +174,6 @@ message SetRecoveryDataRequest {
   .bootz.DUTRecoveryData recovery_data = 1;
 }
 
-message SetRecoveryDataResponse {}
+message SetRecoveryDataResponse {
+
+}
