@@ -20,8 +20,45 @@ package bootz;
 // The DHCP service is responsible for managing DHCP leases for the DUT and
 // responding to DHCP requests.
 service DHCPService {
-
+  // CreateLease creates a DHCP lease for the DUT.
+  rpc CreateLease(CreateLeaseRequest) returns(CreateLeaseResponse);
+  // RemoveLease deletes a DHCP lease for the DUT.
+  rpc RemoveLease(RemoveLeaseRequest) returns(RemoveLeaseResponse);
 }
+
+message CreateLeaseRequest {
+  // MAC addresses to associate with this DHCP lease. For modular devices, this
+  // allows either control card to acquire the lease.
+  repeated string mac_addresses = 1;
+
+  // The IP address to associate with this lease. Note, for a modular chassis
+  // only the active control card will acquire the lease, so only one IP
+  // address should be provided.
+  // For example, "192.168.1.100" or "2001:db8::2".
+  string ip_address = 2;
+
+  // The mask length of the lease IP address. For example, "24" for IPv4 or
+  // "120" for IPv6.
+  int32 mask_len = 3;
+
+  // The gateway IP address. For example,"192.168.1.1" or "2001:db8::1".
+  string gateway = 4;
+
+  // The address of the Bootz server to be included in the DHCP response. It
+  // should have the format: bootz://<server_address>:<port>. For example:
+  // * IPv6: bootz://[2001:db8::1]:12345
+  // * IPv4: bootz://192.168.1.1:12345
+  string bootz_server_address = 5;
+}
+
+message CreateLeaseResponse {}
+
+message RemoveLeaseRequest {
+  // The MAC addresses to remove the DHCP lease for.
+  repeated string mac_addresses = 1;
+}
+
+message RemoveLeaseResponse {}
 
 // Image Service
 // The Image Service provides an interface to upload and download images.
