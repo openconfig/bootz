@@ -262,7 +262,7 @@ can install production configuration and certificates into the device.
 
 ## Detailed Design
 
-### Boot Procedure (v2)
+### Boot Procedure: Unary Bootz
 
 1. DHCP Discovery of Bootstrap Server
    1. Device sends DHCP messages, containing the mac-address of the active
@@ -390,10 +390,13 @@ the ownership voucher and ownership certificate.
       accounts. We have validated the identity and integrity of the device and
       its software components. It is ready to serve traffic.
 
-### Bootz Procedure (BootstrapStream v0.6)
+### Bootz Procedure: BootstrapStream v0.6
 
 **NOTE: BootstrapStream v0.6 is deprecated, please use BootstrapStream v1.0
 below instead.**
+
+BootstrapStream v0.6 only supports TPM 2.0 (with or without IDevID) systems,
+while TPM 1.2 systems are not supported.
 
 1. DHCP Discovery of Bootstrap Server
    1. Device sends DHCP messages, containing the mac-address of the active
@@ -426,7 +429,6 @@ below instead.**
       - For TPM 2.0 with IDevID, populate `idevid_cert` with the IDevID
         certificate.
       - For TPM 2.0 without IDevID, set `ek_ppk_pub` to true.
-      - For TPM 1.2, set `ek_pub` to true.
 4. BootstrapStreamResponse.challenge
    1. The server will provide a challenge depending on the data fetched from
       OVGS (Ownership Voucher gRPC Service) server based on the
@@ -440,18 +442,7 @@ below instead.**
            to get the S/N.
         2. The S/N will be validated by lookup in OVGS and then use the key
            returned (EK/PPK) to encrypt an importable HMAC challenge.
-      - For TPM 1.2:
-        1. The `GetBootstrapDataRequest.chassis_descriptor` data will be used
-           to get the S/N.
-        2. The server sends its certificate authority's public key so that the
-           device can send a CSR-like request securely.
-5. EkIdentityRequest - Applicable only for devices having TPM 1.2
-   1. The device sends the EK public key and an identity request to the
-      server.
-6. EkIdentityResponse - Applicable only for devices having TPM 1.2
-   1. The server extracts the modulus and exponent from the EK public key, and
-      sends a nonce challenge which can be responded only by the intended TPM.
-7. BootstrapStreamRequest.response
+5. BootstrapStreamRequest.response
    1. The device should populate the `Response` message as below:
       - For TPM 2.0 with IDevID, the `Response` message contains the nonce
         signed via IDevID, which can validate that the device is in fact the
@@ -459,9 +450,7 @@ below instead.**
       - For TPM 2.0 without IDevID, the `Response` message contains the
         HMAC challenge response, which can validate that the device is in
         possession of the EK/PPK.
-      - For TPM 1.2, the `Response` message contains the decrypted nonce,
-        which can validate that the device is in possession of the EK.
-8. BootstrapStreamResponse.bootstrap_response
+6. BootstrapStreamResponse.bootstrap_response
    1. Bootz-server verifies the challenge response received from the device:
       - If the challenge response is valid the server will send the bootstrap
         data.
@@ -489,7 +478,7 @@ below instead.**
       - A reboot may be performed, if required.
    8. The device/modules will then apply the configuration.
       - A reboot may be performed, if required.
-9. BootstrapStreamRequest.report_status_request
+7. BootstrapStreamRequest.report_status_request
    1. The device sends a `ReportStatusRequest` message to the bootz-server.
       - If bootstrapping is successful, the device should report all control
         cards as `CONTROL_CARD_STATUS_INITIALIZED` and
@@ -497,21 +486,21 @@ below instead.**
       - If bootstrapping is not successful, the device _may_ report status as
         `BOOTSTRAP_STATUS_FAILURE` and then should restart the process from
         Step 1.
-10. BootstrapStreamResponse.report_status_response
-    - If the device _did not_ terminate the current stream (i.e., no reboot
-      ever happened during this entire process), the bootz-server will
-      respond with an empty `ReportStatusResponse` message to acknowledge
-      the status report.
-    - If the device terminated the previous stream (e.g., due to a reboot),
-      so that the `ReportStatusRequest` message received by the bootz-server
-      is the first message in a new stream, then bootz-server will send out
-      a new challenge again (refer to Step 4 through 7) to verify the identity
-      of the device. Once the challenge passes, bootz-server will finally send
-      out an empty `ReportStatusResponse` message to acknowledge the status
-      report. If the challenge fails, an error will be returned and the device
-      must start over from Step 9.
+8. BootstrapStreamResponse.report_status_response
+   - If the device _did not_ terminate the current stream (i.e., no reboot
+     ever happened during this entire process), the bootz-server will
+     respond with an empty `ReportStatusResponse` message to acknowledge
+     the status report.
+   - If the device terminated the previous stream (e.g., due to a reboot),
+     so that the `ReportStatusRequest` message received by the bootz-server
+     is the first message in a new stream, then bootz-server will send out
+     a new challenge again (refer to Step 4 through 7) to verify the identity
+     of the device. Once the challenge passes, bootz-server will finally send
+     out an empty `ReportStatusResponse` message to acknowledge the status
+     report. If the challenge fails, an error will be returned and the device
+     must start over from Step 9.
 
-### Bootz Procedure (BootstrapStream v1.0)
+### Bootz Procedure: BootstrapStream v1.0
 
 1. DHCP Discovery of Bootstrap Server
    1. Device sends DHCP messages, containing the mac-address of the active
@@ -595,7 +584,7 @@ below instead.**
         the chosen cipher suite, and serialize the `TransportKey` message into
         the wire format, then invoke `TPM_ActivateIdentity` command with the
         receivied `blob_encrypted` as argument to decrypt the HMAC-SHA256 key,
-        and calculate the hash over the `serialized_transport_key` using the
+        and calculate the `hash` over the `serialized_transport_key` using the
         HMAC-SHA256 key, finally discard the earlier created placeholder AIK.
 6. BootstrapStreamResponseV1.bootstrap_response
    1. Bootz server verifies the challenge response received from the device:

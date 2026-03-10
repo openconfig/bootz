@@ -263,11 +263,6 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				}
 				session.currentState = stateChallengeSent
 
-			case *bpb.Identity_EkPub:
-				log.Infof("Detected TPM 1.2 flow (EK only) for device %s", lu.ActiveSerial)
-				// TODO: logic to send the ca_pub challenge
-				return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not implemented")
-
 			default:
 				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
 			}
@@ -324,11 +319,6 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 					return status.Errorf(codes.InvalidArgument, "IAK certify info verification failed: %v", err)
 				}
 				log.Infof("HMAC challenge verified successfully for device %s", session.chassis.ActiveSerial)
-
-			case *bpb.BootstrapStreamRequest_Response_Nonce:
-				log.Infof("received TPM 1.2 nonce challenge response for %s", session.chassis.ActiveSerial)
-				// TODO: logic to verify the nonce challenge
-				return status.Errorf(codes.Unimplemented, "TPM 1.2 flow not fully implemented")
 
 			default:
 				return status.Errorf(codes.InvalidArgument, "unsupported challenge response type: %T", challengeType)

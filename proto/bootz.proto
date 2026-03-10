@@ -97,14 +97,12 @@ message Identity {
     // The actual EK public key will be retrieved from OVGS database.
     bytes tpm12_ek_pub = 8;
 
-    // TPM 1.2
-    bool ek_pub = 2 [deprecated = true];
-    // TPM 2.0 without IDevId. Device supports both EK and PPK.
+    // TPM 2.0 without IDevID (For Streaming Bootz v0.6 only)
     bool ek_ppk_pub = 5 [deprecated = true];
   }
 
   // Deprecated fields. Do not reuse.
-  reserved 3, 4;
+  reserved 2, 3, 4;
 }
 
 // Initial request from device to the bootz-server. Contains a detailed
@@ -140,32 +138,22 @@ message BootstrapStreamRequest {
     oneof type {
       // Nonce signed with IAK from the device for TPM 2.0 IDevID based systems.
       bytes nonce_signed = 1;
-      // Nonce decrypted via EK for TPM 1.2 systems.
-      string nonce = 2;
       // HMAC challenge response for TPM 2.0 no-IDevID systems.
       openconfig.attestz.HMACChallengeResponse hmac_challenge_response = 3;
     }
-  }
 
-  message EKIdentityRequest {
-    // TPM 1.2 DER-encoded EK RSA public key.
-    bytes ek_pub = 1;
-    // 'prgbTCPAIdentityReq' argument of Tspi_TPM_CollateIdentityRequest
-    // defined in TCG Software Stack (TSS) Specification Version 1.2 Level 1
-    // section 4.3.4.6.3 whose definition is in TCPA version 1.1b Section
-    // 4.30.2 - TCPA_IDENTITY_REQ
-    bytes identity_request = 2;
+    // Deprecated fields. Do not reuse.
+    reserved 2;
   }
 
   oneof type {
     GetBootstrapDataRequest bootstrap_request = 1;
     Response response = 2;
     ReportStatusRequest report_status_request = 3;
-    EKIdentityRequest ek_identity_request = 4;
   }
 
   // Deprecated fields. Do not reuse.
-  reserved 5, 6;
+  reserved 4, 5, 6;
 }
 
 // BootstrapStreamResponse will be returned based on the request from the
@@ -183,34 +171,29 @@ message BootstrapStreamResponse {
     oneof type {
       // The nonce to be signed by IAK for TPM 2.0 IDevID based systems.
       string nonce = 1;
-      // Bootz server self-signed CA public cert for TPM 1.2 systems.
-      bytes ca_pub = 3;
       // HMAC challenge for TPM 2.0 no-IDevID systems.
       TPM20HMACChallenge tpm20_hmac_challenge = 5;
     }
 
     // Deprecated fields. Do not reuse.
-    reserved 2, 4;
-  }
-
-  message EKIdentityResponse {
-    // TPM 1.2 challenge
-    bytes asymmetric = 1;
-    bytes symmetric = 2;
+    reserved 2, 3, 4;
   }
 
   oneof type {
     Challenge challenge = 1;
     GetBootstrapDataResponse bootstrap_response = 2;
     EmptyResponse report_status_response = 3;
-    EKIdentityResponse ek_identity_response = 4;
   }
+
+  // Deprecated fields. Do not reuse.
+  reserved 4;
 }
 
 // Structured message containing the chassis details, and listing its component
 // control card modules.
 message ChassisDescriptor {
   string manufacturer = 1;
+  // The part number of the chassis. This field is optional.
   string part_number = 2;
   // This field must be populated for fixed form factor chassis.
   // The serial number can be empty for modular chassis.
@@ -223,8 +206,12 @@ message ChassisDescriptor {
 // Details of the control card, including serial number and the location
 // of the card on the chassis.
 message ControlCard {
+  // The part number of each control card. This field is optional.
   string part_number = 1;
+  // The serial number of each control card must be populated for modular
+  // chassis.
   string serial_number = 2;
+  // The slot of the control card. This field is optional.
   string slot_id = 4;
 
   // Deprecated fields. Do not reuse.
@@ -257,8 +244,10 @@ message ControlCardState {
     CONTROL_CARD_STATUS_INITIALIZED = 2;
   }
 
-  // serial_number must align with the serial number of the provided
-  // control card in the chassis descriptor.
+  // This field must be populated.
+  // For fixed form factor chassis, it is the serial number of the chassis
+  // itself. For modular chassis, it is the serial number of the corresponding
+  // control card.
   string serial_number = 1;
   ControlCardStatus status = 2;
 }
