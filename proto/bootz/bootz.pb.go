@@ -1542,6 +1542,7 @@ type StreamBootstrapDataResponse struct {
 	OwnershipCertificate             []byte                 `protobuf:"bytes,2,opt,name=ownership_certificate,json=ownershipCertificate,proto3" json:"ownership_certificate,omitempty"`
 	ResponseSignature                string                 `protobuf:"bytes,3,opt,name=response_signature,json=responseSignature,proto3" json:"response_signature,omitempty"`
 	EncryptedSerializedBootstrapData []byte                 `protobuf:"bytes,4,opt,name=encrypted_serialized_bootstrap_data,json=encryptedSerializedBootstrapData,proto3" json:"encrypted_serialized_bootstrap_data,omitempty"`
+	EncapsulatedKey                  []byte                 `protobuf:"bytes,5,opt,name=encapsulated_key,json=encapsulatedKey,proto3" json:"encapsulated_key,omitempty"`
 	unknownFields                    protoimpl.UnknownFields
 	sizeCache                        protoimpl.SizeCache
 }
@@ -1600,6 +1601,13 @@ func (x *StreamBootstrapDataResponse) GetResponseSignature() string {
 func (x *StreamBootstrapDataResponse) GetEncryptedSerializedBootstrapData() []byte {
 	if x != nil {
 		return x.EncryptedSerializedBootstrapData
+	}
+	return nil
+}
+
+func (x *StreamBootstrapDataResponse) GetEncapsulatedKey() []byte {
+	if x != nil {
+		return x.EncapsulatedKey
 	}
 	return nil
 }
@@ -2631,12 +2639,13 @@ const file_github_com_openconfig_bootz_proto_bootz_proto_rawDesc = "" +
 	"\fcipher_suite\x18\x01 \x01(\x0e2\x16.bootz.HPKECipherSuiteR\vcipherSuite\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x02 \x01(\fR\tpublicKey\x12\x14\n" +
-	"\x05nonce\x18\x03 \x01(\fR\x05nonce\"\xfd\x01\n" +
+	"\x05nonce\x18\x03 \x01(\fR\x05nonce\"\xa8\x02\n" +
 	"\x1bStreamBootstrapDataResponse\x12+\n" +
 	"\x11ownership_voucher\x18\x01 \x01(\fR\x10ownershipVoucher\x123\n" +
 	"\x15ownership_certificate\x18\x02 \x01(\fR\x14ownershipCertificate\x12-\n" +
 	"\x12response_signature\x18\x03 \x01(\tR\x11responseSignature\x12M\n" +
-	"#encrypted_serialized_bootstrap_data\x18\x04 \x01(\fR encryptedSerializedBootstrapData\"\x8c\b\n" +
+	"#encrypted_serialized_bootstrap_data\x18\x04 \x01(\fR encryptedSerializedBootstrapData\x12)\n" +
+	"\x10encapsulated_key\x18\x05 \x01(\fR\x0fencapsulatedKey\"\x8c\b\n" +
 	"\x18BootstrapStreamRequestV1\x12M\n" +
 	"\x11bootstrap_request\x18\x01 \x01(\v2\x1e.bootz.GetBootstrapDataRequestH\x00R\x10bootstrapRequest\x12b\n" +
 	"\x12challenge_response\x18\x02 \x01(\v21.bootz.BootstrapStreamRequestV1.ChallengeResponseH\x00R\x11challengeResponse\x12P\n" +

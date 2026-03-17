@@ -118,6 +118,7 @@ type streamSessionV1 struct {
 	hmacSensitive *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
 }
 
+// GetBootstrapData implements the GetBootstrapData RPC handler for Unary Bootz.
 func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*bpb.GetBootstrapDataResponse, error) {
 	log.Infof("=============================================================================")
 	log.Infof("==================== Received request for bootstrap data ====================")
@@ -211,6 +212,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	return resp, nil
 }
 
+// ReportStatus implements the ReportStatus RPC handler for Unary Bootz.
 func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest) (*bpb.EmptyResponse, error) {
 	log.Infof("=============================================================================")
 	log.Infof("========================== Status report received ===========================")
@@ -223,6 +225,7 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
 }
 
+// BootstrapStream implements the RPC handler for Streaming Bootz v0.6.
 func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
 	ctx := stream.Context()
 	session := &streamSession{stream: stream, currentState: stateInitial, chassis: &types.Chassis{}}
@@ -402,6 +405,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 	}
 }
 
+// BootstrapStreamV1 implements the RPC handler for Streaming Bootz v1.0.
 func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server) error {
 	ctx := stream.Context()
 	session := &streamSessionV1{stream: stream, currentState: stateInitial, chassis: &types.Chassis{}}
@@ -423,7 +427,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			log.Infof("===================== StreamV1 bootstrap request received ===================")
 			log.Infof("=============================================================================")
 			if session.currentState != stateInitial {
-				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest can only be sent as the first message.")
+				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest can only be sent as the first message")
 			}
 			bootstrapRequest := req.BootstrapRequest
 			session.clientNonce = bootstrapRequest.GetNonce()

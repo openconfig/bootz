@@ -565,27 +565,29 @@ while TPM 1.2 systems are not supported.
 5. BootstrapStreamRequestV1.challenge_response
    1. The device should populate the `ChallengeResponse` message as below:
       - For TPM 2.0 with IDevID, populate the `tpm20_idevid` field of this
-        message. First create a `TransportKey` message by generating an HPKE
-        key according to the chosen cipher suite, then copy the received `nonce`
-        into it, and serialize the `TransportKey` message into the wire format,
-        finally generate a `signature` by signing the `serialized_transport_key`
-        field using the IDevID private key.
+        message. First create a `TransportKey` message by generating an
+        ephemeral HPKE key according to the chosen cipher suite, then copy the
+        received `nonce` into it, and serialize the `TransportKey` message into
+        the wire format, finally generate a `signature` by signing the
+        `serialized_transport_key` field using the IDevID private key.
       - For TPM 2.0 without IDevID, populate the `tpm20_hmac` field of this
-        message. First create a `TransportKey` message by generating an HPKE
-        key according to the chosen cipher suite, and serialize the
-        `TransportKey` message into the wire format, then invoke `TPM2_Import`
-        command to import the received HMAC-SHA256 key into TPM, finally invoke
-        `TPM2_Certify` command to certify any TPM residing key using the
-        imported HMAC-SHA256 key. When invoking `TPM2_Certify` command, the
-        `qualifyingData` argument must be set to the SHA256 hash over the
-        `serialized_transport_key` field.
+        message. First create a `TransportKey` message by generating an
+        ephemeral HPKE key according to the chosen cipher suite, and serialize
+        the `TransportKey` message into the wire format, then invoke
+        `TPM2_Import` command to import the received HMAC-SHA256 key into TPM,
+        finally invoke `TPM2_Certify` command to certify any TPM residing key
+        using the imported HMAC-SHA256 key. When invoking `TPM2_Certify`
+        command, the `qualifyingData` argument must be set to the SHA256 hash
+        over the `serialized_transport_key` field.
       - For TPM 1.2, populate the `tpm12_ek` field of this message. First
-        create a `TransportKey` message by generating an HPKE key according to
-        the chosen cipher suite, and serialize the `TransportKey` message into
-        the wire format, then invoke `TPM_ActivateIdentity` command with the
-        receivied `blob_encrypted` as argument to decrypt the HMAC-SHA256 key,
-        and calculate the `hash` over the `serialized_transport_key` using the
-        HMAC-SHA256 key, finally discard the earlier created placeholder AIK.
+        create a `TransportKey` message by generating an ephemeral HPKE key
+        according to the chosen cipher suite, and serialize the `TransportKey`
+        message into the wire format, then invoke `TPM_ActivateIdentity`
+        command with the receivied `blob_encrypted` and the earlier created
+        placeholder AIK as arguments to decrypt the HMAC-SHA256 key, and
+        calculate the `hash` over the `serialized_transport_key` field
+        using the HMAC-SHA256 key, finally discard the earlier created
+        placeholder AIK.
 6. BootstrapStreamResponseV1.bootstrap_response
    1. Bootz server verifies the challenge response received from the device:
       - If the challenge response is valid the server will send the bootstrap
@@ -611,10 +613,10 @@ while TPM 1.2 systems are not supported.
       validation above fails, the device should restart the bootstrap
       process from Step 1.
    6. The device decrypts the `encrypted_serialized_bootstrap_data` using the
-      HPKE private key, and deserializes it to get a `BootstrapDataSigned`
-      message. The device should verify the `nonce` field in this message. If
-      the validation fails, the device should restart the bootstrap process
-      from Step 1.
+      received `encapsulated_key` along with the HPKE private key, and then
+      deserializes it to get a `BootstrapDataSigned` message. The device should
+      verify the `nonce` field in this message. If the validation fails, the
+      device should restart the bootstrap process from Step 1.
    7. The decrypted and deserialized `BootstrapDataSigned` message allows us to
       return multiple sets of `BootstrapDataResponse`, one per control card.
       In practice, we usually apply the same configuration to both cards.
