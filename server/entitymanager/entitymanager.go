@@ -60,31 +60,31 @@ type InMemoryEntityManager struct {
 	vendorCAPool *x509.CertPool
 }
 
-// ResolveChassis returns an entity based on the provided lookup.
-func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *types.EntityLookup) (*types.Chassis, error) {
-	chassis, err := m.lookupChassis(lookup)
+// ResolveChassis fills the chassis information based on the matched inventory.
+func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, chassis *types.Chassis) error {
+	inventory, err := m.lookupChassis(chassis.ActiveSerial)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var key *rsa.PublicKey
 	var keyType tpb.Key
-	if _, ok := lookup.Identity.GetType().(*bpb.Identity_EkPpkPub); ok {
-		for _, c := range chassis.GetControllerCards() {
-			if c.GetSerialNumber() == lookup.ActiveSerial {
+	if _, ok := chassis.Identity.GetType().(*bpb.Identity_EkPpkPub); ok {
+		for _, c := range inventory.GetControllerCards() {
+			if c.GetSerialNumber() == chassis.ActiveSerial {
 				block, _ := pem.Decode([]byte(c.GetPublicKey()))
 				if block == nil {
-					return nil, status.Errorf(codes.InvalidArgument, "failed to decode PEM block from public key: %s", c.GetPublicKey())
+					return status.Errorf(codes.InvalidArgument, "failed to decode PEM block from public key: %s", c.GetPublicKey())
 				}
 				if block.Type != "PUBLIC KEY" {
-					return nil, status.Errorf(codes.InvalidArgument, "unsupported public key type: %s", block.Type)
+					return status.Errorf(codes.InvalidArgument, "unsupported public key type: %s", block.Type)
 				}
 				pub, err := x509.ParsePKIXPublicKey(block.Bytes)
 				if err != nil {
-					return nil, status.Errorf(codes.InvalidArgument, "failed to parse DER encoded public key: %v", err)
+					return status.Errorf(codes.InvalidArgument, "failed to parse DER encoded public key: %v", err)
 				}
 				rsaPub, ok := pub.(*rsa.PublicKey)
 				if !ok {
-					return nil, status.Errorf(codes.InvalidArgument, "public key is not of type RSA")
+					return status.Errorf(codes.InvalidArgument, "public key is not of type RSA")
 				}
 				key = rsaPub
 				keyType = c.GetPublicKeyType()
@@ -92,51 +92,49 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *type
 			}
 		}
 	}
-	bootCfg, err := populateBootConfig(chassis.GetConfig().GetBootConfig())
+	bootCfg, err := populateBootConfig(inventory.GetConfig().GetBootConfig())
 	if err != nil {
-		return nil, err
+		return err
 	}
-	authzConf, err := m.populateAuthzConfig(chassis)
+	authzConf, err := m.populateAuthzConfig(inventory)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &types.Chassis{
-		Serials:                lookup.Serials,
-		ActiveSerial:           lookup.ActiveSerial,
-		ActivePublicKey:        key,
-		ActivePublicKeyType:    keyType,
-		Hostname:               chassis.GetName(),
-		BootMode:               chassis.GetBootMode(),
-		StreamingSupported:     chassis.GetStreamingSupported(),
-		Manufacturer:           chassis.GetManufacturer(),
-		PartNumber:             chassis.GetPartNumber(),
-		SoftwareImage:          chassis.GetSoftwareImage(),
-		BootloaderPasswordHash: chassis.GetBootloaderPasswordHash(),
-		Realm:                  defaultRealm,
-		BootConfig:             bootCfg,
-		Authz:                  authzConf,
-	}, nil
+
+	chassis.ActivePublicKey = key
+	chassis.ActivePublicKeyType = keyType
+	chassis.Hostname = inventory.GetName()
+	chassis.BootMode = inventory.GetBootMode()
+	chassis.StreamingSupported = inventory.GetStreamingSupported()
+	chassis.SoftwareImage = inventory.GetSoftwareImage()
+	chassis.BootloaderPasswordHash = inventory.GetBootloaderPasswordHash()
+	chassis.Realm = defaultRealm
+	chassis.Manufacturer = inventory.GetManufacturer()
+	chassis.PartNumber = inventory.GetPartNumber()
+	chassis.BootConfig = bootCfg
+	chassis.Authz = authzConf
+	return nil
 }
 
-func (m *InMemoryEntityManager) lookupChassis(lookup *types.EntityLookup) (*epb.ChassisInventory, error) {
-	if lookup.ActiveSerial == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "lookup active serial number can't be empty")
+func (m *InMemoryEntityManager) lookupChassis(serial string) (*epb.ChassisInventory, error) {
+	if serial == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "lookup serial number can't be empty")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, chassis := range m.chassisInventory {
 		// Search for the chassis serial number first.
-		if chassis.GetSerialNumber() == lookup.ActiveSerial {
+		if chassis.GetSerialNumber() == serial {
 			return chassis, nil
 		}
 		// While we're here, try looking up by control card.
 		for _, c := range chassis.GetControllerCards() {
-			if c.GetSerialNumber() == lookup.ActiveSerial {
+			if c.GetSerialNumber() == serial {
 				return chassis, nil
 			}
 		}
 	}
-	return nil, status.Errorf(codes.NotFound, "could not find chassis for lookup %+v", lookup)
+	return nil, status.Errorf(codes.NotFound, "could not find chassis for lookup serial %+v", serial)
 }
 
 func readOCConfig(path string) ([]byte, error) {
@@ -387,14 +385,12 @@ func New(chassisConfigFile string, artifacts *types.SecurityArtifacts) (*InMemor
 
 // ReplaceDevice replaces an existing chassis with a new chassis object.
 // If the chassis is not found, it is added to the inventory.
-func (m *InMemoryEntityManager) ReplaceDevice(old *types.EntityLookup, new *epb.ChassisInventory) error {
-	// Chassis: old device lookup, newChassis: new device
-
+func (m *InMemoryEntityManager) ReplaceDevice(serial string, new *epb.ChassisInventory) error {
 	// todo: Validate before replace
 	// todo: Forward error from validateConfig
 
-	if old == nil || old.ActiveSerial == "" {
-		return status.Error(codes.InvalidArgument, "lookup active serial must be set")
+	if serial == "" {
+		return status.Error(codes.InvalidArgument, "lookup serial number must be set")
 	}
 
 	if new == nil || new.SerialNumber == "" {
@@ -404,7 +400,7 @@ func (m *InMemoryEntityManager) ReplaceDevice(old *types.EntityLookup, new *epb.
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for i, ch := range m.chassisInventory {
-		if ch.GetManufacturer() == old.Manufacturer && ch.GetSerialNumber() == old.ActiveSerial {
+		if ch.GetSerialNumber() == serial {
 			m.chassisInventory[i] = new
 			return nil
 		}
@@ -415,19 +411,19 @@ func (m *InMemoryEntityManager) ReplaceDevice(old *types.EntityLookup, new *epb.
 }
 
 // DeleteDevice removes the chassis at the provided lookup from the entitymanager.
-func (m *InMemoryEntityManager) DeleteDevice(chassis *types.EntityLookup) {
+func (m *InMemoryEntityManager) DeleteDevice(serial string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for i, ch := range m.chassisInventory {
-		if ch.GetManufacturer() == chassis.Manufacturer && ch.GetSerialNumber() == chassis.ActiveSerial {
+		if ch.GetSerialNumber() == serial {
 			m.chassisInventory = append(m.chassisInventory[:i], m.chassisInventory[i+1:]...)
 		}
 	}
 }
 
-// GetDevice returns a copy of the chassis at the provided lookup.
-func (m *InMemoryEntityManager) GetDevice(chassis *types.EntityLookup) (*epb.ChassisInventory, error) {
-	ch, err := m.lookupChassis(chassis)
+// GetDevice returns a copy of the chassis at the provided serial number.
+func (m *InMemoryEntityManager) GetDevice(serial string) (*epb.ChassisInventory, error) {
+	ch, err := m.lookupChassis(serial)
 	if err != nil {
 		return nil, err
 	}

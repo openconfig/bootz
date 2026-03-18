@@ -37,25 +37,6 @@ type SecurityArtifacts struct {
 	TLSKeypair *tls.Certificate
 }
 
-// EntityLookup is used to resolve the fields of an active control card to a chassis.
-// For fixed form factor devices, the active control card is the chassis itself.
-type EntityLookup struct {
-	// All the serial numbers that need bootstrapping for this chassis.
-	// For fixed form factor devices, it only contains the serial number of this chassis itself.
-	// For modular devices, it contains the serial numbers of all control cards in this chassis.
-	Serials []string
-	// The active serial number that sent the bootstrap request.
-	ActiveSerial string
-	// The manufacturer of this chassis.
-	Manufacturer string
-	// The hardware model/part number of this chassis.
-	PartNumber string
-	// The reported IP address of the management interface that sent the bootstrap request.
-	IPAddress string
-	// The identity presented by this chassis.
-	Identity *bpb.Identity
-}
-
 // Chassis describes a chassis that has been resolved from an organization's inventory.
 type Chassis struct {
 	// All the serial numbers that need bootstrapping for this chassis.
@@ -64,6 +45,16 @@ type Chassis struct {
 	Serials []string
 	// The active serial number that sent the bootstrap request.
 	ActiveSerial string
+	// The reported IP address of the management interface that sent the bootstrap request.
+	IPAddress string
+	// The identity presented by this chassis.
+	Identity *bpb.Identity
+
+	// ================================================================================
+	// All the fields above are initialized from device bootstrap request.
+	// All the fields below are resolved from Bootz server inventory.
+	// ================================================================================
+
 	// The public key owned by the active control card.
 	ActivePublicKey *rsa.PublicKey
 	// The type of the public key (EK or PPK) owned by the active control card.
@@ -87,6 +78,4 @@ type Chassis struct {
 	BootConfig             *bpb.BootConfig
 	Authz                  *apb.UploadRequest
 	BootloaderPasswordHash string
-	// The identity presented by this chassis.
-	Identity *bpb.Identity
 }

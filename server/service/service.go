@@ -82,7 +82,7 @@ type ChassisManager interface {
 
 // EntityManager maintains the entities and their states.
 type EntityManager interface {
-	ResolveChassis(context.Context, *types.EntityLookup) (*types.Chassis, error)
+	ResolveChassis(context.Context, *types.Chassis) error
 	GetBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error)
 	SetStatus(context.Context, *bpb.ReportStatusRequest) error
 	Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis) error
@@ -138,15 +138,13 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		serials = append(serials, chassisDesc.GetSerialNumber())
 	}
 	log.Infof("Requesting for %v chassis %v", chassisDesc.GetManufacturer(), chassisDesc.GetSerialNumber())
-	lookup := &types.EntityLookup{
+	chassis := &types.Chassis{
 		Serials:      serials,
 		ActiveSerial: req.GetControlCardState().GetSerialNumber(),
-		Manufacturer: chassisDesc.GetManufacturer(),
-		PartNumber:   chassisDesc.GetPartNumber(),
 		IPAddress:    peerAddr,
 	}
 	// Validate the chassis can be serviced
-	chassis, err := s.em.ResolveChassis(ctx, lookup)
+	err = s.em.ResolveChassis(ctx, chassis)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", chassisDesc, err)
 	}
@@ -253,15 +251,16 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			session.clientNonce = bootstrapReq.GetNonce()
 			log.Infof("Received initial BootstrapRequest: %+v", bootstrapReq)
 
-			lu, err := buildEntityLookup(ctx, bootstrapReq)
+			chassis, err := initializeChassis(ctx, bootstrapReq)
 			if err != nil {
 				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
 			}
+			session.chassis = chassis
 
-			switch idType := lu.Identity.GetType().(type) {
+			switch idType := chassis.Identity.GetType().(type) {
 			case *bpb.Identity_IdevidCert, *bpb.Identity_EkPpkPub:
-				log.Infof("Detected TPM 2.0 flow (ID type: %T) for device %s", idType, lu.ActiveSerial)
-				if err := s.establishSessionAndSendChallenge(session, lu); err != nil {
+				log.Infof("Detected TPM 2.0 flow (ID type: %T) for device %s", idType, chassis.ActiveSerial)
+				if err := s.establishSessionAndSendChallenge(session); err != nil {
 					return err
 				}
 				session.currentState = stateChallengeSent
@@ -382,12 +381,13 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 			if session.currentState == stateInitial {
 				log.Info("Received ReportStatusRequest on a new stream. Starting re-authentication...")
-				lu, err := buildEntityLookup(ctx, req.ReportStatusRequest)
+				chassis, err := initializeChassis(ctx, req.ReportStatusRequest)
 				if err != nil {
 					return err
 				}
+				session.chassis = chassis
 
-				if err := s.establishSessionAndSendChallenge(session, lu); err != nil {
+				if err := s.establishSessionAndSendChallenge(session); err != nil {
 					return err
 				}
 
@@ -433,24 +433,25 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			session.clientNonce = bootstrapRequest.GetNonce()
 			log.Infof("Received initial BootstrapRequest: %+v", bootstrapRequest)
 
-			lu, err := buildEntityLookup(ctx, bootstrapRequest)
+			chassis, err := initializeChassis(ctx, bootstrapRequest)
 			if err != nil {
 				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
 			}
+			session.chassis = chassis
 
-			switch idType := lu.Identity.GetType().(type) {
+			switch idType := chassis.Identity.GetType().(type) {
 			case *bpb.Identity_IdevidCert:
-				log.Infof("Detected TPM 2.0 IDevID flow for device %s", lu.ActiveSerial)
+				log.Infof("Detected TPM 2.0 IDevID flow for device %s", chassis.ActiveSerial)
 				// TODO: logic to send the challenge
 				return status.Errorf(codes.Unimplemented, "TPM 2.0 IDevID flow not fully implemented")
 
 			case *bpb.Identity_Tpm20EkPub, *bpb.Identity_Tpm20PpkPub:
-				log.Infof("Detected TPM 2.0 EK/PPK flow for device %s", lu.ActiveSerial)
+				log.Infof("Detected TPM 2.0 EK/PPK flow for device %s", chassis.ActiveSerial)
 				// TODO: logic to send the challenge
 				return status.Errorf(codes.Unimplemented, "TPM 2.0 EK/PPK flow not fully implemented")
 
 			case *bpb.Identity_Tpm12EkPub:
-				log.Infof("Detected TPM 1.2 EK flow for device %s", lu.ActiveSerial)
+				log.Infof("Detected TPM 1.2 EK flow for device %s", chassis.ActiveSerial)
 				// TODO: logic to send the challenge
 				return status.Errorf(codes.Unimplemented, "TPM 1.2 EK flow not fully implemented")
 
@@ -602,26 +603,25 @@ func (s *Service) sendHMACChallenge(session *streamSession) error {
 }
 
 // establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM2.0 with or without IDevID.
-func (s *Service) establishSessionAndSendChallenge(session *streamSession, lookup *types.EntityLookup) error {
-	chassis, err := s.em.ResolveChassis(session.stream.Context(), lookup)
+func (s *Service) establishSessionAndSendChallenge(session *streamSession) error {
+	err := s.em.ResolveChassis(session.stream.Context(), session.chassis)
 	if err != nil {
 		return status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
 	}
-	if !chassis.StreamingSupported {
+	if !session.chassis.StreamingSupported {
 		return status.Errorf(codes.Unimplemented, "streaming bootstrap is not supported for this device")
 	}
-	session.chassis = chassis
-	log.Infof("Resolved device %s to hostname %s", chassis.ActiveSerial, chassis.Hostname)
+	log.Infof("Resolved device %s to hostname %s", session.chassis.ActiveSerial, session.chassis.Hostname)
 
-	switch idType := lookup.Identity.GetType().(type) {
+	switch idType := session.chassis.Identity.GetType().(type) {
 	case *bpb.Identity_IdevidCert:
-		log.Infof("Starting sendIdevidChallenge for TPM 2.0 with IDevID flow for device %s", chassis.ActiveSerial)
+		log.Infof("Starting sendIdevidChallenge for TPM 2.0 with IDevID flow for device %s", session.chassis.ActiveSerial)
 		if err := s.sendIdevidChallenge(session, idType.IdevidCert); err != nil {
 			return err
 		}
 		return nil
 	case *bpb.Identity_EkPpkPub:
-		log.Infof("Starting sendHMACChallenge for TPM 2.0 without IDevID flow for device %s", chassis.ActiveSerial)
+		log.Infof("Starting sendHMACChallenge for TPM 2.0 without IDevID flow for device %s", session.chassis.ActiveSerial)
 		if err := s.sendHMACChallenge(session); err != nil {
 			return err
 		}
@@ -669,8 +669,8 @@ func peerAddressFromContext(ctx context.Context) (string, error) {
 	return a.IP.String(), nil
 }
 
-// buildEntityLookup constructs an EntityLookup object from a proto message.
-func buildEntityLookup(ctx context.Context, msg proto.Message) (*types.EntityLookup, error) {
+// initializeChassis constructs a chassis object from a proto message.
+func initializeChassis(ctx context.Context, msg proto.Message) (*types.Chassis, error) {
 	peerAddr, err := peerAddressFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -711,7 +711,7 @@ func buildEntityLookup(ctx context.Context, msg proto.Message) (*types.EntityLoo
 	}
 
 	log.Infof("Detected identity %+v of device %s from IP %v", id, activeSerial, peerAddr)
-	return &types.EntityLookup{
+	return &types.Chassis{
 		Serials:      serials,
 		ActiveSerial: activeSerial,
 		IPAddress:    peerAddr,
