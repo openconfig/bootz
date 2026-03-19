@@ -320,7 +320,11 @@ func TestSign(t *testing.T) {
 				t.Errorf("Sign() err = %v, want %v", err, test.wantErr)
 			}
 
-			err = signature.Verify(a.OwnerCert, test.resp.GetSerializedBootstrapData(), test.resp.GetResponseSignature())
+			sig, err := base64.StdEncoding.DecodeString(test.resp.GetResponseSignature())
+			if err != nil {
+				t.Errorf("unable to base64 decode: %v", err)
+			}
+			err = signature.Verify(a.OwnerCert, test.resp.GetSerializedBootstrapData(), sig)
 			if err != nil {
 				t.Errorf("Verify() err == %v, want %v", err, test.wantErr)
 			}

@@ -67,12 +67,8 @@ func Sign(privateKey crypto.PrivateKey, algorithm x509.SignatureAlgorithm, input
 	return base64.StdEncoding.EncodeToString(sig), nil
 }
 
-// Verify verifies a base64-encoded signature of the input data using the provided certificate.
-func Verify(cert *x509.Certificate, input []byte, signature string) error {
-	decodedSig, err := base64.StdEncoding.DecodeString(signature)
-	if err != nil {
-		return fmt.Errorf("Verify(): unable to base64 decode: %w", err)
-	}
+// Verify verifies a signature of the input data using the provided certificate.
+func Verify(cert *x509.Certificate, input []byte, signature []byte) error {
 	hashAlgo, hashed, err := computeHash(cert.SignatureAlgorithm, input)
 	if err != nil {
 		return err
@@ -80,12 +76,12 @@ func Verify(cert *x509.Certificate, input []byte, signature string) error {
 
 	switch pub := cert.PublicKey.(type) {
 	case *rsa.PublicKey:
-		err = rsa.VerifyPKCS1v15(pub, hashAlgo, hashed, decodedSig)
+		err = rsa.VerifyPKCS1v15(pub, hashAlgo, hashed, signature)
 		if err != nil {
 			return fmt.Errorf("Verify(): signature not verified: %w", err)
 		}
 	case *ecdsa.PublicKey:
-		if !ecdsa.VerifyASN1(pub, hashed, decodedSig) {
+		if !ecdsa.VerifyASN1(pub, hashed, signature) {
 			return fmt.Errorf("Verify(): signature not verified")
 		}
 	default:
