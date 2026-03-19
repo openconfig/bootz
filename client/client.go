@@ -125,7 +125,11 @@ func validateArtifacts(serialNumber string, resp *bpb.GetBootstrapDataResponse) 
 	log.Infof("=============================================================================")
 	log.Infof("===================== Validating the response signature =====================")
 	log.Infof("=============================================================================")
-	if err := signature.Verify(ocCert, resp.GetSerializedBootstrapData(), resp.GetResponseSignature()); err != nil {
+	sig, err := base64.StdEncoding.DecodeString(resp.GetResponseSignature())
+	if err != nil {
+		return fmt.Errorf("unable to base64 decode: %v", err)
+	}
+	if err := signature.Verify(ocCert, resp.GetSerializedBootstrapData(), sig); err != nil {
 		return err
 	}
 	log.Infof("Successfully validated the response")

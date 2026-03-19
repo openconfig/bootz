@@ -103,7 +103,7 @@ type streamSession struct {
 	status        *bpb.ReportStatusRequest // Store status for later stages
 	clientNonce   string                   // client nonce from bootstrap request
 	idevidCert    *x509.Certificate        // For IDevID flow
-	nonce         string                   // base64 encoded, for TPM 2.0 nonce challenge
+	serverNonce   string                   // For TPM 2.0 with IDevID nonce challenge
 	hmacSensitive *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
 }
 
@@ -114,7 +114,7 @@ type streamSessionV1 struct {
 	status        *bpb.ReportStatusRequest // Store status for later stages
 	clientNonce   string                   // client nonce from bootstrap request
 	idevidCert    *x509.Certificate        // For IDevID flow
-	nonce         []byte                   // For TPM 2.0 with IDevID nonce challenge
+	serverNonce   []byte                   // For TPM 2.0 with IDevID nonce challenge
 	hmacSensitive *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
 }
 
@@ -281,14 +281,11 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 			switch challengeType := challengeResponse.GetType().(type) {
 			case *bpb.BootstrapStreamRequest_Response_NonceSigned:
-				if len(session.nonce) == 0 {
+				if len(session.serverNonce) == 0 {
 					return status.Errorf(codes.InvalidArgument, "received unexpected nonce challenge response")
 				}
-				// Base64-encode the raw signed nonce before passing it to the Verify function.
-				signedNonceB64 := base64.StdEncoding.EncodeToString(challengeResponse.GetNonceSigned())
-				// The device signs the base64-encoded nonce string.
-				if err := signature.Verify(session.idevidCert, []byte(session.nonce), signedNonceB64); err != nil {
-					log.Errorf("Nonce signature verification failed for device %s. Signature: %s, Error: %v", session.chassis.ActiveSerial, signedNonceB64, err)
+				if err := signature.Verify(session.idevidCert, []byte(session.serverNonce), challengeResponse.GetNonceSigned()); err != nil {
+					log.Errorf("Nonce signature verification failed for device %s. Signature: %v, Error: %v", session.chassis.ActiveSerial, challengeResponse.GetNonceSigned(), err)
 					return status.Errorf(codes.InvalidArgument, "nonce signature verification failed: %v", err)
 				}
 				log.Infof("Nonce signature verified successfully for device %s", session.chassis.ActiveSerial)
@@ -471,7 +468,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 
 			switch challengeType := challengeResponse.GetType().(type) {
 			case *bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm20Idevid:
-				if len(session.nonce) == 0 {
+				if len(session.serverNonce) == 0 {
 					return status.Errorf(codes.InvalidArgument, "received unexpected TPM20IDevID challenge response")
 				}
 				// TODO: logic to verify the challenge response
@@ -545,13 +542,13 @@ func (s *Service) sendIdevidChallenge(session *streamSession, idevidCertB64 stri
 	if _, err := rand.Read(nonceBytes); err != nil {
 		return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
 	}
-	session.nonce = base64.StdEncoding.EncodeToString(nonceBytes)
+	session.serverNonce = base64.StdEncoding.EncodeToString(nonceBytes)
 
 	challengeResp := &bpb.BootstrapStreamResponse{
 		Type: &bpb.BootstrapStreamResponse_Challenge_{
 			Challenge: &bpb.BootstrapStreamResponse_Challenge{
 				Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
-					Nonce: session.nonce,
+					Nonce: session.serverNonce,
 				},
 			},
 		},

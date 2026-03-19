@@ -22,6 +22,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"math/big"
 	"testing"
 	"time"
@@ -64,9 +65,13 @@ func TestCreateAndVerifyRSA(t *testing.T) {
 	input := []byte("input_data")
 
 	// Sign the signature
-	sig, err := Sign(key, cert.SignatureAlgorithm, input)
+	sigString, err := Sign(key, cert.SignatureAlgorithm, input)
 	if err != nil {
 		t.Fatalf("unable to sign signature: %v", err)
+	}
+	sig, err := base64.StdEncoding.DecodeString(sigString)
+	if err != nil {
+		t.Fatalf("unable to base64 decode: %v", err)
 	}
 	// Verify the signature
 	err = Verify(cert, input, sig)
@@ -84,9 +89,13 @@ func TestCreateAndVerifyECDSA(t *testing.T) {
 	input := []byte("input_data")
 
 	// Sign the signature
-	sig, err := Sign(key, cert.SignatureAlgorithm, input)
+	sigString, err := Sign(key, cert.SignatureAlgorithm, input)
 	if err != nil {
 		t.Fatalf("unable to sign signature: %v", err)
+	}
+	sig, err := base64.StdEncoding.DecodeString(sigString)
+	if err != nil {
+		t.Fatalf("unable to base64 decode: %v", err)
 	}
 	// Verify the signature
 	err = Verify(cert, input, sig)
