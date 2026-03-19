@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/openconfig/attestz/service/biz"
 	"github.com/openconfig/bootz/common/types"
@@ -55,8 +56,14 @@ type mockEntityManager struct {
 	signErr              error
 }
 
-func (m *mockEntityManager) ResolveChassis(context.Context, *types.EntityLookup) (*types.Chassis, error) {
-	return m.resolveChassisResp, m.resolveChassisErr
+func (m *mockEntityManager) ResolveChassis(ctx context.Context, chassis *types.Chassis) error {
+	chassisCopy := *chassis
+	*chassis = *m.resolveChassisResp
+	chassis.Serials = chassisCopy.Serials
+	chassis.ActiveSerial = chassisCopy.ActiveSerial
+	chassis.IPAddress = chassisCopy.IPAddress
+	chassis.Identity = chassisCopy.Identity
+	return m.resolveChassisErr
 }
 func (m *mockEntityManager) GetBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error) {
 	return m.getBootstrapDataResp, m.getBootstrapDataErr
@@ -164,7 +171,7 @@ func TestBootstrapStream(t *testing.T) {
 	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
 	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
 	em := &mockEntityManager{
-		resolveChassisResp: &types.Chassis{Serials: []string{"test-serial-123"}, ActiveSerial: "test-serial-123", StreamingSupported: true, ActivePublicKey: ekPub, ActivePublicKeyType: epb.Key_KEY_EK},
+		resolveChassisResp: &types.Chassis{StreamingSupported: true, ActivePublicKey: ekPub, ActivePublicKeyType: epb.Key_KEY_EK},
 		getBootstrapDataResp: &bpb.BootstrapDataResponse{
 			BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
 		},
@@ -172,7 +179,7 @@ func TestBootstrapStream(t *testing.T) {
 	initialReq := &bpb.BootstrapStreamRequest{
 		Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
 			BootstrapRequest: &bpb.GetBootstrapDataRequest{
-				ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123", PartNumber: "FIXED-123"},
+				ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123"},
 				ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
 			},
 		},
@@ -240,7 +247,7 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow with Failing Status Report",
 			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{Serials: []string{"test-serial-123"}, ActiveSerial: "test-serial-123", StreamingSupported: true},
+				resolveChassisResp: &types.Chassis{StreamingSupported: true},
 				getBootstrapDataResp: &bpb.BootstrapDataResponse{
 					BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
 				},
@@ -482,13 +489,13 @@ func peerAddressContext(t *testing.T, address string) context.Context {
 	})
 }
 
-func TestBuildEntityLookup(t *testing.T) {
+func TestInitializeChassis(t *testing.T) {
 	ctx := peerAddressContext(t, "1.1.1.1")
 	tests := []struct {
 		name    string
 		ctx     context.Context
 		msg     proto.Message
-		want    *types.EntityLookup
+		want    *types.Chassis
 		wantErr bool
 	}{
 		{
@@ -505,7 +512,7 @@ func TestBuildEntityLookup(t *testing.T) {
 					Type: &bpb.Identity_IdevidCert{},
 				},
 			},
-			want: &types.EntityLookup{
+			want: &types.Chassis{
 				Serials:      []string{"1234"},
 				ActiveSerial: "1234",
 				IPAddress:    "1.1.1.1",
@@ -523,7 +530,7 @@ func TestBuildEntityLookup(t *testing.T) {
 					Type: &bpb.Identity_EkPpkPub{},
 				},
 			},
-			want: &types.EntityLookup{
+			want: &types.Chassis{
 				Serials:      []string{"1234"},
 				ActiveSerial: "1234",
 				IPAddress:    "1.1.1.1",
@@ -560,15 +567,15 @@ func TestBuildEntityLookup(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := buildEntityLookup(tc.ctx, tc.msg)
+			got, err := initializeChassis(tc.ctx, tc.msg)
 			if (err != nil) != tc.wantErr {
-				t.Fatalf("buildEntityLookup err = %v, want nil", err)
+				t.Fatalf("initializeChassis err = %v, want nil", err)
 			}
 			if err != nil {
 				return
 			}
-			if diff := cmp.Diff(got, tc.want, protocmp.Transform()); diff != "" {
-				t.Errorf("buildEntityLookup diff = %v", diff)
+			if diff := cmp.Diff(got, tc.want, protocmp.Transform(), cmpopts.IgnoreFields(types.Chassis{}, "ActivePublicKey", "SoftwareImage", "BootConfig", "Authz")); diff != "" {
+				t.Errorf("initializeChassis diff = %v", diff)
 			}
 		})
 	}

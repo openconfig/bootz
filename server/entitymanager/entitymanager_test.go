@@ -126,7 +126,6 @@ func TestNew(t *testing.T) {
 				opts := []cmp.Option{
 					protocmp.Transform(),
 					protocmp.IgnoreMessages(&epb.ChassisInventory{}, &epb.Options{}, &bpb.SoftwareImage{}, &epb.DHCPConfig{}, &epb.GNSIConfig{}, &epb.BootConfig{}, &epb.Config{}, &epb.BootConfig{}, &epb.ControlCard{}),
-					cmpopts.IgnoreUnexported(types.EntityLookup{}),
 				}
 				if !cmp.Equal(inv.chassisInventory, test.inventory, opts...) {
 					t.Errorf("Inventory list is not as expected, Diff: %s", cmp.Diff(inv.chassisInventory, test.inventory, opts...))
@@ -214,12 +213,12 @@ func TestResolveChassis(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
 		desc    string
-		input   *types.EntityLookup
+		input   *types.Chassis
 		want    *types.Chassis
 		wantErr bool
 	}{{
 		desc: "Default device",
-		input: &types.EntityLookup{
+		input: &types.Chassis{
 			ActiveSerial: "123",
 		},
 		want: &types.Chassis{
@@ -245,7 +244,7 @@ func TestResolveChassis(t *testing.T) {
 		},
 	}, {
 		desc: "Chassis Not Found",
-		input: &types.EntityLookup{
+		input: &types.Chassis{
 			ActiveSerial: "456",
 		},
 		wantErr: true,
@@ -258,11 +257,14 @@ func TestResolveChassis(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			got, err := em.ResolveChassis(ctx, test.input)
+			err := em.ResolveChassis(ctx, test.input)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("ResolveChassis(%v) err = %v, want %v", test.input, err, test.wantErr)
 			}
-			if diff := cmp.Diff(got, test.want, protocmp.Transform(), cmpopts.IgnoreFields(types.Chassis{}, "ActivePublicKey")); diff != "" {
+			if err != nil {
+				return
+			}
+			if diff := cmp.Diff(test.input, test.want, protocmp.Transform(), cmpopts.IgnoreFields(types.Chassis{}, "ActivePublicKey")); diff != "" {
 				t.Errorf("ResolveChassis(%v) diff = %v", test.input, diff)
 			}
 		})
@@ -599,13 +601,13 @@ func TestGetDevice(t *testing.T) {
 	tests := []struct {
 		name        string
 		inventory   []*epb.ChassisInventory
-		lookup      *types.EntityLookup
+		serial      string
 		wantChassis *epb.ChassisInventory
 		wantErr     string
 	}{
 		{
 			name:   "Successfully GetDevice",
-			lookup: &types.EntityLookup{ActiveSerial: "1234", Manufacturer: "cisco"},
+			serial: "1234",
 			inventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "1234",
@@ -620,7 +622,7 @@ func TestGetDevice(t *testing.T) {
 		},
 		{
 			name:   "Unsuccessfully GetDevice",
-			lookup: &types.EntityLookup{ActiveSerial: "1234", Manufacturer: "cisco"},
+			serial: "1234",
 			inventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "5678",
@@ -638,7 +640,7 @@ func TestGetDevice(t *testing.T) {
 				chassisInventory: tt.inventory,
 			}
 
-			got, err := em.GetDevice(tt.lookup)
+			got, err := em.GetDevice(tt.serial)
 
 			if s := errdiff.Check(err, tt.wantErr); s != "" {
 				t.Errorf("Expected error %s, but got error %v", tt.wantErr, err)
@@ -687,7 +689,7 @@ func TestReplaceDevice(t *testing.T) {
 	tests := []struct {
 		inventory     []*epb.ChassisInventory
 		wantInventory []*epb.ChassisInventory
-		lookup        *types.EntityLookup
+		serial        string
 		name          string
 		newChassis    *epb.ChassisInventory
 		wantErr       string
@@ -700,7 +702,7 @@ func TestReplaceDevice(t *testing.T) {
 					Manufacturer: "cisco",
 				},
 			},
-			lookup: &types.EntityLookup{ActiveSerial: "1234", Manufacturer: "cisco"},
+			serial: "1234",
 			newChassis: &epb.ChassisInventory{
 				SerialNumber: "5678",
 				Manufacturer: "cisco",
@@ -719,7 +721,7 @@ func TestReplaceDevice(t *testing.T) {
 				chassisInventory: tt.inventory,
 			}
 
-			err := em.ReplaceDevice(tt.lookup, tt.newChassis)
+			err := em.ReplaceDevice(tt.serial, tt.newChassis)
 			got := em.chassisInventory
 
 			// todo: This test will require error checking after ValidateConfig is implemented.
@@ -737,7 +739,7 @@ func TestDeleteDevice(t *testing.T) {
 	tests := []struct {
 		inventory     []*epb.ChassisInventory
 		wantInventory []*epb.ChassisInventory
-		lookup        *types.EntityLookup
+		serial        string
 		name          string
 	}{
 		{
@@ -748,7 +750,7 @@ func TestDeleteDevice(t *testing.T) {
 					Manufacturer: "cisco",
 				},
 			},
-			lookup:        &types.EntityLookup{ActiveSerial: "1234", Manufacturer: "cisco"},
+			serial:        "1234",
 			wantInventory: []*epb.ChassisInventory{},
 		},
 		{
@@ -759,7 +761,7 @@ func TestDeleteDevice(t *testing.T) {
 					Manufacturer: "cisco",
 				},
 			},
-			lookup: &types.EntityLookup{ActiveSerial: "1234", Manufacturer: "cisco"},
+			serial: "1234",
 			wantInventory: []*epb.ChassisInventory{
 				{
 					SerialNumber: "5678",
@@ -775,7 +777,7 @@ func TestDeleteDevice(t *testing.T) {
 				chassisInventory: tt.inventory,
 			}
 
-			em.DeleteDevice(tt.lookup)
+			em.DeleteDevice(tt.serial)
 
 			if !(cmp.Equal(tt.wantInventory, em.chassisInventory, protocmp.Transform())) {
 				t.Errorf("Result of DeleteDevice does not match expected\nwant:\n\t%s\nactual:\n\t%s", tt.wantInventory, em.chassisInventory)
