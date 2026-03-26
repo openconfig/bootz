@@ -480,6 +480,138 @@ func TestBootstrapStream(t *testing.T) {
 	}
 }
 
+func TestBootstrapStreamV1(t *testing.T) {
+	_, deviceCert := createTestCertificate(t, "test-device", "test-serial-123")
+	idevidCert := base64.StdEncoding.EncodeToString(deviceCert)
+	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
+	idIdevid := &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: idevidCert}}
+	idTPM20EK := &bpb.Identity{Type: &bpb.Identity_Tpm20EkPub{Tpm20EkPub: []byte{}}}
+	em := &mockEntityManager{
+		resolveChassisResp:   &types.Chassis{StreamingSupported: true, ActivePublicKey: ekPub, ActivePublicKeyType: epb.Key_KEY_EK},
+		getBootstrapDataResp: &bpb.BootstrapDataResponse{BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")}},
+	}
+	initialReq := &bpb.BootstrapStreamRequestV1{
+		Type: &bpb.BootstrapStreamRequestV1_BootstrapRequest{
+			BootstrapRequest: &bpb.GetBootstrapDataRequest{
+				ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123"},
+				ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
+			},
+		},
+	}
+	statusReq := &bpb.BootstrapStreamRequestV1{
+		Type: &bpb.BootstrapStreamRequestV1_ReportStatusRequest{
+			ReportStatusRequest: &bpb.ReportStatusRequest{
+				States: []*bpb.ControlCardState{
+					{SerialNumber: "test-serial-123"},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		em        *mockEntityManager
+		tpm       *mockTPM20Utils
+		req       *bpb.BootstrapStreamRequestV1
+		id        *bpb.Identity
+		wantCodes []codes.Code
+	}{
+		{
+			name:      "Missing Identity - Invalid Argument",
+			em:        &mockEntityManager{},
+			req:       initialReq,
+			wantCodes: []codes.Code{codes.InvalidArgument},
+		},
+		{
+			name:      "IDevID Flow Success - Initial Bootstrap Request Only",
+			em:        em,
+			req:       initialReq,
+			id:        idIdevid,
+			wantCodes: []codes.Code{codes.OK},
+		},
+		{
+			name:      "TPM 2.0 EK Flow Success - Initial Bootstrap Request Only",
+			em:        em,
+			tpm:       &mockTPM20Utils{},
+			req:       initialReq,
+			id:        idTPM20EK,
+			wantCodes: []codes.Code{codes.OK},
+		},
+		{
+			name:      "IDevID Flow Success - Initial Status Report Only",
+			em:        em,
+			req:       statusReq,
+			id:        idIdevid,
+			wantCodes: []codes.Code{codes.OK},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			s := New(test.em, test.tpm)
+			srv := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
+			bpb.RegisterBootstrapServer(srv, s)
+			addr := startTestServer(t, srv)
+			conn := createTestClient(t, addr, nil)
+			cli := bpb.NewBootstrapClient(conn)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			stream, err := cli.BootstrapStreamV1(ctx)
+			if err != nil {
+				t.Fatalf("BootstrapStreamV1() failed: %v", err)
+			}
+
+			for step, wantCode := range test.wantCodes {
+				var message *bpb.BootstrapStreamRequestV1
+
+				// TODO: Add testing for further steps once handling code is implemented.
+				switch step {
+				case 0: // Send Challenge Request
+					message = proto.Clone(test.req).(*bpb.BootstrapStreamRequestV1)
+				}
+
+				if test.id != nil {
+					switch reqType := message.Type.(type) {
+					case *bpb.BootstrapStreamRequestV1_BootstrapRequest:
+						reqType.BootstrapRequest.Identity = test.id
+					case *bpb.BootstrapStreamRequestV1_ReportStatusRequest:
+						reqType.ReportStatusRequest.Identity = test.id
+					}
+				}
+				if err := stream.Send(message); err != nil {
+					t.Fatalf("stream.Send(%v) failed: %v", message, err)
+				}
+				resp, err := stream.Recv()
+				stat, ok := status.FromError(err)
+				if !ok {
+					t.Fatalf("failed to extract status code from error: %v", err)
+				}
+
+				if stat.Code() != wantCode {
+					t.Errorf("[Step %v] stream.Recv() got error code %v, want %v:", step, stat.Code(), wantCode)
+				}
+				if err != nil {
+					return
+				}
+
+				// TODO: Add checking for further steps once handling code is implemented.
+				switch step {
+				case 0: // Received Challenge Response
+					if resp.GetChallengeRequest() == nil {
+						t.Errorf("received blank challenge request")
+					}
+				}
+			}
+
+			stream.CloseSend()
+			_, err = stream.Recv()
+			if err != io.EOF {
+				t.Errorf("Expected EOF after final response, got %v", err)
+			}
+		})
+	}
+}
+
 func peerAddressContext(t *testing.T, address string) context.Context {
 	t.Helper()
 	return peer.NewContext(context.Background(), &peer.Peer{

@@ -404,7 +404,6 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 // BootstrapStreamV1 implements the RPC handler for Streaming Bootz v1.0.
 func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server) error {
-	ctx := stream.Context()
 	session := &streamSessionV1{stream: stream, currentState: stateInitial, chassis: &types.Chassis{}}
 
 	for {
@@ -418,6 +417,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			return err
 		}
 
+		var response *bpb.BootstrapStreamResponseV1
 		switch req := in.GetType().(type) {
 		case *bpb.BootstrapStreamRequestV1_BootstrapRequest:
 			log.Infof("=============================================================================")
@@ -426,34 +426,11 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			if session.currentState != stateInitial {
 				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest can only be sent as the first message")
 			}
-			bootstrapRequest := req.BootstrapRequest
-			session.clientNonce = bootstrapRequest.GetNonce()
-			log.Infof("Received initial BootstrapRequest: %+v", bootstrapRequest)
+			log.Infof("Received initial BootstrapRequest: %+v", req.BootstrapRequest)
+			session.clientNonce = req.BootstrapRequest.GetNonce()
 
-			chassis, err := initializeChassis(ctx, bootstrapRequest)
-			if err != nil {
-				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
-			}
-			session.chassis = chassis
-
-			switch idType := chassis.Identity.GetType().(type) {
-			case *bpb.Identity_IdevidCert:
-				log.Infof("Detected TPM 2.0 IDevID flow for device %s", chassis.ActiveSerial)
-				// TODO: logic to send the challenge
-				return status.Errorf(codes.Unimplemented, "TPM 2.0 IDevID flow not fully implemented")
-
-			case *bpb.Identity_Tpm20EkPub, *bpb.Identity_Tpm20PpkPub:
-				log.Infof("Detected TPM 2.0 EK/PPK flow for device %s", chassis.ActiveSerial)
-				// TODO: logic to send the challenge
-				return status.Errorf(codes.Unimplemented, "TPM 2.0 EK/PPK flow not fully implemented")
-
-			case *bpb.Identity_Tpm12EkPub:
-				log.Infof("Detected TPM 1.2 EK flow for device %s", chassis.ActiveSerial)
-				// TODO: logic to send the challenge
-				return status.Errorf(codes.Unimplemented, "TPM 1.2 EK flow not fully implemented")
-
-			default:
-				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
+			if response, err = s.createChallengeRequest(session, req.BootstrapRequest); err != nil {
+				return err
 			}
 
 		case *bpb.BootstrapStreamRequestV1_ChallengeResponse_:
@@ -497,18 +474,102 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			session.status = req.ReportStatusRequest
 
 			if session.currentState == stateInitial {
-				log.Info("Received ReportStatusRequest on a new stream. Starting re-authentication...")
-				// TODO: logic to send challenge again
+				log.Info("This is a new stream. Starting re-authentication...")
+				if response, err = s.createChallengeRequest(session, req.ReportStatusRequest); err != nil {
+					return err
+				}
+				session.currentState = stateReauthChallengeSent
+			} else {
+				// TODO: logic to update status
 				return status.Errorf(codes.Unimplemented, "Not yet implemented")
 			}
 
-			// TODO: logic to update status
-			return status.Errorf(codes.Unimplemented, "Not yet implemented")
-
 		default:
-			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
+			return status.Errorf(codes.InvalidArgument, "unsupported message type: %T", req)
 		}
+
+		if err = stream.Send(response); err != nil {
+			return status.Errorf(codes.Internal, "failed to send BootstrapStreamResponseV1 message: %v", err)
+		}
+		log.Infof("Sent BootstrapStreamResponseV1 message to device %s", session.chassis.ActiveSerial)
 	}
+}
+
+// createChallengeRequest creates a challenge request message for Streaming Bootz v1.0.
+func (s *Service) createChallengeRequest(session *streamSessionV1, message proto.Message) (*bpb.BootstrapStreamResponseV1, error) {
+	var challengeRequest *bpb.BootstrapStreamResponseV1
+	ctx := session.stream.Context()
+	chassis, err := initializeChassis(ctx, message)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to initialize chassis from received message: %v", err)
+	}
+	if err = s.em.ResolveChassis(ctx, chassis); err != nil {
+		return nil, status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
+	}
+	if !chassis.StreamingSupported {
+		return nil, status.Errorf(codes.Unimplemented, "streaming bootstrap is not supported for this device")
+	}
+	log.Infof("Resolved device %s with identity %T to hostname %s", chassis.ActiveSerial, chassis.Identity.GetType(), chassis.Hostname)
+	session.chassis = chassis
+
+	switch idType := chassis.Identity.GetType().(type) {
+	case *bpb.Identity_IdevidCert:
+		// Generate a random server nonce.
+		nonceBytes := make([]byte, 32)
+		if _, err = rand.Read(nonceBytes); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to generate server nonce: %v", err)
+		}
+		session.serverNonce = nonceBytes
+		challengeRequest = &bpb.BootstrapStreamResponseV1{
+			Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_{
+				ChallengeRequest: &bpb.BootstrapStreamResponseV1_ChallengeRequest{
+					Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm20Idevid{
+						Tpm20Idevid: &bpb.BootstrapStreamResponseV1_ChallengeRequest_ChallengeRequestTPM20IDevID{
+							Nonce: nonceBytes,
+						},
+					},
+				},
+			},
+		}
+
+	case *bpb.Identity_Tpm20EkPub, *bpb.Identity_Tpm20PpkPub:
+		// Generate a restricted HMAC key.
+		hmacPub, hmacSensitive, err := s.tpm20.GenerateRestrictedHMACKey()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to generate a restricted HMAC key: %v", err)
+		}
+		// Wrap HMAC key to EK/PPK public key.
+		duplicate, inSymSeed, err := s.tpm20.WrapHMACKeytoRSAPublicKey(chassis.ActivePublicKey, hmacPub, hmacSensitive)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to wrap HMAC key to EK/PPK public key: %v", err)
+		}
+		session.hmacSensitive = hmacSensitive
+		challengeRequest = &bpb.BootstrapStreamResponseV1{
+			Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_{
+				ChallengeRequest: &bpb.BootstrapStreamResponseV1_ChallengeRequest{
+					Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm20Hmac{
+						Tpm20Hmac: &bpb.BootstrapStreamResponseV1_ChallengeRequest_ChallengeRequestTPM20HMAC{
+							HmacEncrypted: &epb.HMACChallenge{
+								HmacPubKey: tpm2.Marshal(tpm2.New2B(*hmacPub)),
+								Duplicate:  tpm2.Marshal(&tpm2.TPM2BPrivate{Buffer: duplicate}),
+								InSymSeed:  tpm2.Marshal(&tpm2.TPM2BEncryptedSecret{Buffer: inSymSeed}),
+							},
+						},
+					},
+				},
+			},
+		}
+
+	case *bpb.Identity_Tpm12EkPub:
+		// TODO: logic to create the challenge
+		return nil, status.Errorf(codes.Unimplemented, "TPM 1.2 EK flow not fully implemented")
+
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "unsupported device identity type: %T", idType)
+	}
+
+	log.Infof("Created challenge request for device %s", chassis.ActiveSerial)
+	return challengeRequest, nil
 }
 
 // sendIdevidChallenge contains the logic for parsing an IDevID cert, and sending a nonce challenge.
