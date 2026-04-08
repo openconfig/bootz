@@ -1,8 +1,6 @@
 module github.com/openconfig/bootz
 
-go 1.24.0
-
-toolchain go1.25.5
+go 1.26.1
 
 require (
 	github.com/coredhcp/coredhcp v0.0.0-20260112190756-6b627b2954a2

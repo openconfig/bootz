@@ -312,7 +312,7 @@ func TestSign(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			err = em.Sign(ctx, test.resp, &test.chassis)
+			sigString, ov, oc, err := em.Sign(ctx, test.resp.GetSerializedBootstrapData(), &test.chassis)
 			if err != nil {
 				if test.wantErr {
 					t.Skip()
@@ -320,7 +320,7 @@ func TestSign(t *testing.T) {
 				t.Errorf("Sign() err = %v, want %v", err, test.wantErr)
 			}
 
-			sig, err := base64.StdEncoding.DecodeString(test.resp.GetResponseSignature())
+			sig, err := base64.StdEncoding.DecodeString(sigString)
 			if err != nil {
 				t.Errorf("unable to base64 decode: %v", err)
 			}
@@ -328,8 +328,8 @@ func TestSign(t *testing.T) {
 			if err != nil {
 				t.Errorf("Verify() err == %v, want %v", err, test.wantErr)
 			}
-			if !bytes.Equal(test.resp.GetOwnershipVoucher(), a.OV[test.chassis.ActiveSerial]) {
-				t.Errorf("Sign() ov = %v, want %v", test.resp.GetOwnershipVoucher(), a.OV[test.chassis.ActiveSerial])
+			if !bytes.Equal(ov, a.OV[test.chassis.ActiveSerial]) {
+				t.Errorf("Sign() ov = %v, want %v", ov, a.OV[test.chassis.ActiveSerial])
 			}
 			if test.wantOC {
 				wantOC, err := ownercertificate.GenerateCMS(a.OwnerCert, a.OwnerCertPrivateKey)
@@ -340,7 +340,7 @@ func TestSign(t *testing.T) {
 				if err != nil {
 					t.Fatalf("unable to parse OC CMS message: %v", err)
 				}
-				gotCert, err := ownercertificate.Verify(test.resp.GetOwnershipCertificate(), nil)
+				gotCert, err := ownercertificate.Verify(oc, nil)
 				if err != nil {
 					t.Fatalf("unable to parse OC CMS message: %v", err)
 				}

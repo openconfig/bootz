@@ -242,40 +242,41 @@ func (m *InMemoryEntityManager) SetStatus(ctx context.Context, req *bpb.ReportSt
 	return nil
 }
 
-// Sign unmarshals the SignedResponse bytes then generates a signature from its Ownership Certificate private key.
-func (m *InMemoryEntityManager) Sign(ctx context.Context, resp *bpb.GetBootstrapDataResponse, chassis *types.Chassis) error {
+// Sign generates a signature over the input data using its Ownership Certificate private key,
+// and returns the based64-encoded signature string, the Ownership Voucher, and the Ownership Certificate.
+func (m *InMemoryEntityManager) Sign(ctx context.Context, data []byte, chassis *types.Chassis) (string, []byte, []byte, error) {
+	if len(data) == 0 {
+		return "", nil, nil, status.Errorf(codes.InvalidArgument, "empty input data to sign")
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// Check if security artifacts are provided for signing.
 	if m.secArtifacts == nil {
-		return status.Errorf(codes.Internal, "security artifact is missing")
-	}
-	if len(resp.GetSerializedBootstrapData()) == 0 {
-		return status.Errorf(codes.InvalidArgument, "empty serialized bootstrap data")
+		return "", nil, nil, status.Errorf(codes.Internal, "security artifact is missing")
 	}
 
-	sig, err := signature.Sign(m.secArtifacts.OwnerCertPrivateKey, m.secArtifacts.OwnerCert.SignatureAlgorithm, resp.GetSerializedBootstrapData())
+	sig, err := signature.Sign(m.secArtifacts.OwnerCertPrivateKey, m.secArtifacts.OwnerCert.SignatureAlgorithm, data)
 	if err != nil {
-		return err
+		return "", nil, nil, err
 	}
-	resp.ResponseSignature = sig
+	log.Infof("Signature generated")
 
-	// Populate the OV
+	// Fetch the OV
 	ov, err := m.fetchOwnershipVoucher(chassis.ActiveSerial)
 	if err != nil {
-		return err
+		return "", nil, nil, err
 	}
-	resp.OwnershipVoucher = ov
-	log.Infof("OV populated")
+	log.Infof("OV fetched")
 
-	// Populate the OC
-	ocCMS, err := ownercertificate.GenerateCMS(m.secArtifacts.OwnerCert, m.secArtifacts.OwnerCertPrivateKey)
+	// Fetch the OC
+	oc, err := ownercertificate.GenerateCMS(m.secArtifacts.OwnerCert, m.secArtifacts.OwnerCertPrivateKey)
 	if err != nil {
-		return err
+		return "", nil, nil, err
 	}
-	resp.OwnershipCertificate = ocCMS
-	log.Infof("OC populated")
-	return nil
+	log.Infof("OC fetched")
+
+	return sig, ov, oc, nil
 }
 
 // ValidateIDevID verifies the authenticity and authorization of a device by validating its IDevID certificate.

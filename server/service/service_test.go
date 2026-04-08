@@ -14,8 +14,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto"
+	"crypto/ecdh"
+	"crypto/hpke"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -46,6 +49,14 @@ import (
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
 
+var (
+	testOV            = []byte("test-ov")
+	testOC            = []byte("test-oc")
+	testSig           = "test-signature"
+	testNonce         = "test-client-nonce"
+	testBootstrapData = &bpb.BootstrapDataResponse{BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")}}
+)
+
 // Mock EntityManager for testing purposes.
 type mockEntityManager struct {
 	resolveChassisResp   *types.Chassis
@@ -71,8 +82,8 @@ func (m *mockEntityManager) GetBootstrapData(context.Context, *types.Chassis, st
 func (m *mockEntityManager) SetStatus(context.Context, *bpb.ReportStatusRequest) error {
 	return m.setStatusErr
 }
-func (m *mockEntityManager) Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis) error {
-	return m.signErr
+func (m *mockEntityManager) Sign(context.Context, []byte, *types.Chassis) (string, []byte, []byte, error) {
+	return testSig, testOV, testOC, m.signErr
 }
 func (m *mockEntityManager) ValidateIDevID(context.Context, *x509.Certificate, []byte, *types.Chassis) error {
 	return m.signErr
@@ -171,10 +182,8 @@ func TestBootstrapStream(t *testing.T) {
 	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
 	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
 	em := &mockEntityManager{
-		resolveChassisResp: &types.Chassis{StreamingSupported: true, ActivePublicKey: ekPub, ActivePublicKeyType: epb.Key_KEY_EK},
-		getBootstrapDataResp: &bpb.BootstrapDataResponse{
-			BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
-		},
+		resolveChassisResp:   &types.Chassis{StreamingSupported: true, ActivePublicKey: ekPub, ActivePublicKeyType: epb.Key_KEY_EK},
+		getBootstrapDataResp: testBootstrapData,
 	}
 	initialReq := &bpb.BootstrapStreamRequest{
 		Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
@@ -247,11 +256,9 @@ func TestBootstrapStream(t *testing.T) {
 		{
 			name: "IDevID Flow with Failing Status Report",
 			em: &mockEntityManager{
-				resolveChassisResp: &types.Chassis{StreamingSupported: true},
-				getBootstrapDataResp: &bpb.BootstrapDataResponse{
-					BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")},
-				},
-				setStatusErr: status.Errorf(codes.Internal, "db error"),
+				resolveChassisResp:   &types.Chassis{StreamingSupported: true},
+				getBootstrapDataResp: testBootstrapData,
+				setStatusErr:         status.Errorf(codes.Internal, "db error"),
 			},
 			req:          initialReq,
 			id:           idIdevid,
@@ -481,20 +488,33 @@ func TestBootstrapStream(t *testing.T) {
 }
 
 func TestBootstrapStreamV1(t *testing.T) {
-	_, deviceCert := createTestCertificate(t, "test-device", "test-serial-123")
+	deviceKey, deviceCert := createTestCertificate(t, "test-device", "test-serial-123")
 	idevidCert := base64.StdEncoding.EncodeToString(deviceCert)
 	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
 	idIdevid := &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: idevidCert}}
 	idTPM20EK := &bpb.Identity{Type: &bpb.Identity_Tpm20EkPub{Tpm20EkPub: []byte{}}}
+	hpkeKey, err := hpke.DHKEM(ecdh.X25519()).GenerateKey()
+	if err != nil {
+		t.Fatalf("Failed to generate HPKE key: %v", err)
+	}
+	transportKey := &bpb.TransportKey{
+		CipherSuite: bpb.HPKECipherSuite_HPKE_CIPHER_SUITE_X25519_HKDF_SHA256_HKDF_SHA256_AES_256_GCM,
+		PublicKey:   hpkeKey.PublicKey().Bytes(),
+	}
+	bootstrapData := &bpb.BootstrapDataSigned{
+		Responses: []*bpb.BootstrapDataResponse{testBootstrapData},
+		Nonce:     testNonce,
+	}
 	em := &mockEntityManager{
 		resolveChassisResp:   &types.Chassis{StreamingSupported: true, ActivePublicKey: ekPub, ActivePublicKeyType: epb.Key_KEY_EK},
-		getBootstrapDataResp: &bpb.BootstrapDataResponse{BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")}},
+		getBootstrapDataResp: testBootstrapData,
 	}
 	initialReq := &bpb.BootstrapStreamRequestV1{
 		Type: &bpb.BootstrapStreamRequestV1_BootstrapRequest{
 			BootstrapRequest: &bpb.GetBootstrapDataRequest{
 				ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123"},
 				ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
+				Nonce:             testNonce,
 			},
 		},
 	}
@@ -523,11 +543,11 @@ func TestBootstrapStreamV1(t *testing.T) {
 			wantCodes: []codes.Code{codes.InvalidArgument},
 		},
 		{
-			name:      "IDevID Flow Success - Initial Bootstrap Request Only",
+			name:      "IDevID Flow Success - Full Process",
 			em:        em,
 			req:       initialReq,
 			id:        idIdevid,
-			wantCodes: []codes.Code{codes.OK},
+			wantCodes: []codes.Code{codes.OK, codes.OK},
 		},
 		{
 			name:      "TPM 2.0 EK Flow Success - Initial Bootstrap Request Only",
@@ -538,7 +558,7 @@ func TestBootstrapStreamV1(t *testing.T) {
 			wantCodes: []codes.Code{codes.OK},
 		},
 		{
-			name:      "IDevID Flow Success - Initial Status Report Only",
+			name:      "IDevID Flow Success - Status Report in New Stream",
 			em:        em,
 			req:       statusReq,
 			id:        idIdevid,
@@ -561,27 +581,58 @@ func TestBootstrapStreamV1(t *testing.T) {
 				t.Fatalf("BootstrapStreamV1() failed: %v", err)
 			}
 
+			var request *bpb.BootstrapStreamRequestV1
+			var response *bpb.BootstrapStreamResponseV1
 			for step, wantCode := range test.wantCodes {
-				var message *bpb.BootstrapStreamRequestV1
-
 				// TODO: Add testing for further steps once handling code is implemented.
 				switch step {
-				case 0: // Send Challenge Request
-					message = proto.Clone(test.req).(*bpb.BootstrapStreamRequestV1)
+				case 0: // Send Bootstrap Request.
+					request = proto.Clone(test.req).(*bpb.BootstrapStreamRequestV1)
+				case 1: // Send Challenge Response.
+					switch reqType := response.GetChallengeRequest().Type.(type) {
+					case *bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm20Idevid:
+						msg := proto.Clone(transportKey).(*bpb.TransportKey)
+						msg.Nonce = reqType.Tpm20Idevid.GetNonce()
+						serializedMsg, err := proto.Marshal(msg)
+						if err != nil {
+							t.Fatalf("Failed to serialize transport key message: %v", err)
+						}
+						hasher := sha256.New()
+						hasher.Write(serializedMsg)
+						hash := hasher.Sum(nil)
+						sig, err := rsa.SignPKCS1v15(rand.Reader, deviceKey, crypto.SHA256, hash)
+						if err != nil {
+							t.Fatalf("Failed to sign transport key: %v", err)
+						}
+						request = &bpb.BootstrapStreamRequestV1{
+							Type: &bpb.BootstrapStreamRequestV1_ChallengeResponse_{
+								ChallengeResponse: &bpb.BootstrapStreamRequestV1_ChallengeResponse{
+									Type: &bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm20Idevid{
+										Tpm20Idevid: &bpb.BootstrapStreamRequestV1_ChallengeResponse_ChallengeResponseTPM20IDevID{
+											SerializedTransportKey: serializedMsg,
+											Signature:              sig,
+										},
+									},
+								},
+							},
+						}
+					case *bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm20Hmac:
+					case *bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm12Ek:
+					}
 				}
 
 				if test.id != nil {
-					switch reqType := message.Type.(type) {
+					switch reqType := request.Type.(type) {
 					case *bpb.BootstrapStreamRequestV1_BootstrapRequest:
 						reqType.BootstrapRequest.Identity = test.id
 					case *bpb.BootstrapStreamRequestV1_ReportStatusRequest:
 						reqType.ReportStatusRequest.Identity = test.id
 					}
 				}
-				if err := stream.Send(message); err != nil {
-					t.Fatalf("stream.Send(%v) failed: %v", message, err)
+				if err := stream.Send(request); err != nil {
+					t.Fatalf("stream.Send(%v) failed: %v", request, err)
 				}
-				resp, err := stream.Recv()
+				response, err = stream.Recv()
 				stat, ok := status.FromError(err)
 				if !ok {
 					t.Fatalf("failed to extract status code from error: %v", err)
@@ -596,9 +647,47 @@ func TestBootstrapStreamV1(t *testing.T) {
 
 				// TODO: Add checking for further steps once handling code is implemented.
 				switch step {
-				case 0: // Received Challenge Response
-					if resp.GetChallengeRequest() == nil {
-						t.Errorf("received blank challenge request")
+				case 0: // Received Challenge Request.
+					if response.GetChallengeRequest() == nil {
+						t.Errorf("received nil challenge request")
+					}
+				case 1: // Received Bootstrap Response or Report Status Response.
+					switch resType := response.GetType().(type) {
+					case *bpb.BootstrapStreamResponseV1_BootstrapResponse:
+						if response.GetBootstrapResponse() == nil {
+							t.Errorf("received nil bootstrap data")
+						}
+						if ov := response.GetBootstrapResponse().GetOwnershipVoucher(); !bytes.Equal(ov, testOV) {
+							t.Errorf("unexpected ownership voucher: got %v, want %v", ov, testOV)
+						}
+						if oc := response.GetBootstrapResponse().GetOwnershipCertificate(); !bytes.Equal(oc, testOC) {
+							t.Errorf("unexpected ownership certificate: got %v, want %v", oc, testOC)
+						}
+						if sig := response.GetBootstrapResponse().GetResponseSignature(); sig != testSig {
+							t.Errorf("unexpected response signature: got %v, want %v", sig, testSig)
+						}
+						recipient, err := hpke.NewRecipient(response.GetBootstrapResponse().GetEncapsulatedKey(), hpkeKey, hpke.HKDFSHA256(), hpke.AES256GCM(), nil)
+						if err != nil {
+							t.Fatalf("Failed to create HPKE recipient: %v", err)
+						}
+						plainText, err := recipient.Open(nil, response.GetBootstrapResponse().GetEncryptedSerializedBootstrapData())
+						if err != nil {
+							t.Fatalf("Failed to decrypt bootstrap data: %v", err)
+						}
+						gotBootstrapDataSigned := &bpb.BootstrapDataSigned{}
+						err = proto.Unmarshal(plainText, gotBootstrapDataSigned)
+						if err != nil {
+							t.Fatalf("Failed to unmarshal decrypted bootstrap data: %v", err)
+						}
+						if diff := cmp.Diff(gotBootstrapDataSigned, bootstrapData, protocmp.Transform()); diff != "" {
+							t.Errorf("unexpected BootstrapDataSigned, diff = %v", diff)
+						}
+					case *bpb.BootstrapStreamResponseV1_ReportStatusResponse:
+						if response.GetReportStatusResponse() == nil {
+							t.Errorf("received nil report status response")
+						}
+					default:
+						t.Errorf("received unexpected response type %T", resType)
 					}
 				}
 			}

@@ -28,7 +28,9 @@ jobs:
       contents: read
     strategy:
       matrix:
-        go: ["1.24", "1.x"]
+        go: ["1.26.1"]
+    env:
+      GOTOOLCHAIN: "go${{ matrix.go }}"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
@@ -50,7 +52,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
         with:
-          go-version: "1.x"
+          go-version: "1.26.1"
       - name: Run Coverage
         run: go test -v -coverprofile=profile.cov ./...
       - name: Send coverage
@@ -70,7 +72,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
         with:
-          go-version: "1.x"
+          go-version: "1.26.1"
         id: go
       - name: Install required static analysis tools
         run: |
