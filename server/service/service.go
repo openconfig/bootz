@@ -23,6 +23,7 @@ import (
 	"crypto/hpke"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -45,11 +46,13 @@ import (
 )
 
 const (
+	// Initial state indicating a new stream.
 	stateInitial = iota
-	// Challenge states
+	// Challenge state.
 	stateChallengeSent
+	// Reauth state.
 	stateReauthChallengeSent
-	// Common state
+	// Attested state.
 	stateAttested
 )
 
@@ -494,8 +497,46 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				if session.hmacSensitive == nil {
 					return status.Errorf(codes.InvalidArgument, "received unexpected TPM20HMAC challenge response")
 				}
-				// TODO: logic to verify the challenge response
-				return status.Errorf(codes.Unimplemented, "Not yet implemented")
+				// Verify HMAC challenge response.
+				hmac := challengeResponse.GetTpm20Hmac().GetHmac()
+				tpm2BAttest, err := tpm2.Unmarshal[tpm2.TPM2BAttest](hmac.GetIakCertifyInfo())
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to unmarshal IAK Certify Info into TPM2B_ATTEST: %v", err)
+				}
+				iakCertifyInfo, err := tpm2BAttest.Contents()
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to get IAK Certify Info contents: %v", err)
+				}
+				if err = s.tpm20.VerifyHMAC(tpm2.Marshal(iakCertifyInfo), hmac.GetIakCertifyInfoSignature(), session.hmacSensitive); err != nil {
+					log.Errorf("Tpm20Hmac challenge HMAC verification failed for device %s, error: %v", session.chassis.ActiveSerial, err)
+					return status.Errorf(codes.InvalidArgument, "Tpm20Hmac challenge HMAC verification failed: %v", err)
+				}
+				// Verify IAK public key attributes.
+				iakPubKey, err := s.tpm20.VerifyIAKAttributes(hmac.GetIakPub())
+				if err != nil {
+					log.Errorf("Tpm20Hmac challenge public key verification failed for device %s, error: %v", session.chassis.ActiveSerial, err)
+					return status.Errorf(codes.InvalidArgument, "Tpm20Hmac challenge public key verification failed: %v", err)
+				}
+				// Verify IAK certify info.
+				if err = s.tpm20.VerifyCertifyInfo(iakCertifyInfo, iakPubKey); err != nil {
+					log.Errorf("Tpm20Hmac challenge certify info verification failed for device %s, error: %v", session.chassis.ActiveSerial, err)
+					return status.Errorf(codes.InvalidArgument, "Tpm20Hmac challenge certify info verification failed: %v", err)
+				}
+				// Verify extra data in IAK certify info, which must contain the SHA256 hash over the serialized transport key.
+				ha, err := tpm2.Unmarshal[tpm2.TPMTHA](iakCertifyInfo.ExtraData.Buffer)
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to unmarshal extra data into TPMT_HA: %v", err)
+				}
+				if ha.HashAlg != tpm2.TPMAlgSHA256 {
+					return status.Errorf(codes.InvalidArgument, "unexpected hash algorithm in extra data: %v", ha.HashAlg)
+				}
+				serializedTransportKey = challengeResponse.GetTpm20Hmac().GetSerializedTransportKey()
+				digest := sha256.Sum256(serializedTransportKey)
+				if !bytes.Equal(ha.Digest, digest[:]) {
+					log.Errorf("Tpm20Hmac challenge certify info extra data verification failed: wrong SHA256 digest for device %s, expected: %x, received: %x", session.chassis.ActiveSerial, digest, ha.Digest)
+					return status.Errorf(codes.InvalidArgument, "Tpm20Hmac challenge certify info extra data verification failed: wrong SHA256 digest")
+				}
+				log.Infof("Tpm20Hmac challenge verification succeeded for device %s", session.chassis.ActiveSerial)
 
 			case *bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm12Ek:
 				// TODO: logic to verify the challenge response
@@ -516,9 +557,10 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			}
 			// Check whether this is re-authentication for status report.
 			if session.currentState == stateReauthChallengeSent {
-				log.Infof("Created status report acknowledgement after re-authentication for device %s", session.chassis.ActiveSerial)
-				// TODO: logic to update status
-				return status.Errorf(codes.Unimplemented, "Acknowledgement for status report is not yet implemented")
+				log.Infof("This is re-authentication. Acknowledging status report...")
+				if response, err = s.createReportStatusResponse(session); err != nil {
+					return err
+				}
 			} else {
 				// Otherwise fetch the bootstrap data.
 				var bootstrapData []*bpb.BootstrapDataResponse
@@ -582,18 +624,21 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			log.Infof("=============================================================================")
 			log.Infof("===================== StreamV1 status report received =======================")
 			log.Infof("=============================================================================")
+			if session.currentState != stateInitial && session.currentState != stateAttested {
+				return status.Errorf(codes.InvalidArgument, "unexpected report status request")
+			}
 			log.Infof("Received ReportStatusRequest from %s: %+v", session.chassis.ActiveSerial, req.ReportStatusRequest)
 			session.status = req.ReportStatusRequest
 
+			// Check whether this is a new stream.
 			if session.currentState == stateInitial {
 				log.Info("This is a new stream. Starting re-authentication...")
 				if response, err = s.createChallengeRequest(session, req.ReportStatusRequest); err != nil {
 					return err
 				}
 				session.currentState = stateReauthChallengeSent
-			} else {
-				// TODO: logic to update status
-				return status.Errorf(codes.Unimplemented, "Not yet implemented")
+			} else if response, err = s.createReportStatusResponse(session); err != nil {
+				return err
 			}
 
 		default:
@@ -682,6 +727,23 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 
 	log.Infof("Created challenge request for device %s", chassis.ActiveSerial)
 	return challengeRequest, nil
+}
+
+// createReportStatusResponse creates a report status response message for Streaming Bootz v1.0.
+func (s *Service) createReportStatusResponse(session *streamSessionV1) (*bpb.BootstrapStreamResponseV1, error) {
+	if err := s.em.SetStatus(session.stream.Context(), session.status); err != nil {
+		log.Errorf("Failed to set status for device %s: %v", session.chassis.ActiveSerial, err)
+		return nil, status.Errorf(codes.Internal, "failed to set status: %v", err)
+	}
+	log.Infof("Successfully set status for device %s", session.chassis.ActiveSerial)
+
+	reportStatusResponse := &bpb.BootstrapStreamResponseV1{
+		Type: &bpb.BootstrapStreamResponseV1_ReportStatusResponse{
+			ReportStatusResponse: &bpb.EmptyResponse{},
+		},
+	}
+	log.Infof("Created report status response for device %s", session.chassis.ActiveSerial)
+	return reportStatusResponse, nil
 }
 
 // sendIdevidChallenge contains the logic for parsing an IDevID cert, and sending a nonce challenge.
