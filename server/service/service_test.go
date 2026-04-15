@@ -547,22 +547,22 @@ func TestBootstrapStreamV1(t *testing.T) {
 			em:        em,
 			req:       initialReq,
 			id:        idIdevid,
-			wantCodes: []codes.Code{codes.OK, codes.OK},
+			wantCodes: []codes.Code{codes.OK, codes.OK, codes.OK},
 		},
 		{
-			name:      "TPM 2.0 EK Flow Success - Initial Bootstrap Request Only",
+			name:      "TPM 2.0 EK Flow Success - Full Process",
 			em:        em,
 			tpm:       &mockTPM20Utils{},
 			req:       initialReq,
 			id:        idTPM20EK,
-			wantCodes: []codes.Code{codes.OK},
+			wantCodes: []codes.Code{codes.OK, codes.OK, codes.OK},
 		},
 		{
-			name:      "IDevID Flow Success - Status Report in New Stream",
+			name:      "Status Report in New Stream Success - Full Process",
 			em:        em,
 			req:       statusReq,
 			id:        idIdevid,
-			wantCodes: []codes.Code{codes.OK},
+			wantCodes: []codes.Code{codes.OK, codes.OK},
 		},
 	}
 
@@ -586,7 +586,7 @@ func TestBootstrapStreamV1(t *testing.T) {
 			for step, wantCode := range test.wantCodes {
 				// TODO: Add testing for further steps once handling code is implemented.
 				switch step {
-				case 0: // Send Bootstrap Request.
+				case 0: // Send Bootstrap Request or Report Status Request.
 					request = proto.Clone(test.req).(*bpb.BootstrapStreamRequestV1)
 				case 1: // Send Challenge Response.
 					switch reqType := response.GetChallengeRequest().Type.(type) {
@@ -597,10 +597,8 @@ func TestBootstrapStreamV1(t *testing.T) {
 						if err != nil {
 							t.Fatalf("Failed to serialize transport key message: %v", err)
 						}
-						hasher := sha256.New()
-						hasher.Write(serializedMsg)
-						hash := hasher.Sum(nil)
-						sig, err := rsa.SignPKCS1v15(rand.Reader, deviceKey, crypto.SHA256, hash)
+						digest := sha256.Sum256(serializedMsg)
+						sig, err := rsa.SignPKCS1v15(rand.Reader, deviceKey, crypto.SHA256, digest[:])
 						if err != nil {
 							t.Fatalf("Failed to sign transport key: %v", err)
 						}
@@ -617,8 +615,39 @@ func TestBootstrapStreamV1(t *testing.T) {
 							},
 						}
 					case *bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm20Hmac:
+						serializedKey, err := proto.Marshal(transportKey)
+						if err != nil {
+							t.Fatalf("Failed to serialize transport key message: %v", err)
+						}
+						digest := sha256.Sum256(serializedKey)
+						attest := tpm2.TPMSAttest{
+							Magic: tpm2.TPMGeneratedValue,
+							Type:  tpm2.TPMSTAttestCertify,
+							ExtraData: tpm2.TPM2BData{Buffer: tpm2.Marshal(tpm2.TPMTHA{
+								HashAlg: tpm2.TPMAlgSHA256,
+								Digest:  digest[:],
+							})},
+						}
+						request = &bpb.BootstrapStreamRequestV1{
+							Type: &bpb.BootstrapStreamRequestV1_ChallengeResponse_{
+								ChallengeResponse: &bpb.BootstrapStreamRequestV1_ChallengeResponse{
+									Type: &bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm20Hmac{
+										Tpm20Hmac: &bpb.BootstrapStreamRequestV1_ChallengeResponse_ChallengeResponseTPM20HMAC{
+											SerializedTransportKey: serializedKey,
+											Hmac: &epb.HMACChallengeResponse{
+												IakPub:                  []byte("IAKPub"),
+												IakCertifyInfo:          tpm2.Marshal(tpm2.New2B(attest)),
+												IakCertifyInfoSignature: []byte("IAKCertifySignature"),
+											},
+										},
+									},
+								},
+							},
+						}
 					case *bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm12Ek:
 					}
+				case 2: // Send Report Status Request.
+					request = proto.Clone(statusReq).(*bpb.BootstrapStreamRequestV1)
 				}
 
 				if test.id != nil {
@@ -639,7 +668,7 @@ func TestBootstrapStreamV1(t *testing.T) {
 				}
 
 				if stat.Code() != wantCode {
-					t.Errorf("[Step %v] stream.Recv() got error code %v, want %v:", step, stat.Code(), wantCode)
+					t.Errorf("[Step %v] stream.Recv() got error code %v, want %v", step, stat.Code(), wantCode)
 				}
 				if err != nil {
 					return
@@ -688,6 +717,10 @@ func TestBootstrapStreamV1(t *testing.T) {
 						}
 					default:
 						t.Errorf("received unexpected response type %T", resType)
+					}
+				case 2: // Received Report Status Response.
+					if response.GetReportStatusResponse() == nil {
+						t.Errorf("received nil report status response")
 					}
 				}
 			}
