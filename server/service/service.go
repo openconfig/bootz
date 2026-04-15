@@ -383,6 +383,9 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			log.Infof("=============================================================================")
 			log.Infof("====================== Stream status report received ========================")
 			log.Infof("=============================================================================")
+			if session.currentState != stateInitial && session.currentState != stateAttested {
+				return status.Errorf(codes.FailedPrecondition, "unexpected report status request")
+			}
 			log.Infof("Received ReportStatusRequest from %s: %+v", session.chassis.ActiveSerial, req.ReportStatusRequest)
 			session.status = req.ReportStatusRequest
 
