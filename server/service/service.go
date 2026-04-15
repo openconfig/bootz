@@ -16,8 +16,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto"
+	"crypto/ecdh"
+	"crypto/hpke"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -85,7 +88,7 @@ type EntityManager interface {
 	ResolveChassis(context.Context, *types.Chassis) error
 	GetBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error)
 	SetStatus(context.Context, *bpb.ReportStatusRequest) error
-	Sign(context.Context, *bpb.GetBootstrapDataResponse, *types.Chassis) error
+	Sign(context.Context, []byte, *types.Chassis) (string, []byte, []byte, error)
 	ValidateIDevID(context.Context, *x509.Certificate, []byte, *types.Chassis) error
 }
 
@@ -113,7 +116,6 @@ type streamSessionV1 struct {
 	chassis       *types.Chassis           // Store chassis info for later stages
 	status        *bpb.ReportStatusRequest // Store status for later stages
 	clientNonce   string                   // client nonce from bootstrap request
-	idevidCert    *x509.Certificate        // For IDevID flow
 	serverNonce   []byte                   // For TPM 2.0 with IDevID nonce challenge
 	hmacSensitive *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
 }
@@ -201,9 +203,13 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		log.Infof("=============================================================================")
 		log.Infof("====================== Signing the response with nonce ======================")
 		log.Infof("=============================================================================")
-		if err := s.em.Sign(ctx, resp, chassis); err != nil {
+		sig, ov, oc, err := s.em.Sign(ctx, signedResponseBytes, chassis)
+		if err != nil {
 			return nil, err
 		}
+		resp.ResponseSignature = sig
+		resp.OwnershipVoucher = ov
+		resp.OwnershipCertificate = oc
 		log.Infof("Signed with nonce")
 	}
 	log.Infof("Returning response")
@@ -350,11 +356,15 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			if err != nil {
 				return status.Errorf(codes.Internal, "failed to serialize bootstrap data: %v", err)
 			}
+			sig, ov, oc, err := s.em.Sign(ctx, serializedSignedData, session.chassis)
+			if err != nil {
+				return status.Errorf(codes.Internal, "failed to sign bootstrap data: %v", err)
+			}
 			bootstrapRespForSigning := &bpb.GetBootstrapDataResponse{
 				SerializedBootstrapData: serializedSignedData,
-			}
-			if err := s.em.Sign(ctx, bootstrapRespForSigning, session.chassis); err != nil {
-				return status.Errorf(codes.Internal, "failed to sign bootstrap data: %v", err)
+				ResponseSignature:       sig,
+				OwnershipVoucher:        ov,
+				OwnershipCertificate:    oc,
 			}
 
 			// Send the bootstrap data to the device.
@@ -404,7 +414,6 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 // BootstrapStreamV1 implements the RPC handler for Streaming Bootz v1.0.
 func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server) error {
-	ctx := stream.Context()
 	session := &streamSessionV1{stream: stream, currentState: stateInitial, chassis: &types.Chassis{}}
 
 	for {
@@ -418,6 +427,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			return err
 		}
 
+		var response *bpb.BootstrapStreamResponseV1
 		switch req := in.GetType().(type) {
 		case *bpb.BootstrapStreamRequestV1_BootstrapRequest:
 			log.Infof("=============================================================================")
@@ -426,35 +436,13 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			if session.currentState != stateInitial {
 				return status.Errorf(codes.FailedPrecondition, "BootstrapRequest can only be sent as the first message")
 			}
-			bootstrapRequest := req.BootstrapRequest
-			session.clientNonce = bootstrapRequest.GetNonce()
-			log.Infof("Received initial BootstrapRequest: %+v", bootstrapRequest)
+			log.Infof("Received initial BootstrapRequest: %+v", req.BootstrapRequest)
+			session.clientNonce = req.BootstrapRequest.GetNonce()
 
-			chassis, err := initializeChassis(ctx, bootstrapRequest)
-			if err != nil {
-				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
+			if response, err = s.createChallengeRequest(session, req.BootstrapRequest); err != nil {
+				return err
 			}
-			session.chassis = chassis
-
-			switch idType := chassis.Identity.GetType().(type) {
-			case *bpb.Identity_IdevidCert:
-				log.Infof("Detected TPM 2.0 IDevID flow for device %s", chassis.ActiveSerial)
-				// TODO: logic to send the challenge
-				return status.Errorf(codes.Unimplemented, "TPM 2.0 IDevID flow not fully implemented")
-
-			case *bpb.Identity_Tpm20EkPub, *bpb.Identity_Tpm20PpkPub:
-				log.Infof("Detected TPM 2.0 EK/PPK flow for device %s", chassis.ActiveSerial)
-				// TODO: logic to send the challenge
-				return status.Errorf(codes.Unimplemented, "TPM 2.0 EK/PPK flow not fully implemented")
-
-			case *bpb.Identity_Tpm12EkPub:
-				log.Infof("Detected TPM 1.2 EK flow for device %s", chassis.ActiveSerial)
-				// TODO: logic to send the challenge
-				return status.Errorf(codes.Unimplemented, "TPM 1.2 EK flow not fully implemented")
-
-			default:
-				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
-			}
+			session.currentState = stateChallengeSent
 
 		case *bpb.BootstrapStreamRequestV1_ChallengeResponse_:
 			log.Infof("=============================================================================")
@@ -466,13 +454,41 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			log.Infof("Received ChallengeResponse from device %s", session.chassis.ActiveSerial)
 			challengeResponse := req.ChallengeResponse
 
+			var serializedTransportKey []byte
 			switch challengeType := challengeResponse.GetType().(type) {
 			case *bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm20Idevid:
 				if len(session.serverNonce) == 0 {
 					return status.Errorf(codes.InvalidArgument, "received unexpected TPM20IDevID challenge response")
 				}
-				// TODO: logic to verify the challenge response
-				return status.Errorf(codes.Unimplemented, "Not yet implemented")
+				// Verify IDevID certificate.
+				var certDER, intermediates []byte
+				var pemBlock *pem.Block
+				idevid := session.chassis.Identity.GetIdevidCert()
+				if certDER, err = base64.StdEncoding.DecodeString(idevid); err != nil {
+					// If we can't base64 decode the cert, it might be a PEM-encoded cert chain.
+					// Find the first (leaf) cert in the PEM block, then decode it to a DER string.
+					if pemBlock, intermediates = pem.Decode([]byte(idevid)); pemBlock == nil {
+						return status.Errorf(codes.InvalidArgument, "idevid_cert is not a valid PEM block or base64 encoded DER cert")
+					}
+					certDER = pemBlock.Bytes
+				}
+				cert, err := x509.ParseCertificate(certDER)
+				if err != nil {
+					return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
+				}
+				if err = s.em.ValidateIDevID(stream.Context(), cert, intermediates, session.chassis); err != nil {
+					log.Errorf("Tpm20Idevid challenge certificate verification failed for device %s, error: %v", session.chassis.ActiveSerial, err)
+					return status.Errorf(codes.InvalidArgument, "failed to validate idevid_cert: %v", err)
+				}
+				log.Infof("Successfully validated IDevID cert for %s", cert.Subject.CommonName)
+				// Verify IDevID signature.
+				serializedTransportKey = challengeResponse.GetTpm20Idevid().GetSerializedTransportKey()
+				sig := challengeResponse.GetTpm20Idevid().GetSignature()
+				if err = signature.Verify(cert, serializedTransportKey, sig); err != nil {
+					log.Errorf("Tpm20Idevid challenge signature verification failed for device %s. signature: %v, error: %v", session.chassis.ActiveSerial, sig, err)
+					return status.Errorf(codes.InvalidArgument, "Tpm20Idevid challenge signature verification failed: %v", err)
+				}
+				log.Infof("Tpm20Idevid challenge verification succeeded for device %s", session.chassis.ActiveSerial)
 
 			case *bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm20Hmac:
 				if session.hmacSensitive == nil {
@@ -489,6 +505,79 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				return status.Errorf(codes.InvalidArgument, "unsupported challenge response type: %T", challengeType)
 			}
 
+			var transportKey bpb.TransportKey
+			if err = proto.Unmarshal(serializedTransportKey, &transportKey); err != nil {
+				return status.Errorf(codes.InvalidArgument, "failed to deserialize TransportKey message: %v", err)
+			}
+			// Verify server nonce if applicable.
+			if len(session.serverNonce) != 0 && !bytes.Equal(session.serverNonce, transportKey.GetNonce()) {
+				log.Errorf("Tpm20Idevid challenge nonce does not match, expected %x, received: %x", session.serverNonce, transportKey.GetNonce())
+				return status.Errorf(codes.InvalidArgument, "Tpm20Idevid challenge nonce does not match")
+			}
+			// Check whether this is re-authentication for status report.
+			if session.currentState == stateReauthChallengeSent {
+				log.Infof("Created status report acknowledgement after re-authentication for device %s", session.chassis.ActiveSerial)
+				// TODO: logic to update status
+				return status.Errorf(codes.Unimplemented, "Acknowledgement for status report is not yet implemented")
+			} else {
+				// Otherwise fetch the bootstrap data.
+				var bootstrapData []*bpb.BootstrapDataResponse
+				for _, v := range session.chassis.Serials {
+					log.Infof("Fetching bootstrap data for serial number: %s", v)
+					data, err := s.em.GetBootstrapData(stream.Context(), session.chassis, v)
+					if err != nil {
+						return status.Errorf(codes.Internal, "failed to get bootstrap data for serial number %s: %v", v, err)
+					}
+					bootstrapData = append(bootstrapData, data)
+				}
+				serializedBootstrapData, err := proto.Marshal(&bpb.BootstrapDataSigned{
+					Responses: bootstrapData,
+					Nonce:     session.clientNonce,
+				})
+				if err != nil {
+					return status.Errorf(codes.Internal, "failed to serialize BootstrapDataSigned message: %v", err)
+				}
+				// Encrypt the bootstrap data.
+				switch transportKey.GetCipherSuite() {
+				case bpb.HPKECipherSuite_HPKE_CIPHER_SUITE_X25519_HKDF_SHA256_HKDF_SHA256_AES_256_GCM:
+					kem, kdf, aead := hpke.DHKEM(ecdh.X25519()), hpke.HKDFSHA256(), hpke.AES256GCM()
+					publicKey, err := kem.NewPublicKey(transportKey.GetPublicKey())
+					if err != nil {
+						return status.Errorf(codes.InvalidArgument, "failed to deserialize HPKE public key: %v", err)
+					}
+					encapsulatedKey, sender, err := hpke.NewSender(publicKey, kdf, aead, nil)
+					if err != nil {
+						return status.Errorf(codes.Internal, "failed to create HPKE sender: %v", err)
+					}
+					cipherText, err := sender.Seal(nil, serializedBootstrapData)
+					if err != nil {
+						return status.Errorf(codes.Internal, "failed to encrypt bootstrap data: %v", err)
+					}
+					response = &bpb.BootstrapStreamResponseV1{
+						Type: &bpb.BootstrapStreamResponseV1_BootstrapResponse{
+							BootstrapResponse: &bpb.StreamBootstrapDataResponse{
+								EncryptedSerializedBootstrapData: cipherText,
+								EncapsulatedKey:                  encapsulatedKey,
+							},
+						},
+					}
+				case bpb.HPKECipherSuite_HPKE_CIPHER_SUITE_NONE:
+					return status.Errorf(codes.InvalidArgument, "HPKE cipher suite can not be none")
+				default:
+					return status.Errorf(codes.InvalidArgument, "unsupported HPKE cipher suite enum: %v", transportKey.GetCipherSuite())
+				}
+				// Sign the bootstrap data.
+				sig, ov, oc, err := s.em.Sign(stream.Context(), response.GetBootstrapResponse().GetEncryptedSerializedBootstrapData(), session.chassis)
+				if err != nil {
+					return status.Errorf(codes.Internal, "failed to sign bootstrap data: %v", err)
+				}
+				response.GetBootstrapResponse().ResponseSignature = sig
+				response.GetBootstrapResponse().OwnershipVoucher = ov
+				response.GetBootstrapResponse().OwnershipCertificate = oc
+				log.Infof("Created bootstrap data for device %s", session.chassis.ActiveSerial)
+			}
+			session.currentState = stateAttested
+
 		case *bpb.BootstrapStreamRequestV1_ReportStatusRequest:
 			log.Infof("=============================================================================")
 			log.Infof("===================== StreamV1 status report received =======================")
@@ -497,18 +586,102 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			session.status = req.ReportStatusRequest
 
 			if session.currentState == stateInitial {
-				log.Info("Received ReportStatusRequest on a new stream. Starting re-authentication...")
-				// TODO: logic to send challenge again
+				log.Info("This is a new stream. Starting re-authentication...")
+				if response, err = s.createChallengeRequest(session, req.ReportStatusRequest); err != nil {
+					return err
+				}
+				session.currentState = stateReauthChallengeSent
+			} else {
+				// TODO: logic to update status
 				return status.Errorf(codes.Unimplemented, "Not yet implemented")
 			}
 
-			// TODO: logic to update status
-			return status.Errorf(codes.Unimplemented, "Not yet implemented")
-
 		default:
-			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
+			return status.Errorf(codes.InvalidArgument, "unsupported message type: %T", req)
 		}
+
+		if err = stream.Send(response); err != nil {
+			return status.Errorf(codes.Internal, "failed to send BootstrapStreamResponseV1 message: %v", err)
+		}
+		log.Infof("Sent BootstrapStreamResponseV1 message to device %s", session.chassis.ActiveSerial)
 	}
+}
+
+// createChallengeRequest creates a challenge request message for Streaming Bootz v1.0.
+func (s *Service) createChallengeRequest(session *streamSessionV1, message proto.Message) (*bpb.BootstrapStreamResponseV1, error) {
+	var challengeRequest *bpb.BootstrapStreamResponseV1
+	ctx := session.stream.Context()
+	chassis, err := initializeChassis(ctx, message)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to initialize chassis from received message: %v", err)
+	}
+	if err = s.em.ResolveChassis(ctx, chassis); err != nil {
+		return nil, status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
+	}
+	if !chassis.StreamingSupported {
+		return nil, status.Errorf(codes.Unimplemented, "streaming bootstrap is not supported for this device")
+	}
+	log.Infof("Resolved device %s with identity %T to hostname %s", chassis.ActiveSerial, chassis.Identity.GetType(), chassis.Hostname)
+	session.chassis = chassis
+
+	switch idType := chassis.Identity.GetType().(type) {
+	case *bpb.Identity_IdevidCert:
+		// Generate a random server nonce.
+		nonceBytes := make([]byte, 32)
+		if _, err = rand.Read(nonceBytes); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to generate server nonce: %v", err)
+		}
+		session.serverNonce = nonceBytes
+		challengeRequest = &bpb.BootstrapStreamResponseV1{
+			Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_{
+				ChallengeRequest: &bpb.BootstrapStreamResponseV1_ChallengeRequest{
+					Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm20Idevid{
+						Tpm20Idevid: &bpb.BootstrapStreamResponseV1_ChallengeRequest_ChallengeRequestTPM20IDevID{
+							Nonce: nonceBytes,
+						},
+					},
+				},
+			},
+		}
+
+	case *bpb.Identity_Tpm20EkPub, *bpb.Identity_Tpm20PpkPub:
+		// Generate a restricted HMAC key.
+		hmacPub, hmacSensitive, err := s.tpm20.GenerateRestrictedHMACKey()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to generate a restricted HMAC key: %v", err)
+		}
+		// Wrap HMAC key to EK/PPK public key.
+		duplicate, inSymSeed, err := s.tpm20.WrapHMACKeytoRSAPublicKey(chassis.ActivePublicKey, hmacPub, hmacSensitive)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to wrap HMAC key to EK/PPK public key: %v", err)
+		}
+		session.hmacSensitive = hmacSensitive
+		challengeRequest = &bpb.BootstrapStreamResponseV1{
+			Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_{
+				ChallengeRequest: &bpb.BootstrapStreamResponseV1_ChallengeRequest{
+					Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm20Hmac{
+						Tpm20Hmac: &bpb.BootstrapStreamResponseV1_ChallengeRequest_ChallengeRequestTPM20HMAC{
+							HmacEncrypted: &epb.HMACChallenge{
+								HmacPubKey: tpm2.Marshal(tpm2.New2B(*hmacPub)),
+								Duplicate:  tpm2.Marshal(&tpm2.TPM2BPrivate{Buffer: duplicate}),
+								InSymSeed:  tpm2.Marshal(&tpm2.TPM2BEncryptedSecret{Buffer: inSymSeed}),
+							},
+						},
+					},
+				},
+			},
+		}
+
+	case *bpb.Identity_Tpm12EkPub:
+		// TODO: logic to create the challenge
+		return nil, status.Errorf(codes.Unimplemented, "TPM 1.2 EK flow not fully implemented")
+
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "unsupported device identity type: %T", idType)
+	}
+
+	log.Infof("Created challenge request for device %s", chassis.ActiveSerial)
+	return challengeRequest, nil
 }
 
 // sendIdevidChallenge contains the logic for parsing an IDevID cert, and sending a nonce challenge.
