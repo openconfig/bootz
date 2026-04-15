@@ -480,6 +480,11 @@ while TPM 1.2 systems are not supported.
       - A reboot may be performed, if required.
 7. BootstrapStreamRequest.report_status_request
    1. The device sends a `ReportStatusRequest` message to the bootz-server.
+      NOTE: If this `ReportStatusRequest` message is sent in a new stream
+      (i.e., there was a reboot breaking the previous stream), then the
+      device must use the `server_trust_cert` received earlier from the
+      `BootstrapDataResponse` to verify the identity of the Bootz server
+      during the gRPC handshake of this new stream.
       - If bootstrapping is successful, the device should report all control
         cards as `CONTROL_CARD_STATUS_INITIALIZED` and
         `BOOTSTRAP_STATUS_SUCCESS`.
@@ -629,6 +634,11 @@ while TPM 1.2 systems are not supported.
       - A reboot may be performed, if required.
 7. BootstrapStreamRequestV1.report_status_request
    1. The device sends a `ReportStatusRequest` message to Bootz server.
+      NOTE: If this `ReportStatusRequest` message is sent in a new stream
+      (i.e., there was a reboot breaking the previous stream), then the
+      device must use the `server_trust_cert` received earlier from the
+      `BootstrapDataResponse` to verify the identity of the Bootz server
+      during the gRPC handshake of this new stream.
       - If bootstrapping is successful, the device should report all control
         cards as `CONTROL_CARD_STATUS_INITIALIZED` and
         `BOOTSTRAP_STATUS_SUCCESS`.
