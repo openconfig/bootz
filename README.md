@@ -582,8 +582,9 @@ while TPM 1.2 systems are not supported.
         `TPM2_Import` command to import the received HMAC-SHA256 key into TPM,
         finally invoke `TPM2_Certify` command to certify any TPM residing key
         using the imported HMAC-SHA256 key. When invoking `TPM2_Certify`
-        command, the `qualifyingData` argument must be set to the SHA256 hash
-        over the `serialized_transport_key` field.
+        command, the `qualifyingData` argument must hold a TPMT_HA structure,
+        with TPMT_HA.hashAlg field set to TPM_ALG_SHA256 and TPMT_HA.digest
+        field set to the SHA256 hash over the `serialized_transport_key`.
       - For TPM 1.2, populate the `tpm12_ek` field of this message. First
         create a `TransportKey` message by generating an ephemeral HPKE key
         according to the chosen cipher suite, and serialize the `TransportKey`
