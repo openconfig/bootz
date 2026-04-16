@@ -8,7 +8,7 @@ on:
   schedule:
     - cron: "0 0 * * *"
 
-permissions: { }
+permissions: {}
 
 jobs:
   build:
@@ -22,7 +22,7 @@ jobs:
           submodules: recursive
           persist-credentials: false
       - name: Mount bazel cache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: "~/.cache/bazel"
           key: bazel-${{ runner.os }}-build-${{ hashFiles('**/*.bzl', '**/*.bazel') }}
