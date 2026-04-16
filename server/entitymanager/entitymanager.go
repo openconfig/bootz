@@ -256,25 +256,25 @@ func (m *InMemoryEntityManager) Sign(ctx context.Context, data []byte, chassis *
 		return "", nil, nil, status.Errorf(codes.Internal, "security artifact is missing")
 	}
 
-	sig, err := signature.Sign(m.secArtifacts.OwnerCertPrivateKey, m.secArtifacts.OwnerCert.SignatureAlgorithm, data)
-	if err != nil {
-		return "", nil, nil, err
-	}
-	log.Infof("Signature generated")
-
 	// Fetch the OV
 	ov, err := m.fetchOwnershipVoucher(chassis.ActiveSerial)
 	if err != nil {
-		return "", nil, nil, err
+		return "", nil, nil, status.Errorf(codes.NotFound, "failed to fetch ownership voucher: %v", err)
 	}
 	log.Infof("OV fetched")
 
 	// Fetch the OC
 	oc, err := ownercertificate.GenerateCMS(m.secArtifacts.OwnerCert, m.secArtifacts.OwnerCertPrivateKey)
 	if err != nil {
-		return "", nil, nil, err
+		return "", nil, nil, status.Errorf(codes.Internal, "failed to generate ownership certificate: %v", err)
 	}
 	log.Infof("OC fetched")
+
+	sig, err := signature.Sign(m.secArtifacts.OwnerCertPrivateKey, m.secArtifacts.OwnerCert.SignatureAlgorithm, data)
+	if err != nil {
+		return "", nil, nil, status.Errorf(codes.Internal, "failed to generate signature: %v", err)
+	}
+	log.Infof("Signature generated")
 
 	return sig, ov, oc, nil
 }
@@ -324,7 +324,7 @@ func getCertSerialNumber(serial string) string {
 func (m *InMemoryEntityManager) fetchOwnershipVoucher(ccSerial string) ([]byte, error) {
 	ov, ok := m.secArtifacts.OV[ccSerial]
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "OV not found for serial %v", ccSerial)
+		return nil, fmt.Errorf("OV not found for serial %v", ccSerial)
 	}
 	return ov, nil
 }
