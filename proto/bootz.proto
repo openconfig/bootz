@@ -524,6 +524,10 @@ message BootstrapStreamRequestV1 {
       // imported HMAC key.
       // IMPORTANT: When invoking TPM2_Certify command, the qualifyingData
       // argument must be set to the SHA256 hash over serialized_transport_key.
+      // More specifically, the qualifyingData is a TPM2B_DATA structure. The
+      // TPM2B_DATA.buffer field holds a TPMT_HA structure. The TPMT_HA.hashAlg
+      // field must be set to TPM_ALG_SHA256, and the TPMT_HA.digest field must
+      // be set to the SHA256 hash in raw bytes over serialized_transport_key.
       openconfig.attestz.HMACChallengeResponse hmac = 2;
     }
     message ChallengeResponseTPM12EK {
