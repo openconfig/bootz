@@ -20,7 +20,7 @@ on:
     branches: [main]
   schedule:
     - cron: "0 0 * * *"
-permissions: {}
+permissions: { }
 jobs:
   build:
     runs-on: ubuntu-latest
