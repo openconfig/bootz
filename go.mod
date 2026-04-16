@@ -9,7 +9,7 @@ require (
 	github.com/google/go-tpm v0.9.8
 	github.com/h-fam/errdiff v1.0.2
 	github.com/insomniacslk/dhcp v0.0.0-20260220084031-5adc3eb26f91
-	github.com/openconfig/attestz v0.6.11
+	github.com/openconfig/attestz v0.6.10
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnsi v1.9.1
 	go.mozilla.org/pkcs7 v0.9.0
