@@ -16,16 +16,19 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"crypto"
 	"crypto/ecdh"
+	"crypto/hmac"
 	"crypto/hpke"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/pem"
 	"io"
 	"net"
@@ -121,6 +124,17 @@ type streamSessionV1 struct {
 	clientNonce   string                   // client nonce from bootstrap request
 	serverNonce   []byte                   // For TPM 2.0 with IDevID nonce challenge
 	hmacSensitive *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
+	hmacKey       []byte                   // For TPM 1.2 EK challenge
+}
+
+// TPM_ASYM_CA_CONTENTS structure for TPM 1.2 EK challenge.
+// We have to define this structure as a fixed size struct for easy serialization using binary.Encode().
+type TPMAsymCAContents struct {
+	AlgID     uint32
+	EncScheme uint16
+	KeySize   uint16
+	Key       [32]byte
+	IDDigest  [20]byte
 }
 
 // GetBootstrapData implements the GetBootstrapData RPC handler for Unary Bootz.
@@ -283,7 +297,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			log.Infof("====================== Stream challenge response received ===================")
 			log.Infof("=============================================================================")
 			if session.currentState != stateChallengeSent && session.currentState != stateReauthChallengeSent {
-				return status.Errorf(codes.InvalidArgument, "unexpected challenge response")
+				return status.Errorf(codes.FailedPrecondition, "unexpected challenge response")
 			}
 			log.Infof("Received Response from device %s", session.chassis.ActiveSerial)
 			challengeResponse := req.Response
@@ -291,7 +305,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			switch challengeType := challengeResponse.GetType().(type) {
 			case *bpb.BootstrapStreamRequest_Response_NonceSigned:
 				if len(session.serverNonce) == 0 {
-					return status.Errorf(codes.InvalidArgument, "received unexpected nonce challenge response")
+					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM 2.0 nonce challenge response")
 				}
 				if err := signature.Verify(session.idevidCert, []byte(session.serverNonce), challengeResponse.GetNonceSigned()); err != nil {
 					log.Errorf("Nonce signature verification failed for device %s. Signature: %v, Error: %v", session.chassis.ActiveSerial, challengeResponse.GetNonceSigned(), err)
@@ -301,7 +315,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 			case *bpb.BootstrapStreamRequest_Response_HmacChallengeResponse:
 				if session.hmacSensitive == nil {
-					return status.Errorf(codes.InvalidArgument, "received unexpected HMAC challenge response")
+					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM 2.0 HMAC challenge response")
 				}
 				hmacResponse := challengeResponse.GetHmacChallengeResponse()
 
@@ -361,7 +375,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 			sig, ov, oc, err := s.em.Sign(ctx, serializedSignedData, session.chassis)
 			if err != nil {
-				return status.Errorf(codes.Internal, "failed to sign bootstrap data: %v", err)
+				return err
 			}
 			bootstrapRespForSigning := &bpb.GetBootstrapDataResponse{
 				SerializedBootstrapData: serializedSignedData,
@@ -455,7 +469,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			log.Infof("===================== StreamV1 challenge response received ==================")
 			log.Infof("=============================================================================")
 			if session.currentState != stateChallengeSent && session.currentState != stateReauthChallengeSent {
-				return status.Errorf(codes.InvalidArgument, "unexpected challenge response")
+				return status.Errorf(codes.FailedPrecondition, "unexpected challenge response")
 			}
 			log.Infof("Received ChallengeResponse from device %s", session.chassis.ActiveSerial)
 			challengeResponse := req.ChallengeResponse
@@ -464,7 +478,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			switch challengeType := challengeResponse.GetType().(type) {
 			case *bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm20Idevid:
 				if len(session.serverNonce) == 0 {
-					return status.Errorf(codes.InvalidArgument, "received unexpected TPM20IDevID challenge response")
+					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM20IDevID challenge response")
 				}
 				// Verify IDevID certificate.
 				var certDER, intermediates []byte
@@ -498,7 +512,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 
 			case *bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm20Hmac:
 				if session.hmacSensitive == nil {
-					return status.Errorf(codes.InvalidArgument, "received unexpected TPM20HMAC challenge response")
+					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM20HMAC challenge response")
 				}
 				// Verify HMAC challenge response.
 				hmac := challengeResponse.GetTpm20Hmac().GetHmac()
@@ -535,15 +549,26 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				}
 				serializedTransportKey = challengeResponse.GetTpm20Hmac().GetSerializedTransportKey()
 				digest := sha256.Sum256(serializedTransportKey)
-				if !bytes.Equal(ha.Digest, digest[:]) {
+				if subtle.ConstantTimeCompare(ha.Digest, digest[:]) != 1 {
 					log.Errorf("Tpm20Hmac challenge certify info extra data verification failed: wrong SHA256 digest for device %s, expected: %x, received: %x", session.chassis.ActiveSerial, digest, ha.Digest)
 					return status.Errorf(codes.InvalidArgument, "Tpm20Hmac challenge certify info extra data verification failed: wrong SHA256 digest")
 				}
 				log.Infof("Tpm20Hmac challenge verification succeeded for device %s", session.chassis.ActiveSerial)
 
 			case *bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm12Ek:
-				// TODO: logic to verify the challenge response
-				return status.Errorf(codes.Unimplemented, "Not yet implemented")
+				if len(session.hmacKey) == 0 {
+					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM12EK challenge response")
+				}
+				// Verify HMAC-SHA256 hash.
+				serializedTransportKey = challengeResponse.GetTpm12Ek().GetSerializedTransportKey()
+				mac := hmac.New(sha256.New, session.hmacKey)
+				mac.Write(serializedTransportKey)
+				hash := mac.Sum(nil)
+				if subtle.ConstantTimeCompare(challengeResponse.GetTpm12Ek().GetHash(), hash) != 1 {
+					log.Errorf("Tpm12Ek challenge verification failed: wrong HMAC hash for device %s, expected: %x, received: %x", session.chassis.ActiveSerial, hash, challengeResponse.GetTpm12Ek().GetHash())
+					return status.Errorf(codes.InvalidArgument, "Tpm12Ek challenge response HMAC hash verification failed")
+				}
+				log.Infof("Tpm12Ek challenge verification succeeded for device %s", session.chassis.ActiveSerial)
 
 			default:
 				return status.Errorf(codes.InvalidArgument, "unsupported challenge response type: %T", challengeType)
@@ -554,7 +579,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				return status.Errorf(codes.InvalidArgument, "failed to deserialize TransportKey message: %v", err)
 			}
 			// Verify server nonce if applicable.
-			if len(session.serverNonce) != 0 && !bytes.Equal(session.serverNonce, transportKey.GetNonce()) {
+			if len(session.serverNonce) != 0 && subtle.ConstantTimeCompare(session.serverNonce, transportKey.GetNonce()) != 1 {
 				log.Errorf("Tpm20Idevid challenge nonce does not match, expected %x, received: %x", session.serverNonce, transportKey.GetNonce())
 				return status.Errorf(codes.InvalidArgument, "Tpm20Idevid challenge nonce does not match")
 			}
@@ -614,7 +639,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				// Sign the bootstrap data.
 				sig, ov, oc, err := s.em.Sign(stream.Context(), response.GetBootstrapResponse().GetEncryptedSerializedBootstrapData(), session.chassis)
 				if err != nil {
-					return status.Errorf(codes.Internal, "failed to sign bootstrap data: %v", err)
+					return err
 				}
 				response.GetBootstrapResponse().ResponseSignature = sig
 				response.GetBootstrapResponse().OwnershipVoucher = ov
@@ -628,7 +653,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			log.Infof("===================== StreamV1 status report received =======================")
 			log.Infof("=============================================================================")
 			if session.currentState != stateInitial && session.currentState != stateAttested {
-				return status.Errorf(codes.InvalidArgument, "unexpected report status request")
+				return status.Errorf(codes.FailedPrecondition, "unexpected report status request")
 			}
 			log.Infof("Received ReportStatusRequest from %s: %+v", session.chassis.ActiveSerial, req.ReportStatusRequest)
 			session.status = req.ReportStatusRequest
@@ -721,8 +746,52 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 		}
 
 	case *bpb.Identity_Tpm12EkPub:
-		// TODO: logic to create the challenge
-		return nil, status.Errorf(codes.Unimplemented, "TPM 1.2 EK flow not fully implemented")
+		// Check that aik_pub_digest is valid in the request.
+		var aikPubDigest []byte
+		switch msg := message.(type) {
+		case *bpb.GetBootstrapDataRequest:
+			aikPubDigest = msg.GetAikPubDigest()
+		case *bpb.ReportStatusRequest:
+			aikPubDigest = msg.GetAikPubDigest()
+		}
+		if len(aikPubDigest) != 20 {
+			log.Errorf("aik_pub_digest is invalid from request for TPM 1.2 EK flow, got: %x", aikPubDigest)
+			return nil, status.Errorf(codes.InvalidArgument, "aik_pub_digest is required and must be 20 bytes for TPM 1.2 EK flow")
+		}
+		// Generate a random HMAC key.
+		hmacKey := make([]byte, 32)
+		if _, err = rand.Read(hmacKey); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to generate HMAC key: %v", err)
+		}
+		// Serialize the TPM_ASYM_CA_CONTENTS structure to big endian.
+		asym := TPMAsymCAContents{
+			AlgID:     0x00000005, // TPM_ALG_HMAC
+			EncScheme: 0x0001,     // TPM_SS_NONE
+			KeySize:   32,         // len(hmacKey)
+			Key:       [32]byte(hmacKey),
+			IDDigest:  [20]byte(aikPubDigest),
+		}
+		blob := make([]byte, 4+2+2+32+20) // size of TPM_ASYM_CA_CONTENTS
+		if _, err = binary.Encode(blob, binary.BigEndian, asym); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to serialize TPM_ASYM_CA_CONTENTS to the blob: %v", err)
+		}
+		// Wrap the serialized TPM_ASYM_CA_CONTENTS blob to EK public key.
+		blobEncrypted, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, chassis.ActivePublicKey, blob, []byte("TCPA"))
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to encrypt the TPM_ASYM_CA_CONTENTS blob to EK: %v", err)
+		}
+		session.hmacKey = hmacKey
+		challengeRequest = &bpb.BootstrapStreamResponseV1{
+			Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_{
+				ChallengeRequest: &bpb.BootstrapStreamResponseV1_ChallengeRequest{
+					Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm12Ek{
+						Tpm12Ek: &bpb.BootstrapStreamResponseV1_ChallengeRequest_ChallengeRequestTPM12EK{
+							BlobEncrypted: blobEncrypted,
+						},
+					},
+				},
+			},
+		}
 
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unsupported device identity type: %T", idType)
@@ -837,7 +906,7 @@ func (s *Service) sendHMACChallenge(session *streamSession) error {
 	return nil
 }
 
-// establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM2.0 with or without IDevID.
+// establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM 2.0 with or without IDevID.
 func (s *Service) establishSessionAndSendChallenge(session *streamSession) error {
 	err := s.em.ResolveChassis(session.stream.Context(), session.chassis)
 	if err != nil {
