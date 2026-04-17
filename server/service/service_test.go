@@ -604,7 +604,6 @@ func TestBootstrapStreamV1(t *testing.T) {
 			var request *bpb.BootstrapStreamRequestV1
 			var response *bpb.BootstrapStreamResponseV1
 			for step, wantCode := range test.wantCodes {
-				// TODO: Add testing for further steps once handling code is implemented.
 				switch step {
 				case 0: // Send Bootstrap Request or Report Status Request.
 					request = proto.Clone(test.req).(*bpb.BootstrapStreamRequestV1)
@@ -724,7 +723,6 @@ func TestBootstrapStreamV1(t *testing.T) {
 					return
 				}
 
-				// TODO: Add checking for further steps once handling code is implemented.
 				switch step {
 				case 0: // Received Challenge Request.
 					if response.GetChallengeRequest() == nil {

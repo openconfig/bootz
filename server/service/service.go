@@ -955,12 +955,6 @@ func (s *Service) updateStatusAndSendAcknowledgement(session *streamSession) err
 	return nil
 }
 
-// SetDeviceConfiguration is a public API for allowing the device configuration to be set for each device the
-// will be responsible for configuring.  This will be only available for testing.
-func (s *Service) SetDeviceConfiguration(ctx context.Context) error {
-	return status.Errorf(codes.Unimplemented, "Unimplemented")
-}
-
 func peerAddressFromContext(ctx context.Context) (string, error) {
 	p, ok := peer.FromContext(ctx)
 	if !ok {
