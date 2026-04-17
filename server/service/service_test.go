@@ -18,13 +18,16 @@ import (
 	"context"
 	"crypto"
 	"crypto/ecdh"
+	"crypto/hmac"
 	"crypto/hpke"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/binary"
 	"io"
 	"math/big"
 	"net"
@@ -54,6 +57,9 @@ var (
 	testOC            = []byte("test-oc")
 	testSig           = "test-signature"
 	testNonce         = "test-client-nonce"
+	testSerial        = "test-serial-123"
+	testIPAddress     = "1.2.3.4"
+	testAIKPubDigest  = []byte("test-aik-pub-digest0") // Must be 20 bytes.
 	testBootstrapData = &bpb.BootstrapDataResponse{BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")}}
 )
 
@@ -178,7 +184,7 @@ func createTestClient(t *testing.T, addr string, tlsClientCreds credentials.Tran
 }
 
 func TestBootstrapStream(t *testing.T) {
-	devicePrivKey, goodCertDER := createTestCertificate(t, "test-device", "test-serial-123")
+	devicePrivKey, goodCertDER := createTestCertificate(t, "test-device", testSerial)
 	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
 	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
 	em := &mockEntityManager{
@@ -188,8 +194,8 @@ func TestBootstrapStream(t *testing.T) {
 	initialReq := &bpb.BootstrapStreamRequest{
 		Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
 			BootstrapRequest: &bpb.GetBootstrapDataRequest{
-				ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123"},
-				ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
+				ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: testSerial},
+				ControlCardState:  &bpb.ControlCardState{SerialNumber: testSerial},
 			},
 		},
 	}
@@ -197,7 +203,7 @@ func TestBootstrapStream(t *testing.T) {
 		Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{
 			ReportStatusRequest: &bpb.ReportStatusRequest{
 				States: []*bpb.ControlCardState{
-					{SerialNumber: "test-serial-123"},
+					{SerialNumber: testSerial},
 				},
 			},
 		},
@@ -488,11 +494,15 @@ func TestBootstrapStream(t *testing.T) {
 }
 
 func TestBootstrapStreamV1(t *testing.T) {
-	deviceKey, deviceCert := createTestCertificate(t, "test-device", "test-serial-123")
+	deviceKey, deviceCert := createTestCertificate(t, "test-device", testSerial)
 	idevidCert := base64.StdEncoding.EncodeToString(deviceCert)
-	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
+	ek, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Failed to generate RSA key: %v", err)
+	}
 	idIdevid := &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: idevidCert}}
 	idTPM20EK := &bpb.Identity{Type: &bpb.Identity_Tpm20EkPub{Tpm20EkPub: []byte{}}}
+	idTPM12EK := &bpb.Identity{Type: &bpb.Identity_Tpm12EkPub{Tpm12EkPub: []byte{}}}
 	hpkeKey, err := hpke.DHKEM(ecdh.X25519()).GenerateKey()
 	if err != nil {
 		t.Fatalf("Failed to generate HPKE key: %v", err)
@@ -506,15 +516,16 @@ func TestBootstrapStreamV1(t *testing.T) {
 		Nonce:     testNonce,
 	}
 	em := &mockEntityManager{
-		resolveChassisResp:   &types.Chassis{StreamingSupported: true, ActivePublicKey: ekPub, ActivePublicKeyType: epb.Key_KEY_EK},
+		resolveChassisResp:   &types.Chassis{StreamingSupported: true, ActivePublicKey: &ek.PublicKey, ActivePublicKeyType: epb.Key_KEY_EK},
 		getBootstrapDataResp: testBootstrapData,
 	}
 	initialReq := &bpb.BootstrapStreamRequestV1{
 		Type: &bpb.BootstrapStreamRequestV1_BootstrapRequest{
 			BootstrapRequest: &bpb.GetBootstrapDataRequest{
-				ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: "test-serial-123"},
-				ControlCardState:  &bpb.ControlCardState{SerialNumber: "test-serial-123"},
+				ChassisDescriptor: &bpb.ChassisDescriptor{SerialNumber: testSerial},
+				ControlCardState:  &bpb.ControlCardState{SerialNumber: testSerial},
 				Nonce:             testNonce,
+				AikPubDigest:      testAIKPubDigest,
 			},
 		},
 	}
@@ -522,8 +533,9 @@ func TestBootstrapStreamV1(t *testing.T) {
 		Type: &bpb.BootstrapStreamRequestV1_ReportStatusRequest{
 			ReportStatusRequest: &bpb.ReportStatusRequest{
 				States: []*bpb.ControlCardState{
-					{SerialNumber: "test-serial-123"},
+					{SerialNumber: testSerial},
 				},
+				AikPubDigest: testAIKPubDigest,
 			},
 		},
 	}
@@ -555,6 +567,14 @@ func TestBootstrapStreamV1(t *testing.T) {
 			tpm:       &mockTPM20Utils{},
 			req:       initialReq,
 			id:        idTPM20EK,
+			wantCodes: []codes.Code{codes.OK, codes.OK, codes.OK},
+		},
+		{
+			name:      "TPM 1.2 EK Flow Success - Full Process",
+			em:        em,
+			tpm:       &mockTPM20Utils{},
+			req:       initialReq,
+			id:        idTPM12EK,
 			wantCodes: []codes.Code{codes.OK, codes.OK, codes.OK},
 		},
 		{
@@ -645,6 +665,36 @@ func TestBootstrapStreamV1(t *testing.T) {
 							},
 						}
 					case *bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm12Ek:
+						blob, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, ek, reqType.Tpm12Ek.GetBlobEncrypted(), []byte("TCPA"))
+						if err != nil {
+							t.Fatalf("Failed to decrypt TPM 1.2 EK challenge blob: %v", err)
+						}
+						var asym TPMAsymCAContents
+						_, err = binary.Decode(blob, binary.BigEndian, &asym)
+						if err != nil {
+							t.Fatalf("Failed to decode TPM 1.2 EK challenge blob: %v", err)
+						}
+						if !bytes.Equal(asym.IDDigest[:], testAIKPubDigest) {
+							t.Errorf("unexpected AIK public digest: got %v, want %v", asym.IDDigest, testAIKPubDigest)
+						}
+						serializedKey, err := proto.Marshal(transportKey)
+						if err != nil {
+							t.Fatalf("Failed to serialize transport key message: %v", err)
+						}
+						mac := hmac.New(sha256.New, asym.Key[:])
+						mac.Write(serializedKey)
+						request = &bpb.BootstrapStreamRequestV1{
+							Type: &bpb.BootstrapStreamRequestV1_ChallengeResponse_{
+								ChallengeResponse: &bpb.BootstrapStreamRequestV1_ChallengeResponse{
+									Type: &bpb.BootstrapStreamRequestV1_ChallengeResponse_Tpm12Ek{
+										Tpm12Ek: &bpb.BootstrapStreamRequestV1_ChallengeResponse_ChallengeResponseTPM12EK{
+											SerializedTransportKey: serializedKey,
+											Hash:                   mac.Sum(nil),
+										},
+									},
+								},
+							},
+						}
 					}
 				case 2: // Send Report Status Request.
 					request = proto.Clone(statusReq).(*bpb.BootstrapStreamRequestV1)
@@ -744,7 +794,7 @@ func peerAddressContext(t *testing.T, address string) context.Context {
 }
 
 func TestInitializeChassis(t *testing.T) {
-	ctx := peerAddressContext(t, "1.1.1.1")
+	ctx := peerAddressContext(t, testIPAddress)
 	tests := []struct {
 		name    string
 		ctx     context.Context
@@ -757,19 +807,19 @@ func TestInitializeChassis(t *testing.T) {
 			ctx:  ctx,
 			msg: &bpb.GetBootstrapDataRequest{
 				ChassisDescriptor: &bpb.ChassisDescriptor{
-					SerialNumber: "1234",
+					SerialNumber: testSerial,
 				},
 				ControlCardState: &bpb.ControlCardState{
-					SerialNumber: "1234",
+					SerialNumber: testSerial,
 				},
 				Identity: &bpb.Identity{
 					Type: &bpb.Identity_IdevidCert{},
 				},
 			},
 			want: &types.Chassis{
-				Serials:      []string{"1234"},
-				ActiveSerial: "1234",
-				IPAddress:    "1.1.1.1",
+				Serials:      []string{testSerial},
+				ActiveSerial: testSerial,
+				IPAddress:    testIPAddress,
 				Identity:     &bpb.Identity{Type: &bpb.Identity_IdevidCert{}},
 			},
 		},
@@ -778,16 +828,16 @@ func TestInitializeChassis(t *testing.T) {
 			ctx:  ctx,
 			msg: &bpb.ReportStatusRequest{
 				States: []*bpb.ControlCardState{
-					{SerialNumber: "1234"},
+					{SerialNumber: testSerial},
 				},
 				Identity: &bpb.Identity{
 					Type: &bpb.Identity_EkPpkPub{},
 				},
 			},
 			want: &types.Chassis{
-				Serials:      []string{"1234"},
-				ActiveSerial: "1234",
-				IPAddress:    "1.1.1.1",
+				Serials:      []string{testSerial},
+				ActiveSerial: testSerial,
+				IPAddress:    testIPAddress,
 				Identity:     &bpb.Identity{Type: &bpb.Identity_EkPpkPub{}},
 			},
 		},
@@ -807,7 +857,7 @@ func TestInitializeChassis(t *testing.T) {
 			ctx:  ctx,
 			msg: &bpb.GetBootstrapDataRequest{
 				ControlCardState: &bpb.ControlCardState{
-					SerialNumber: "1234",
+					SerialNumber: testSerial,
 				},
 			},
 			wantErr: true,
