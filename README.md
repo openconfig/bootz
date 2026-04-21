@@ -278,9 +278,9 @@ can install production configuration and certificates into the device.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.GetBootstrapData` to
       the bootz-server whose address was obtained from the DHCP server.
-   2. In the TLS handshake, the server will send a CertificateRequest message
-      with the ServerHello. The device **MUST** present the IDevID cert of
-      the active control card in this handshake.
+   2. In the TLS handshake, the server will send a CertificateRequest message.
+      The device **MUST** present the IDevID cert of the active control card
+      in this TLS handshake.
    3. The responses from the bootz-server are signed by ownership-certificate.
       The device validates the ownership-voucher, which authenticates the
       ownership-certificate. The device verifies the signature of the message
