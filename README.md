@@ -6,7 +6,7 @@ Define a structured data format for exchanging as much data with the network
 device as possible, to take the device from a factory state to a fully
 production supportable state.
 
-Additionally, define both a dial-out and dial-in RPC service which can perform 
+Additionally, define both a dial-out and dial-in RPC service which can perform
 the boot workflow.
 
 The overall design of bootz is meant to allow operators of equipment to provide
