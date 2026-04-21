@@ -522,9 +522,10 @@ while TPM 1.2 systems are not supported.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.BootstrapStreamV1` to
       the bootz-server whose address was obtained from the DHCP server.
-   2. In the TLS handshake, the server will send a CertificateRequest message
-      with the ServerHello. The device **MUST NOT** present a client
-      certificate in this TLS handshake.
+   2. In the TLS handshake, the server will send a CertificateRequest message.
+      The device **MUST NOT** present a client certificate in this TLS
+      handshake. The server MUST be configured to allow the handshake to
+      proceed without a client certificate.
 3. BootstrapStreamRequestV1.bootstrap_request
    1. The BootstrapStreamV1 RPC is initiated by the device sending a
       `GetBootstrapDataRequest` message to the bootz-server in the first
