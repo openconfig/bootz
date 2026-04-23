@@ -127,7 +127,7 @@ type streamSessionV1 struct {
 	hmacKey       []byte                   // For TPM 1.2 EK challenge
 }
 
-// TPM_ASYM_CA_CONTENTS structure for TPM 1.2 EK challenge.
+// TPMAsymCAContents is the TPM_ASYM_CA_CONTENTS structure defined in the TPM 1.2 specification.
 // We have to define this structure as a fixed size struct for easy serialization using binary.Encode().
 type TPMAsymCAContents struct {
 	AlgID     uint32
@@ -515,8 +515,8 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM20HMAC challenge response")
 				}
 				// Verify HMAC challenge response.
-				hmac := challengeResponse.GetTpm20Hmac().GetHmac()
-				tpm2BAttest, err := tpm2.Unmarshal[tpm2.TPM2BAttest](hmac.GetIakCertifyInfo())
+				mac := challengeResponse.GetTpm20Hmac().GetHmac()
+				tpm2BAttest, err := tpm2.Unmarshal[tpm2.TPM2BAttest](mac.GetIakCertifyInfo())
 				if err != nil {
 					return status.Errorf(codes.InvalidArgument, "failed to unmarshal IAK Certify Info into TPM2B_ATTEST: %v", err)
 				}
@@ -524,12 +524,12 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				if err != nil {
 					return status.Errorf(codes.InvalidArgument, "failed to get IAK Certify Info contents: %v", err)
 				}
-				if err = s.tpm20.VerifyHMAC(tpm2.Marshal(iakCertifyInfo), hmac.GetIakCertifyInfoSignature(), session.hmacSensitive); err != nil {
+				if err = s.tpm20.VerifyHMAC(tpm2.Marshal(iakCertifyInfo), mac.GetIakCertifyInfoSignature(), session.hmacSensitive); err != nil {
 					log.Errorf("Tpm20Hmac challenge HMAC verification failed for device %s, error: %v", session.chassis.ActiveSerial, err)
 					return status.Errorf(codes.InvalidArgument, "Tpm20Hmac challenge HMAC verification failed: %v", err)
 				}
 				// Verify IAK public key attributes.
-				iakPubKey, err := s.tpm20.VerifyIAKAttributes(hmac.GetIakPub())
+				iakPubKey, err := s.tpm20.VerifyIAKAttributes(mac.GetIakPub())
 				if err != nil {
 					log.Errorf("Tpm20Hmac challenge public key verification failed for device %s, error: %v", session.chassis.ActiveSerial, err)
 					return status.Errorf(codes.InvalidArgument, "Tpm20Hmac challenge public key verification failed: %v", err)
@@ -563,9 +563,8 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				serializedTransportKey = challengeResponse.GetTpm12Ek().GetSerializedTransportKey()
 				mac := hmac.New(sha256.New, session.hmacKey)
 				mac.Write(serializedTransportKey)
-				hash := mac.Sum(nil)
-				if subtle.ConstantTimeCompare(challengeResponse.GetTpm12Ek().GetHash(), hash) != 1 {
-					log.Errorf("Tpm12Ek challenge verification failed: wrong HMAC hash for device %s, expected: %x, received: %x", session.chassis.ActiveSerial, hash, challengeResponse.GetTpm12Ek().GetHash())
+				if subtle.ConstantTimeCompare(challengeResponse.GetTpm12Ek().GetHash(), mac.Sum(nil)) != 1 {
+					log.Errorf("Tpm12Ek challenge verification failed: wrong HMAC hash for device %s", session.chassis.ActiveSerial)
 					return status.Errorf(codes.InvalidArgument, "Tpm12Ek challenge response HMAC hash verification failed")
 				}
 				log.Infof("Tpm12Ek challenge verification succeeded for device %s", session.chassis.ActiveSerial)
