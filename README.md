@@ -6,8 +6,8 @@ Define a structured data format for exchanging as much data with the network
 device as possible, to take the device from a factory state to a fully
 production supportable state.
 
-Additionally, define both a dialout and dialin RPC service which can perform the
-boot workflow.
+Additionally, define both a dial-out and dial-in RPC service which can perform
+the boot workflow.
 
 The overall design of bootz is meant to allow operators of equipment to provide
 a data-only bootstrap request and allow vendors the freedom to implement the
@@ -278,8 +278,9 @@ can install production configuration and certificates into the device.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.GetBootstrapData` to
       the bootz-server whose address was obtained from the DHCP server.
-   2. The TLS connection **MUST** be secured on the client-side with the
-      IDevID of the active control card.
+   2. In the TLS handshake, the server will send a CertificateRequest message.
+      The device **MUST** present the IDevID cert of the active control card
+      in this TLS handshake.
    3. The responses from the bootz-server are signed by ownership-certificate.
       The device validates the ownership-voucher, which authenticates the
       ownership-certificate. The device verifies the signature of the message
@@ -521,8 +522,10 @@ while TPM 1.2 systems are not supported.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.BootstrapStreamV1` to
       the bootz-server whose address was obtained from the DHCP server.
-   2. The device **MUST NOT** present a client certificate in the TLS
-      handshake.
+   2. In the TLS handshake, the server will send a CertificateRequest message.
+      The device **MUST NOT** present a client certificate in this TLS
+      handshake. The server MUST be configured to allow the handshake to
+      proceed without a client certificate.
 3. BootstrapStreamRequestV1.bootstrap_request
    1. The BootstrapStreamV1 RPC is initiated by the device sending a
       `GetBootstrapDataRequest` message to the bootz-server in the first
