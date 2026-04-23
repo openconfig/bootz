@@ -41,7 +41,7 @@ func LogPeerTLSCertificate(state tls.ConnectionState) error {
 	}
 	log.Infof("Client provided %d TLS certificate(s)", len(certs))
 	for i, cert := range certs {
-		log.Infof("Cert %d:\nIssuer=%v\nSubject=%v\nSerial=%v", i, cert.Issuer.String(), cert.Subject.String(), cert.SerialNumber.String())
+		log.Infof("Cert %d:\nIssuer=%v\nSubject=%v\nSerial=%v\nAlgorithm=%v", i, cert.Issuer, cert.Subject, cert.SerialNumber, cert.PublicKeyAlgorithm)
 	}
 	return nil
 }
