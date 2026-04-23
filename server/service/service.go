@@ -770,7 +770,11 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 			Key:       [32]byte(hmacKey),
 			IDDigest:  [20]byte(aikPubDigest),
 		}
-		blob := make([]byte, 4+2+2+32+20) // size of TPM_ASYM_CA_CONTENTS
+		asymSize := binary.Size(asym)
+		if asymSize <= 0 {
+			return nil, status.Errorf(codes.Internal, "failed to get the size of TPM_ASYM_CA_CONTENTS structure")
+		}
+		blob := make([]byte, asymSize)
 		if _, err = binary.Encode(blob, binary.BigEndian, asym); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to serialize TPM_ASYM_CA_CONTENTS to the blob: %v", err)
 		}
