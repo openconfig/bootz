@@ -89,6 +89,7 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *serv
 		ControlCards:           cards,
 		BootConfig:             bootCfg,
 		Authz:                  authzConf,
+		CertzProfiles:          chassis.GetConfig().GetGnsiConfig().GetCertzProfiles(),
 		BootloaderPasswordHash: chassis.GetBootloaderPasswordHash(),
 	}, nil
 }
@@ -195,7 +196,8 @@ func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, chassis *s
 		BootConfig:       chassis.BootConfig,
 		Credentials:      &bpb.Credentials{},
 		// TODO: Populate pathz, authz and certificates.
-		Authz: chassis.Authz,
+		Authz:         chassis.Authz,
+		CertzProfiles: chassis.CertzProfiles,
 	}, nil
 }
 

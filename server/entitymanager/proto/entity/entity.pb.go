@@ -7,6 +7,9 @@
 package entity
 
 import (
+	reflect "reflect"
+	sync "sync"
+
 	bootz "github.com/openconfig/bootz/proto/bootz"
 	authz "github.com/openconfig/gnsi/authz"
 	certz "github.com/openconfig/gnsi/certz"
@@ -14,8 +17,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	structpb "google.golang.org/protobuf/types/known/structpb"
-	reflect "reflect"
-	sync "sync"
 )
 
 const (
@@ -283,6 +284,7 @@ type GNSIConfig struct {
 	CertzUploadFile string                 `protobuf:"bytes,6,opt,name=certz_upload_file,json=certzUploadFile,proto3" json:"certz_upload_file,omitempty"`
 	CredentialsFile string                 `protobuf:"bytes,7,opt,name=credentials_file,json=credentialsFile,proto3" json:"credentials_file,omitempty"`
 	Credentials     *bootz.Credentials     `protobuf:"bytes,8,opt,name=credentials,proto3" json:"credentials,omitempty"`
+	CertzProfiles   *bootz.CertzProfiles   `protobuf:"bytes,9,opt,name=certz_profiles,json=certzProfiles,proto3" json:"certz_profiles,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -369,6 +371,13 @@ func (x *GNSIConfig) GetCredentialsFile() string {
 func (x *GNSIConfig) GetCredentials() *bootz.Credentials {
 	if x != nil {
 		return x.Credentials
+	}
+	return nil
+}
+
+func (x *GNSIConfig) GetCertzProfiles() *bootz.CertzProfiles {
+	if x != nil {
+		return x.CertzProfiles
 	}
 	return nil
 }

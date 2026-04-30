@@ -103,6 +103,9 @@ message GNSIConfig {
   // gnsi credential config
   bootz.Credentials credentials = 8;
 
+  // Certz profiles to create, including the target SSL profile ID.
+  bootz.CertzProfiles certz_profiles = 9;
+
 }
 
 message  DHCPConfig {
@@ -161,6 +164,5 @@ message Chassis {
   // dhcp config for fixed chassis
   DHCPConfig dhcp_config =12 ;
 }
-
 
 

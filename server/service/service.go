@@ -98,6 +98,7 @@ type Chassis struct {
 	// cases where this data should be hardcoded e.g. for testing.
 	BootConfig             *bpb.BootConfig
 	Authz                  *apb.UploadRequest
+	CertzProfiles          *bpb.CertzProfiles
 	BootloaderPasswordHash string
 }
 
