@@ -733,6 +733,7 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 				ChallengeRequest: &bpb.BootstrapStreamResponseV1_ChallengeRequest{
 					Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm20Hmac{
 						Tpm20Hmac: &bpb.BootstrapStreamResponseV1_ChallengeRequest_ChallengeRequestTPM20HMAC{
+							KeyType: chassis.ActivePublicKeyType,
 							HmacEncrypted: &epb.HMACChallenge{
 								HmacPubKey: tpm2.Marshal(tpm2.New2B(*hmacPub)),
 								Duplicate:  tpm2.Marshal(&tpm2.TPM2BPrivate{Buffer: duplicate}),
@@ -770,7 +771,11 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 			Key:       [32]byte(hmacKey),
 			IDDigest:  [20]byte(aikPubDigest),
 		}
-		blob := make([]byte, 4+2+2+32+20) // size of TPM_ASYM_CA_CONTENTS
+		asymSize := binary.Size(asym)
+		if asymSize <= 0 {
+			return nil, status.Errorf(codes.Internal, "failed to get the size of TPM_ASYM_CA_CONTENTS structure")
+		}
+		blob := make([]byte, asymSize)
 		if _, err = binary.Encode(blob, binary.BigEndian, asym); err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to serialize TPM_ASYM_CA_CONTENTS to the blob: %v", err)
 		}
