@@ -28,6 +28,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"math/big"
+	"net"
 	"time"
 
 	"github.com/openconfig/bootz/server/service"
@@ -58,11 +59,20 @@ type Inner struct {
 	DomainCertRevocationChecks bool     `json:"domain-cert-revocation-checks" xml:"domain-cert-revocation-checks"`
 }
 
+func certificateSANs(serverName string) ([]string, []net.IP) {
+	if ip := net.ParseIP(serverName); ip != nil {
+		return nil, []net.IP{ip}
+	}
+	return []string{serverName}, nil
+}
+
 // NewCertificateAuthority creates a new self-signed CA for the chosen organization.
 func NewCertificateAuthority(commonName, org, serverName string) (*x509.Certificate, *rsa.PrivateKey, error) {
+	dnsNames, ipAddresses := certificateSANs(serverName)
 	// Create the certificate authority.
 	ca := &x509.Certificate{
-		DNSNames:     []string{serverName},
+		DNSNames:     dnsNames,
+		IPAddresses:  ipAddresses,
 		SerialNumber: big.NewInt(int64(time.Now().Year())),
 		Subject: pkix.Name{
 			CommonName:   commonName,
@@ -100,9 +110,11 @@ func NewCertificateAuthority(commonName, org, serverName string) (*x509.Certific
 
 // NewSignedCertificate creates a new cert/private keypair signed by the provided Certificate Authority.
 func NewSignedCertificate(commonName, org, serverName string, ca *x509.Certificate, caPrivateKey crypto.PrivateKey) (*x509.Certificate, *rsa.PrivateKey, error) {
+	dnsNames, ipAddresses := certificateSANs(serverName)
 	// Create the certificate template. Geographic information is the same as the Certificate Authority by default.
 	template := &x509.Certificate{
-		DNSNames:     []string{serverName},
+		DNSNames:     dnsNames,
+		IPAddresses:  ipAddresses,
 		SerialNumber: big.NewInt(int64(time.Now().Year())),
 		Subject: pkix.Name{
 			CommonName:   commonName,
