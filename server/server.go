@@ -32,7 +32,9 @@ import (
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
@@ -88,9 +90,37 @@ type InterceptorOpts struct {
 
 func (*InterceptorOpts) isbootzServerOpts() {}
 
+// DisableBootstrapStream disables the deprecated BootstrapStream RPC while
+// keeping unary RPCs available.
+type DisableBootstrapStream struct{}
+
+func (*DisableBootstrapStream) isbootzServerOpts() {}
+
+type bootstrapServer struct {
+	bpb.UnimplementedBootstrapServer
+	service                *service.Service
+	disableBootstrapStream bool
+}
+
+func (s *bootstrapServer) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDataRequest) (*bpb.GetBootstrapDataResponse, error) {
+	return s.service.GetBootstrapData(ctx, req)
+}
+
+func (s *bootstrapServer) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest) (*bpb.EmptyResponse, error) {
+	return s.service.ReportStatus(ctx, req)
+}
+
+func (s *bootstrapServer) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) error {
+	if s.disableBootstrapStream {
+		return status.Error(codes.Unimplemented, "BootstrapStream disabled")
+	}
+	return s.service.BootstrapStream(stream)
+}
+
 // NewServer start a new Bootz gRPC , dhcp, and image server based on specified flags.
 func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *service.SecurityArtifacts, opts ...bootzServerOpts) (*Server, error) {
 	var interceptor grpc.ServerOption
+	disableBootstrapStream := false
 	server := &Server{}
 	for _, opt := range opts {
 		switch opt := opt.(type) {
@@ -102,6 +132,8 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *se
 			server.httpSrv = StartImageServer(opt)
 		case *InterceptorOpts:
 			interceptor = grpc.UnaryInterceptor(opt.BootzInterceptor)
+		case *DisableBootstrapStream:
+			disableBootstrapStream = true
 		default:
 			continue
 		}
@@ -124,7 +156,10 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *se
 		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)))
 	}
 
-	bpb.RegisterBootstrapServer(s, c)
+	bpb.RegisterBootstrapServer(s, &bootstrapServer{
+		service:                c,
+		disableBootstrapStream: disableBootstrapStream,
+	})
 
 	lis, err := net.Listen("tcp", bootzAddr)
 	if err != nil {
