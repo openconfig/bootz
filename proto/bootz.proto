@@ -565,11 +565,12 @@ message BootstrapStreamResponseV1 {
       bytes nonce = 1;
     }
     message ChallengeRequestTPM20HMAC {
+      // The encryption key type: EK or PPK.
+      openconfig.attestz.Key key_type = 1;
       // The HMAC key encrypted to EK/PPK.
       // The device should invoke TPM2_Import command to import this HMAC key
       // into the TPM.
-      // NOTE: Whether it is encrypted to EK or PPK is decided by the identity
-      // (tpm20_ek_pub or tpm20_ppk_pub) presented by the device.
+      // NOTE: Whether it is encrypted to EK or PPK is decided by the key_type.
       openconfig.attestz.HMACChallenge hmac_encrypted = 2;
     }
     message ChallengeRequestTPM12EK {

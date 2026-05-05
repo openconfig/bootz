@@ -733,6 +733,7 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 				ChallengeRequest: &bpb.BootstrapStreamResponseV1_ChallengeRequest{
 					Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm20Hmac{
 						Tpm20Hmac: &bpb.BootstrapStreamResponseV1_ChallengeRequest_ChallengeRequestTPM20HMAC{
+							KeyType: chassis.ActivePublicKeyType,
 							HmacEncrypted: &epb.HMACChallenge{
 								HmacPubKey: tpm2.Marshal(tpm2.New2B(*hmacPub)),
 								Duplicate:  tpm2.Marshal(&tpm2.TPM2BPrivate{Buffer: duplicate}),
