@@ -202,7 +202,7 @@ func NewOwnershipVoucher(encoding string, serial string, pdc, vendorCACert *x509
 }
 
 // GenerateSecurityArtifacts generates security artifacts.
-func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, vendorOrg string) (*types.SecurityArtifacts, error) {
+func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, vendorCACert *x509.Certificate, vendorCAKey *rsa.PrivateKey) (*types.SecurityArtifacts, error) {
 	pdc, pdcPrivateKey, err := NewCertificateAuthority("Pinned Domain Cert", ownerOrg, "localhost")
 	if err != nil {
 		return nil, err
@@ -211,17 +211,20 @@ func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, ven
 	if err != nil {
 		return nil, err
 	}
-	vendorCA, vendorCAPrivateKey, err := NewCertificateAuthority("Vendor Certificate Authority", vendorOrg, "localhost")
-	if err != nil {
-		return nil, err
+	if vendorCACert == nil || vendorCAKey == nil {
+		vendorCACert, vendorCAKey, err = NewCertificateAuthority("Vendor Certificate Authority", "Vendor", "localhost")
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	trustAnchor, trustAnchorPrivatekey, err := NewCertificateAuthority("Trust Anchor", ownerOrg, "localhost")
 	if err != nil {
 		return nil, err
 	}
 	ovs := types.OVList{}
 	for _, serial := range controlCardSerials {
-		ov, err := NewOwnershipVoucher("json", serial, pdc, vendorCA, vendorCAPrivateKey)
+		ov, err := NewOwnershipVoucher("json", serial, pdc, vendorCACert, vendorCAKey)
 		if err != nil {
 			return nil, err
 		}
@@ -239,8 +242,8 @@ func GenerateSecurityArtifacts(controlCardSerials []string, ownerOrg string, ven
 		OwnerCertPrivateKey:   ocPrivateKey,
 		PDC:                   pdc,
 		PDCPrivateKey:         pdcPrivateKey,
-		VendorCA:              vendorCA,
-		VendorCAPrivateKey:    vendorCAPrivateKey,
+		VendorCA:              vendorCACert,
+		VendorCAPrivateKey:    vendorCAKey,
 		OV:                    ovs,
 		TLSKeypair:            tlsTrustAnchor,
 	}, nil

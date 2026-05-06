@@ -24,7 +24,7 @@ import (
 
 // TestStartup tests that a gRPC server can be created with the default flags.
 func TestStartup(t *testing.T) {
-	sa, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", "Cisco")
+	sa, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate server artifacts: %v", err)
 	}

@@ -47,7 +47,7 @@ func MustMarshalBootstrapDataSigned(t *testing.T, b *bpb.BootstrapDataSigned) []
 }
 
 func TestNew(t *testing.T) {
-	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", "Cisco")
+	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate server artifacts: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestFetchOwnershipVoucher(t *testing.T) {
-	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", "Cisco")
+	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate server artifacts: %v", err)
 	}
@@ -222,11 +222,12 @@ func TestResolveChassis(t *testing.T) {
 			ActiveSerial: "123",
 		},
 		want: &types.Chassis{
-			ActiveSerial: "123",
-			Hostname:     "test",
-			Manufacturer: "Cisco",
-			Realm:        "prod",
-			BootMode:     bpb.BootMode_BOOT_MODE_INSECURE,
+			ActiveSerial:       "123",
+			Hostname:           "test",
+			Manufacturer:       "Cisco",
+			Realm:              "prod",
+			BootMode:           bpb.BootMode_BOOT_MODE_INSECURE,
+			StreamingSupported: true,
 			SoftwareImage: &bpb.SoftwareImage{
 				HashAlgorithm: "ietf-sztp-conveyed-info:sha-256",
 				Name:          "Default Image",
@@ -272,7 +273,7 @@ func TestResolveChassis(t *testing.T) {
 }
 
 func TestSign(t *testing.T) {
-	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A"}, "Google", "Cisco")
+	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A"}, "Google", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate server artifacts: %v", err)
 	}
@@ -407,7 +408,7 @@ func TestSetStatus(t *testing.T) {
 }
 
 func TestGetBootstrapData(t *testing.T) {
-	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", "Cisco")
+	a, err := artifacts.GenerateSecurityArtifacts([]string{"123A", "123B"}, "Google", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate server artifacts: %v", err)
 	}
