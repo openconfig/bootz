@@ -68,7 +68,8 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, chassis *typ
 	}
 	var key *rsa.PublicKey
 	var keyType tpb.Key
-	if _, ok := chassis.Identity.GetType().(*bpb.Identity_EkPpkPub); ok {
+	switch chassis.Identity.GetType().(type) {
+	case *bpb.Identity_Tpm20EkPub, *bpb.Identity_Tpm20PpkPub, *bpb.Identity_Tpm12EkPub, *bpb.Identity_EkPpkPub:
 		for _, c := range inventory.GetControllerCards() {
 			if c.GetSerialNumber() == chassis.ActiveSerial {
 				block, _ := pem.Decode([]byte(c.GetPublicKey()))
@@ -90,6 +91,9 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, chassis *typ
 				keyType = c.GetPublicKeyType()
 				break
 			}
+		}
+		if key == nil || keyType == tpb.Key_KEY_UNSPECIFIED {
+			return status.Errorf(codes.Internal, "public key not found")
 		}
 	}
 	bootCfg, err := populateBootConfig(inventory.GetConfig().GetBootConfig())
@@ -360,7 +364,9 @@ func (m *InMemoryEntityManager) GetChassisInventory() []*epb.ChassisInventory {
 // New returns a new in-memory entity manager.
 func New(chassisConfigFile string, artifacts *types.SecurityArtifacts) (*InMemoryEntityManager, error) {
 	pool := x509.NewCertPool()
-	pool.AddCert(artifacts.VendorCA)
+	if artifacts != nil && artifacts.VendorCA != nil {
+		pool.AddCert(artifacts.VendorCA)
+	}
 	newManager := &InMemoryEntityManager{
 		controlCardStatuses: map[string]bpb.ControlCardState_ControlCardStatus{},
 		defaults:            &epb.Options{GnsiGlobalConfig: &epb.GNSIConfig{}},

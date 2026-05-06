@@ -1,4 +1,4 @@
-// This is a randomly generated fake vendor CA key for testing only,
+// This is a randomly generated fake vendor CA key for testing only.
 // The server and the client must use the same vendor CA cert/key pair.
 
 -----BEGIN RSA PRIVATE KEY-----
