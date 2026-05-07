@@ -34,6 +34,9 @@ import (
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 	apb "github.com/openconfig/gnsi/authz"
+	cpb "github.com/openconfig/gnsi/certz"
+	kpb "github.com/openconfig/gnsi/credentialz"
+	ppb "github.com/openconfig/gnsi/pathz"
 )
 
 // MustMarshalBootstrapDataSigned is a helper function that marshals a BootstrapDataSigned message.
@@ -480,10 +483,29 @@ func TestGetBootstrapData(t *testing.T) {
 				VendorConfig: []byte(""),
 				OcConfig:     []byte(""),
 			},
+			Credentials: &bpb.Credentials{
+				Credentials: []*kpb.AuthorizedKeysRequest{{
+					Credentials: []*kpb.AccountCredentials{{
+						Account: "gnetch",
+						AuthorizedKeys: []*kpb.AccountCredentials_AuthorizedKey{{
+							AuthorizedKey: []byte("AAAA-test-key"),
+						}},
+					}},
+				}},
+			},
+			Pathz: &ppb.UploadRequest{
+				Version: "pathz-v1",
+			},
 			Authz: &apb.UploadRequest{
 				Version:   "v0.1694813669807611349",
 				CreatedOn: 1694813669807,
 				Policy:    "{\"name\":\"default\",\"request\":{\"paths\":[\"*\"]},\"source\":{\"principals\":[\"cafyauto\"]}}",
+			},
+			CertzProfiles: &bpb.CertzProfiles{
+				Profiles: []*bpb.CertzProfile{{
+					SslProfileId: "tls",
+					Certz:        &cpb.UploadRequest{},
+				}},
 			},
 		},
 		want: &bpb.BootstrapDataResponse{
@@ -501,11 +523,29 @@ func TestGetBootstrapData(t *testing.T) {
 				VendorConfig: []byte(""),
 				OcConfig:     []byte(""),
 			},
-			Credentials: &bpb.Credentials{},
+			Credentials: &bpb.Credentials{
+				Credentials: []*kpb.AuthorizedKeysRequest{{
+					Credentials: []*kpb.AccountCredentials{{
+						Account: "gnetch",
+						AuthorizedKeys: []*kpb.AccountCredentials_AuthorizedKey{{
+							AuthorizedKey: []byte("AAAA-test-key"),
+						}},
+					}},
+				}},
+			},
+			Pathz: &ppb.UploadRequest{
+				Version: "pathz-v1",
+			},
 			Authz: &apb.UploadRequest{
 				Version:   "v0.1694813669807611349",
 				CreatedOn: 1694813669807,
 				Policy:    "{\"name\":\"default\",\"request\":{\"paths\":[\"*\"]},\"source\":{\"principals\":[\"cafyauto\"]}}",
+			},
+			CertzProfiles: &bpb.CertzProfiles{
+				Profiles: []*bpb.CertzProfile{{
+					SslProfileId: "tls",
+					Certz:        &cpb.UploadRequest{},
+				}},
 			},
 		},
 		wantErr: false,

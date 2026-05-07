@@ -36,6 +36,7 @@ import (
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	epb "github.com/openconfig/bootz/server/entitymanager/proto/entity"
 	apb "github.com/openconfig/gnsi/authz"
+	ppb "github.com/openconfig/gnsi/pathz"
 )
 
 const defaultRealm = "prod"
@@ -74,6 +75,14 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *serv
 	if err != nil {
 		return nil, err
 	}
+	credzConf, err := m.populateCredentialsConfig(chassis)
+	if err != nil {
+		return nil, err
+	}
+	pathzConf, err := m.populatePathzConfig(chassis)
+	if err != nil {
+		return nil, err
+	}
 	authzConf, err := m.populateAuthzConfig(chassis)
 	if err != nil {
 		return nil, err
@@ -88,6 +97,8 @@ func (m *InMemoryEntityManager) ResolveChassis(ctx context.Context, lookup *serv
 		Serial:                 chassis.GetSerialNumber(),
 		ControlCards:           cards,
 		BootConfig:             bootCfg,
+		Credentials:            credzConf,
+		Pathz:                  pathzConf,
 		Authz:                  authzConf,
 		CertzProfiles:          chassis.GetConfig().GetGnsiConfig().GetCertzProfiles(),
 		BootloaderPasswordHash: chassis.GetBootloaderPasswordHash(),
@@ -161,6 +172,48 @@ func (m *InMemoryEntityManager) populateAuthzConfig(ch *epb.Chassis) (*apb.Uploa
 	return gnsiAuthzReq, nil
 }
 
+func (m *InMemoryEntityManager) populatePathzConfig(ch *epb.Chassis) (*ppb.UploadRequest, error) {
+	gnsiConf := ch.GetConfig().GetGnsiConfig()
+	gnsiPathzReq := gnsiConf.GetPathzUpload()
+	gnsiPathzReqFile := gnsiConf.GetPathzUploadFile()
+	if gnsiPathzReq.GetVersion() != "" && gnsiPathzReq.GetPolicy() != nil {
+		return gnsiPathzReq, nil
+	}
+	if gnsiPathzReqFile == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(gnsiPathzReqFile)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Error opening file %s: %v", gnsiPathzReqFile, err)
+	}
+	gnsiPathzReq = &ppb.UploadRequest{}
+	if err := prototext.Unmarshal(data, gnsiPathzReq); err != nil {
+		return nil, status.Errorf(codes.Internal, "File %s config is not a valid pathz Upload Request: %v", gnsiPathzReqFile, err)
+	}
+	return gnsiPathzReq, nil
+}
+
+func (m *InMemoryEntityManager) populateCredentialsConfig(ch *epb.Chassis) (*bpb.Credentials, error) {
+	gnsiConf := ch.GetConfig().GetGnsiConfig()
+	gnsiCredzReq := gnsiConf.GetCredentials()
+	gnsiCredzReqFile := gnsiConf.GetCredentialsFile()
+	if len(gnsiCredzReq.GetCredentials()) > 0 || len(gnsiCredzReq.GetUsers()) > 0 || len(gnsiCredzReq.GetPasswords()) > 0 {
+		return gnsiCredzReq, nil
+	}
+	if gnsiCredzReqFile == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(gnsiCredzReqFile)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Error opening file %s: %v", gnsiCredzReqFile, err)
+	}
+	gnsiCredzReq = &bpb.Credentials{}
+	if err := prototext.Unmarshal(data, gnsiCredzReq); err != nil {
+		return nil, status.Errorf(codes.Internal, "File %s config is not valid Bootz credentials: %v", gnsiCredzReqFile, err)
+	}
+	return gnsiCredzReq, nil
+}
+
 func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
 	bootConfig := &bpb.BootConfig{}
 	if conf.GetOcConfigFile() != "" {
@@ -187,16 +240,15 @@ func populateBootConfig(conf *epb.BootConfig) (*bpb.BootConfig, error) {
 
 // GetBootstrapData fetches and returns the bootstrap data response from the server.
 func (m *InMemoryEntityManager) GetBootstrapData(ctx context.Context, chassis *service.Chassis, serial string) (*bpb.BootstrapDataResponse, error) {
-	// TODO: Populate gnsi config
 	return &bpb.BootstrapDataResponse{
 		SerialNum:        serial,
 		IntendedImage:    chassis.SoftwareImage,
 		BootPasswordHash: chassis.BootloaderPasswordHash,
 		ServerTrustCert:  base64.StdEncoding.EncodeToString(m.secArtifacts.TrustAnchor.Raw),
 		BootConfig:       chassis.BootConfig,
-		Credentials:      &bpb.Credentials{},
-		// TODO: Populate pathz, authz and certificates.
-		Authz:         chassis.Authz,
+		Credentials:      chassis.Credentials,
+		Pathz:            chassis.Pathz,
+		Authz:            chassis.Authz,
 		CertzProfiles: chassis.CertzProfiles,
 	}, nil
 }
