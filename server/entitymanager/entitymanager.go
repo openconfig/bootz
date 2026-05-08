@@ -363,10 +363,15 @@ func (m *InMemoryEntityManager) GetChassisInventory() []*epb.ChassisInventory {
 
 // New returns a new in-memory entity manager.
 func New(chassisConfigFile string, artifacts *types.SecurityArtifacts) (*InMemoryEntityManager, error) {
+	pool := x509.NewCertPool()
+	if artifacts != nil && artifacts.VendorCA != nil {
+		pool.AddCert(artifacts.VendorCA)
+	}
 	newManager := &InMemoryEntityManager{
 		controlCardStatuses: map[string]bpb.ControlCardState_ControlCardStatus{},
 		defaults:            &epb.Options{GnsiGlobalConfig: &epb.GNSIConfig{}},
 		secArtifacts:        artifacts,
+		vendorCAPool:        pool,
 	}
 	if chassisConfigFile == "" {
 		return newManager, nil

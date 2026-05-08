@@ -117,6 +117,7 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *ty
 	// In a real scenario, this cert pool would contain CA(s) that
 	// signed the device's IDevID cert.
 	vendorIDevIDPool := x509.NewCertPool()
+	vendorIDevIDPool.AddCert(sa.VendorCA)
 
 	tls := &tls.Config{
 		Certificates: []tls.Certificate{*sa.TLSKeypair},

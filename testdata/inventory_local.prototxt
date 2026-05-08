@@ -25,6 +25,7 @@ chassis {
 		hash_algorithm: "ietf-sztp-conveyed-info:sha-256"
     }
     boot_mode: BOOT_MODE_INSECURE
+    streaming_supported: true
     config {
         boot_config {
         }

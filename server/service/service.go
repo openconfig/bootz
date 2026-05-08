@@ -764,7 +764,7 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 			return nil, status.Errorf(codes.Internal, "failed to generate HMAC key: %v", err)
 		}
 		// Serialize the TPM_ASYM_CA_CONTENTS structure to big endian.
-		asym := TPMAsymCAContents{
+		asym := &TPMAsymCAContents{
 			AlgID:     0x00000005, // TPM_ALG_HMAC
 			EncScheme: 0x0001,     // TPM_SS_NONE
 			KeySize:   32,         // len(hmacKey)
