@@ -869,6 +869,119 @@ This is the preferred workflow for security considerations. This workflow
 utilizes Enrollz and Attestz to provide enrollment then measured boot to
 validate the state of device before providing any "production" certificates.
 
+### DHCP-less/Inband Bootz scenarios
+
+#### Scenario 1: Failure before contacting Bootz server
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Operator as Network Operator
+    participant Device
+    participant Server as Bootz Server
+
+    Operator->>Device: Pre-configure device with minimal config
+    activate Device
+    Device->>Device: Apply startup config
+    deactivate Device
+    Operator->>Device: Initiate Bootz (Bootz URI, Source interface)
+    activate Device
+    Device->>Device: Write Bootz parameters to file system
+    Device->>Device: Reboot
+    Note over Device: Device reboots
+    Device->>Device: Check for existence of Bootz parameters
+    loop Retry Loop (Indefinite)
+        Device->>Server: GetBootstrapData()
+        activate Server
+        Server-->>Device: Error / Timeout
+        deactivate Server
+        Note over Device: Wait 10 seconds for retry
+    end
+    deactivate Device
+```
+
+#### Scenario 2: Failure after contacting Bootz server
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Operator as Network Operator
+    participant Device
+    participant Server as Bootz Server
+
+    Operator->>Device: Pre-configure device with minimal config
+    activate Device
+    Device->>Device: Apply startup config
+    deactivate Device
+    Operator->>Device: Initiate Bootz (Bootz URI, Source interface)
+    activate Device
+    Device->>Device: Write Bootz parameters to file system
+    Device->>Device: Reboot
+    Note over Device: Device reboots
+    Device->>Device: Check for existence of Bootz parameters
+    loop Retry Loop (Indefinite)
+        Device->>Server: GetBootstrapData()
+        activate Server
+        Server-->>Device: GetBootstrapDataResponse()
+        deactivate Server
+        Device->>Device: Apply bootstrap config (overwrite)
+        Note over Device: Config commit fails
+        Device->>Device: Revert to pre-Bootz config
+    end
+    deactivate Device
+```
+
+#### Scenario 3: Reverting to DHCP Bootz
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Operator as Network Operator
+    participant Device
+    participant Server as Bootz Server
+    participant DHCP
+
+    Operator->>Device: Pre-configure device with minimal config
+    activate Device
+    Device->>Device: Apply startup config
+    deactivate Device
+    Operator->>Device: Initiate Bootz (Bootz URI, Source interface)
+    activate Device
+    Device->>Device: Write Bootz parameters to file system
+    Device->>Device: Reboot
+    Note over Device: Device reboots
+    Device->>Device: Check for existence of Bootz parameters
+    Device->>Server: GetBootstrapData()
+    activate Server
+    Server-->>Device: Error / Timeout
+    deactivate Server
+    Device->>Device: Revert to pre-Bootz config
+    Note over Device: Retry loop continues indefinitely
+
+    Operator->>Device: Reset Bootz parameters
+    Device->>Device: Wipe Bootz parameters from file system
+    Device->>Device: Wipe startup config
+    Device->>Device: Reboot
+    Note over Device: Device reboots
+    Device->>Device: Check for existence of Bootz parameters (none found)
+
+    Device->>DHCP: DHCP Request
+    activate DHCP
+    DHCP-->>Device: DHCP Response (IP address, Bootz URI)
+    deactivate DHCP
+
+    Device->>Server: GetBootstrapDataRequest()
+    activate Server
+    Server-->>Device: GetBootstrapDataResponse()
+    deactivate Server
+    Device->>Device: Apply bootstrap config
+    Device->>Server: ReportStatus(Success)
+    activate Server
+    Server-->>Device: Acknowledge
+    deactivate Server
+    deactivate Device
+```
+
 ### Protobuf Payload for Bootstrap
 
 The following protocol buffer is provided from the bootz-server to the device to
