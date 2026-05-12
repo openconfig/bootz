@@ -570,10 +570,10 @@ while TPM 1.2 systems are not supported.
      out an empty `ReportStatusResponse` message to acknowledge the status
      report. If the challenge fails, an error will be returned and the device
      must start over from Step 9.
-9.   Cleanup
-   - If the device was bootstrapped via DHCP-less Bootz, it MUST
-     now automatically delete the persistent Bootz parameter file and wipe
-     the temporary pre-configuration used for initial connectivity.
+9. Final state and cleanup:
+   1. If the device was bootstrapped via DHCP-less Bootz, it MUST
+      now automatically delete the persistent Bootz parameter file and wipe
+      the temporary pre-configuration used for initial connectivity.
 
 ### Bootz Procedure: BootstrapStream v1.0
 
