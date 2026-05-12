@@ -282,49 +282,49 @@ already have reachability to the Bootz server.
 ### Boot Procedure: Unary Bootz
 
 1. Entry points to Bootz
-   *  **Option A: DHCP Discovery (default)**
-     1. Device sends DHCP messages, containing the mac-address of the active
-        control card. The DHCP server has been configured with all possible
-        mac-addresses of the device, and responds with the static IP address of
-        the bootstrap server.
-     2. DHCP server also assigns an IP address and a gateway to the device.
-     3. The DHCP response option code should be `OPTION_V4_SZTP_REDIRECT` (143)
-        or `OPTION_V6_SZTP_REDIRECT` (136).
-     4. The format of the DHCP message (other than response option code) follows
-        [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
-        1. The URI will be in the format of `bootz://<hostname or ip>:<port>`
-   *  **Option B: DHCP-less**
-     1. A network operator manually configures the device with a local
-        configuration that gives it reachability to the Bootz server. This
-        includes static routing, interface configuration and local admin
-        credentials.
-     2. A network operator triggers DHCP-less Bootz via CLI, providing the
-        Bootz Server URI and Source Interface. These are saved to a
-        persistent parameters file on disk to survive reboots.
-     3. The device enters a Bootz loop, attempting to connect to the
-        specified Bootz server from the source interface using its local
-        configuration. It should not perform a disk wipe or factory reset
-        during the initiation phase, though a reboot may be performed if
-        required.
-     4. If the DHCP-less Bootz process fails at any point, the device MUST
-        revert back to the operator-provided local configuration and attempt
-        to connect to the Bootz server again. The device MUST remain in this
-        recovery loop until either:
-          1. Bootz completes successfully
-          2. The operator manually resets the device to standard DHCP mode
-             via the CLI, at which point Option A takes effect.
+   - **Option A: DHCP Discovery (default)**
+   1. Device sends DHCP messages, containing the mac-address of the active
+      control card. The DHCP server has been configured with all possible
+      mac-addresses of the device, and responds with the static IP address of
+      the bootstrap server.
+   2. DHCP server also assigns an IP address and a gateway to the device.
+   3. The DHCP response option code should be `OPTION_V4_SZTP_REDIRECT` (143)
+      or `OPTION_V6_SZTP_REDIRECT` (136).
+   4. The format of the DHCP message (other than response option code) follows
+      [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
+      1. The URI will be in the format of `bootz://<hostname or ip>:<port>`
+   - **Option B: DHCP-less**
+   1. A network operator manually configures the device with a local
+      configuration that gives it reachability to the Bootz server. This
+      includes static routing, interface configuration and local admin
+      credentials.
+   2. A network operator triggers DHCP-less Bootz via CLI, providing the
+      Bootz Server URI and Source Interface. These are saved to a
+      persistent parameters file on disk to survive reboots.
+   3. The device enters a Bootz loop, attempting to connect to the
+      specified Bootz server from the source interface using its local
+      configuration. It should not perform a disk wipe or factory reset
+      during the initiation phase, though a reboot may be performed if
+      required.
+   4. If the DHCP-less Bootz process fails at any point, the device MUST
+      revert back to the operator-provided local configuration and attempt
+      to connect to the Bootz server again. The device MUST remain in this
+      recovery loop until either:
+      1. Bootz completes successfully
+      2. The operator manually resets the device to standard DHCP mode
+         via the CLI, at which point Option A takes effect.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.GetBootstrapData` to
       the bootz-server whose address was obtained either from the DHCP server
       (Option A) or from the persistent Bootz parameter file (Option B).
-   3. In the TLS handshake, the server will send a CertificateRequest message.
+   2. In the TLS handshake, the server will send a CertificateRequest message.
       The device **MUST** present the IDevID cert of the active control card
       in this TLS handshake.
-   4. The responses from the bootz-server are signed by ownership-certificate.
+   3. The responses from the bootz-server are signed by ownership-certificate.
       The device validates the ownership-voucher, which authenticates the
       ownership-certificate. The device verifies the signature of the message
       body before accepting the message.
-   5. If the signature could not be verified, the bootstrap process starts
+   4. If the signature could not be verified, the bootstrap process starts
       from the respective entry point (Step 1).
 
 Note: though a device SHOULD validate ownership by default, in some environment
@@ -432,7 +432,6 @@ the ownership voucher and ownership certificate.
    2. If the device was bootstrapped via DHCP-less Bootz, it MUST
       now automatically delete the persistent Bootz parameter file and wipe
       the temporary pre-configuration used for initial connectivity.
-      
 
 ### Bootz Procedure: BootstrapStream v0.6
 
@@ -443,37 +442,37 @@ BootstrapStream v0.6 only supports TPM 2.0 (with or without IDevID) systems,
 while TPM 1.2 systems are not supported.
 
 1. Entry points to Bootz
-   *  **Option A: DHCP Discovery (default)**
-     1. Device sends DHCP messages, containing the mac-address of the active
-        control card. The DHCP server has been configured with all possible
-        mac-addresses of the device, and responds with the static IP address of
-        the bootstrap server.
-     2. DHCP server also assigns an IP address and a gateway to the device.
-     3. The DHCP response option code should be `OPTION_V4_SZTP_REDIRECT` (143)
-        or `OPTION_V6_SZTP_REDIRECT` (136).
-     4. The format of the DHCP message (other than response option code) follows
-        [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
-        1. The URI will be in the format of `bootz://<hostname or ip>:<port>`
-   *  **Option B: DHCP-less**
-     1. A network operator manually configures the device with a local
-        configuration that gives it reachability to the Bootz server. This
-        includes static routing, interface configuration and local admin
-        credentials.
-     2. A network operator triggers DHCP-less Bootz via CLI, providing the
-        Bootz Server URI and Source Interface. These are saved to a
-        persistent parameters file on disk to survive reboots.
-     3. The device enters a Bootz loop, attempting to connect to the
-        specified Bootz server from the source interface using its local
-        configuration. It should not perform a disk wipe or factory reset
-        during the initiation phase, though a reboot may be performed if
-        required.
-     4. If the DHCP-less Bootz process fails at any point, the device MUST
-        revert back to the operator-provided local configuration and attempt
-        to connect to the Bootz server again. The device MUST remain in this
-        recovery loop until either:
-          1. Bootz completes successfully
-          2. The operator manually resets the device to standard DHCP mode
-             via the CLI, at which point Option A takes effect.
+   - **Option A: DHCP Discovery (default)**
+   1. Device sends DHCP messages, containing the mac-address of the active
+      control card. The DHCP server has been configured with all possible
+      mac-addresses of the device, and responds with the static IP address of
+      the bootstrap server.
+   2. DHCP server also assigns an IP address and a gateway to the device.
+   3. The DHCP response option code should be `OPTION_V4_SZTP_REDIRECT` (143)
+      or `OPTION_V6_SZTP_REDIRECT` (136).
+   4. The format of the DHCP message (other than response option code) follows
+      [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
+      1. The URI will be in the format of `bootz://<hostname or ip>:<port>`
+   - **Option B: DHCP-less**
+   1. A network operator manually configures the device with a local
+      configuration that gives it reachability to the Bootz server. This
+      includes static routing, interface configuration and local admin
+      credentials.
+   2. A network operator triggers DHCP-less Bootz via CLI, providing the
+      Bootz Server URI and Source Interface. These are saved to a
+      persistent parameters file on disk to survive reboots.
+   3. The device enters a Bootz loop, attempting to connect to the
+      specified Bootz server from the source interface using its local
+      configuration. It should not perform a disk wipe or factory reset
+      during the initiation phase, though a reboot may be performed if
+      required.
+   4. If the DHCP-less Bootz process fails at any point, the device MUST
+      revert back to the operator-provided local configuration and attempt
+      to connect to the Bootz server again. The device MUST remain in this
+      recovery loop until either:
+      1. Bootz completes successfully
+      2. The operator manually resets the device to standard DHCP mode
+         via the CLI, at which point Option A takes effect.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.BootstrapStream` to
       the bootz-server whose address was obtained either from the DHCP server
@@ -578,37 +577,37 @@ while TPM 1.2 systems are not supported.
 ### Bootz Procedure: BootstrapStream v1.0
 
 1. Entry points to Bootz
-   *  **Option A: DHCP Discovery (default)**
-     1. Device sends DHCP messages, containing the mac-address of the active
-        control card. The DHCP server has been configured with all possible
-        mac-addresses of the device, and responds with the static IP address of
-        the bootstrap server.
-     2. DHCP server also assigns an IP address and a gateway to the device.
-     3. The DHCP response option code should be `OPTION_V4_SZTP_REDIRECT` (143)
-        or `OPTION_V6_SZTP_REDIRECT` (136).
-     4. The format of the DHCP message (other than response option code) follows
-        [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
-        1. The URI will be in the format of `bootz://<hostname or ip>:<port>`
-   *  **Option B: DHCP-less**
-     1. A network operator manually configures the device with a local
-        configuration that gives it reachability to the Bootz server. This
-        includes static routing, interface configuration and local admin
-        credentials.
-     2. A network operator triggers DHCP-less Bootz via CLI, providing the
-        Bootz Server URI and Source Interface. These are saved to a
-        persistent parameters file on disk to survive reboots.
-     3. The device enters a Bootz loop, attempting to connect to the
-        specified Bootz server from the source interface using its local
-        configuration. It should not perform a disk wipe or factory reset
-        during the initiation phase, though a reboot may be performed if
-        required.
-     4. If the DHCP-less Bootz process fails at any point, the device MUST
-        revert back to the operator-provided local configuration and attempt
-        to connect to the Bootz server again. The device MUST remain in this
-        recovery loop until either:
-          1. Bootz completes successfully
-          2. The operator manually resets the device to standard DHCP mode
-             via the CLI, at which point Option A takes effect.
+   - **Option A: DHCP Discovery (default)**
+   1. Device sends DHCP messages, containing the mac-address of the active
+      control card. The DHCP server has been configured with all possible
+      mac-addresses of the device, and responds with the static IP address of
+      the bootstrap server.
+   2. DHCP server also assigns an IP address and a gateway to the device.
+   3. The DHCP response option code should be `OPTION_V4_SZTP_REDIRECT` (143)
+      or `OPTION_V6_SZTP_REDIRECT` (136).
+   4. The format of the DHCP message (other than response option code) follows
+      [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
+      1. The URI will be in the format of `bootz://<hostname or ip>:<port>`
+   - **Option B: DHCP-less**
+   1. A network operator manually configures the device with a local
+      configuration that gives it reachability to the Bootz server. This
+      includes static routing, interface configuration and local admin
+      credentials.
+   2. A network operator triggers DHCP-less Bootz via CLI, providing the
+      Bootz Server URI and Source Interface. These are saved to a
+      persistent parameters file on disk to survive reboots.
+   3. The device enters a Bootz loop, attempting to connect to the
+      specified Bootz server from the source interface using its local
+      configuration. It should not perform a disk wipe or factory reset
+      during the initiation phase, though a reboot may be performed if
+      required.
+   4. If the DHCP-less Bootz process fails at any point, the device MUST
+      revert back to the operator-provided local configuration and attempt
+      to connect to the Bootz server again. The device MUST remain in this
+      recovery loop until either:
+      1. Bootz completes successfully
+      2. The operator manually resets the device to standard DHCP mode
+         via the CLI, at which point Option A takes effect.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.BootstrapStreamV1` to
       the bootz-server whose address was obtained either from the DHCP server
@@ -762,7 +761,7 @@ while TPM 1.2 systems are not supported.
      will finally send out an empty `ReportStatusResponse` message to
      acknowledge the status report. If the challenge fails, an error will be
      returned and the device must start over from Step 7.
-9.   Cleanup
+9. Cleanup
    - If the device was bootstrapped via DHCP-less Bootz, it MUST
      now automatically delete the persistent Bootz parameter file and wipe
      the temporary pre-configuration used for initial connectivity.
@@ -772,33 +771,35 @@ while TPM 1.2 systems are not supported.
 Vendors supporting DHCP-less Bootz MUST implement the following standardized CLI
 commands:
 
-*   **Initiate DHCP-less Bootz**:
+- **Initiate DHCP-less Bootz**:
 
-    ```
-    bootz no-dhcp src_interface <interface> bootz_uri <bootz_uri>
-    ```
-    *   This command configures the Bootz agent to start in DHCP-less mode using
-        the specified source interface and Bootz server URI.
-    *   The URI of the Bootz server is in the format
-        `bootz://<host_or_ip>:<port>`.
-    *   It must save the currently loaded configuration so that it can revert
-        back to it in the event of a failure.
-    *   It must save the CLI parameters (Bootz URI and source interface) to the
-        persistent Bootz parameter file.
-    *   It puts the device into the Bootz loop (may trigger a reboot).
+  ```bash
+  bootz no-dhcp src_interface <interface> bootz_uri <bootz_uri>
+  ```
 
-*   **Exit/Reset DHCP-less Bootz**:
+  - This command configures the Bootz agent to start in DHCP-less mode using
+    the specified source interface and Bootz server URI.
+  - The URI of the Bootz server is in the format
+    `bootz://<host_or_ip>:<port>`.
+  - It must save the currently loaded configuration so that it can revert
+    back to it in the event of a failure.
+  - It must save the CLI parameters (Bootz URI and source interface) to the
+    persistent Bootz parameter file.
+  - It puts the device into the Bootz loop (may trigger a reboot).
 
-    ```
-    bootz no-dhcp reset
-    ```
-    *   This command stops the DHCP-less Bootz loop.
-    *   It MUST wipe the temporary pre-configuration and the persistent Bootz
-        parameter file.
-    *   It reboots the device into standard DHCP Bootz mode.
+- **Exit/Reset DHCP-less Bootz**:
 
-*   **Logging**: The device MUST log initiation, exit, and reset events to
-    syslog or a Bootz-specific log.
+  ```bash
+  bootz no-dhcp reset
+  ```
+
+  - This command stops the DHCP-less Bootz loop.
+  - It MUST wipe the temporary pre-configuration and the persistent Bootz
+    parameter file.
+  - It reboots the device into standard DHCP Bootz mode.
+
+- **Logging**: The device MUST log initiation, exit, and reset events to
+  syslog or a Bootz-specific log.
 
 ### A Note on Modular Devices
 
