@@ -16,7 +16,6 @@
 package http
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -57,11 +56,11 @@ func Start(conf *Config) error {
 	fs := http.FileServer(http.Dir(conf.Folder))
 	mux := http.NewServeMux()
 	mux.Handle("/", fs)
-	srv := &http.Server{Addr: conf.Address, Handler: fs}
+	srv := &http.Server{Addr: conf.Address, Handler: mux}
 	instance = &Server{server: srv}
 
 	go func() {
-		if err := http.ListenAndServe(srv.Addr, srv.Handler); err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			log.Exitf("Error starting http server: %v", err)
 		}
 	}()
@@ -77,7 +76,7 @@ func Stop() {
 	defer lock.Unlock()
 
 	if instance != nil {
-		instance.server.Shutdown(context.Background())
+		instance.server.Close()
 	}
 	instance = nil
 }
