@@ -20,17 +20,16 @@
 package server
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"net"
-	"net/http"
 
 	log "github.com/golang/glog"
 	"github.com/openconfig/attestz/service/biz"
 	"github.com/openconfig/bootz/common/types"
 	"github.com/openconfig/bootz/dhcp"
+	"github.com/openconfig/bootz/http"
 	"github.com/openconfig/bootz/server/entitymanager"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
@@ -44,7 +43,6 @@ type Server struct {
 	serv    *grpc.Server
 	lis     net.Listener
 	service *service.Service
-	httpSrv *http.Server
 }
 
 // Start starts up the bootz emulator server.
@@ -55,9 +53,6 @@ func (s *Server) Start() error {
 // Stop shuts down the bootz emulator server.
 func (s *Server) Stop() {
 	s.serv.GracefulStop()
-	if s.httpSrv != nil {
-		s.httpSrv.Shutdown(context.Background())
-	}
 }
 
 // bootzServerOpts is used to pass optional args to NewServer.
@@ -74,10 +69,8 @@ func (*DHCPOpts) isbootzServerOpts() {}
 
 // ImgSrvOpts is an struct that captures dhcp server config.
 type ImgSrvOpts struct {
-	ImagesLocation string
 	Address        string
-	CertFile       string
-	KeyFile        string
+	ImagesLocation string
 }
 
 func (*ImgSrvOpts) isbootzServerOpts() {}
@@ -101,7 +94,9 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *ty
 				return nil, fmt.Errorf("unable to start dhcp server %v", err)
 			}
 		case *ImgSrvOpts:
-			server.httpSrv = StartImageServer(opt)
+			if err := StartImageServer(opt); err != nil {
+				return nil, fmt.Errorf("unable to start image server %v", err)
+			}
 		case *InterceptorOpts:
 			interceptor = grpc.UnaryInterceptor(opt.BootzInterceptor)
 		default:
@@ -181,16 +176,11 @@ func StartDhcpServer(em *entitymanager.InMemoryEntityManager, dhcpIntf string) e
 	return dhcp.Start(conf)
 }
 
-// StartImageServer starts an https server as an image server.
-func StartImageServer(opt *ImgSrvOpts) *http.Server {
-	fs := http.FileServer(http.Dir(opt.ImagesLocation))
-	mux := http.NewServeMux()
-	mux.Handle("/", fs)
-	srv := &http.Server{Addr: opt.Address, Handler: fs}
-	go func() {
-		if err := srv.ListenAndServeTLS(opt.CertFile, opt.KeyFile); err != http.ErrServerClosed {
-			log.Fatalf("Error starting image server: %v", err)
-		}
-	}()
-	return srv
+// StartImageServer starts an http server as an image server.
+func StartImageServer(opt *ImgSrvOpts) error {
+	conf := &http.Config{
+		Address: opt.Address,
+		Folder:  opt.ImagesLocation,
+	}
+	return http.Start(conf)
 }
