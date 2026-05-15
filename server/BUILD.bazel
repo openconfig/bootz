@@ -22,6 +22,7 @@ go_library(
     deps = [
         "//common/types",
         "//dhcp",
+        "//http",
         "//proto:bootz",
         "//server/entitymanager",
         "//server/service",
