@@ -11,5 +11,4 @@ go_test(
     name = "signature_test",
     srcs = ["signature_test.go"],
     embed = [":signature"],
-    deps = ["//testdata:testdata_lib"],
 )
