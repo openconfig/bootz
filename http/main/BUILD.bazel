@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "main_lib",
+    srcs = ["http.go"],
+    importpath = "github.com/openconfig/bootz/http/main",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//http",
+        "@com_github_golang_glog//:glog",
+    ],
+)
+
+go_binary(
+    name = "main",
+    embed = [":main_lib"],
+    visibility = ["//visibility:public"],
+)
