@@ -1,0 +1,87 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package config;
+
+import "github.com/openconfig/attestz/proto/tpm_enrollz.proto";
+import "github.com/openconfig/bootz/proto/bootz.proto";
+import "github.com/openconfig/gnsi/authz/authz.proto";
+import "github.com/openconfig/gnsi/pathz/pathz.proto";
+
+option go_package = "github.com/openconfig/bootz/server/proto/config";
+
+// A binding configuration for Bootz server.
+message Config {
+  // Bootz server address (IP:port).
+  string server_address = 1;
+  // Bootz server trust anchor cert key pair.
+  CertKeyPair trust_anchor = 2;
+  // Owner certificate key pair.
+  CertKeyPair owner_certificate = 3;
+  // Based64 encoding of ASN.1 DER vendor CA certificates.
+  repeated string vendor_ca_certs = 4;
+  // Chassis owned by the organization.
+  repeated Chassis chassis = 5;
+}
+
+message CertKeyPair {
+  // Base64 encoding of ASN.1 DER certificate.
+  string cert = 1;
+  // Base64 encoding of PKCS#8 DER private key.
+  string key = 2;
+}
+
+message Chassis {
+  // Chassis manufacturer.
+  string manufacturer = 1;
+  // For fixed form factor chassis, populate only 1 control card to represent
+  // the chassis itself. For modular form factor chassis, populate 2 control
+  // cards.
+  repeated ControlCard control_cards = 2;
+  // The intended hostname of the chassis.
+  string hostname = 3;
+  // Boot mode defines the boot mode that can be secure or insecure.
+  bootz.BootMode boot_mode = 4;
+  // Whether Streaming Bootz is supported or not.
+  bool streaming_supported = 5;
+  // Software image to be loaded on the chassis.
+  bootz.SoftwareImage intended_image = 6;
+  // Bootloader password.
+  string boot_password_hash = 7;
+  // Boot config to be loaded on the chassis.
+  bootz.BootConfig boot_config = 8;
+  // Credentials.
+  bootz.Credentials credentials = 9;
+  // Pathz.
+  gnsi.pathz.v1.UploadRequest pathz = 10;
+  // Authz.
+  gnsi.authz.v1.UploadRequest authz = 11;
+  // Certz profiles.
+  bootz.CertzProfiles certz_profiles = 12;
+}
+
+message ControlCard {
+  // Serial number of the control card.
+  string serial_number = 1;
+  // Base64 encoding of ownership voucher.
+  string ownership_voucher = 2;
+  // Base64 encoding of PKIX DER EK/PPK public key.
+  // This field is not populated for control cards having IDevID.
+  string public_key = 3;
+  // Public key type: EK or PPK.
+  // This field is not populated for control cards having IDevID.
+  openconfig.attestz.Key public_key_type = 4;
+}
