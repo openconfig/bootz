@@ -19,7 +19,7 @@ import (
 	"crypto/x509"
 	"testing"
 
-	artifacts "github.com/openconfig/bootz/testdata"
+	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 )
 
 var (
@@ -28,18 +28,18 @@ var (
 
 // Tests that a new OV can be created and it can be unpacked and verified.
 func TestEndToEndJSON(t *testing.T) {
-	pdc, _, err := artifacts.NewCertificateAuthority("Pinned Domain Cert", "Google", "localhost")
+	pdc, _, err := ownercertificate.NewRSACertificate("Pinned Domain Cert", "", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate PDC: %v", err)
 	}
-	vendorca, vendorcaPrivateKey, err := artifacts.NewCertificateAuthority("Cisco Certificate Authority", "Cisco", "localhost")
+	vendorca, vendorcaPrivateKey, err := ownercertificate.NewRSACertificate("Vendor Certificate Authority", "", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate Vendor CA: %v", err)
 	}
 
-	ov, err := artifacts.NewOwnershipVoucher("json", wantSerial, pdc, vendorca, vendorcaPrivateKey)
+	ov, err := NewOwnershipVoucher("json", wantSerial, pdc, vendorca, vendorcaPrivateKey)
 	if err != nil {
-		t.Errorf("New err = %v, want nil", err)
+		t.Errorf("unable to generate ownership voucher: err = %v, want nil", err)
 	}
 
 	vendorCAPool := x509.NewCertPool()
@@ -59,18 +59,18 @@ func TestEndToEndJSON(t *testing.T) {
 }
 
 func TestEndToEndXML(t *testing.T) {
-	pdc, _, err := artifacts.NewCertificateAuthority("Pinned Domain Cert", "Google", "localhost")
+	pdc, _, err := ownercertificate.NewRSACertificate("Pinned Domain Cert", "", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate PDC: %v", err)
 	}
-	vendorca, vendorcaPrivateKey, err := artifacts.NewCertificateAuthority("Cisco Certificate Authority", "Cisco", "localhost")
+	vendorca, vendorcaPrivateKey, err := ownercertificate.NewRSACertificate("Vendor Certificate Authority", "", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate Vendor CA: %v", err)
 	}
 
-	ov, err := artifacts.NewOwnershipVoucher("xml", wantSerial, pdc, vendorca, vendorcaPrivateKey)
+	ov, err := NewOwnershipVoucher("xml", wantSerial, pdc, vendorca, vendorcaPrivateKey)
 	if err != nil {
-		t.Errorf("New err = %v, want nil", err)
+		t.Errorf("unable to generate ownership voucher: err = %v, want nil", err)
 	}
 
 	vendorCAPool := x509.NewCertPool()
