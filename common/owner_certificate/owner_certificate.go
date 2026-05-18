@@ -17,43 +17,40 @@ package ownercertificate
 
 import (
 	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"fmt"
-	"time"
 
 	"go.mozilla.org/pkcs7"
 )
 
-// Verify checks that the provided CMS message is signed by a signer in the provided certPool and returns the signer certificate.
+// Verify checks that the provided CMS value is signed by a signer in the provided
+// certPool and returns the Ownership Certificate.
 func Verify(in []byte, certPool *x509.CertPool) (*x509.Certificate, error) {
 	if len(in) == 0 {
-		return nil, fmt.Errorf("input CMS message is empty")
+		return nil, fmt.Errorf("owner certificate is empty")
 	}
 	p7, err := pkcs7.Parse(in)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse into pkcs7 format: %v", err)
 	}
+	if err = p7.VerifyWithChain(certPool); err != nil {
+		return nil, fmt.Errorf("failed to verify OC: %v", err)
+	}
 	if len(p7.Certificates) == 0 {
 		return nil, fmt.Errorf("no certificates found in pkcs7 message")
-	}
-	if err = p7.VerifyWithChain(certPool); err != nil {
-		return nil, fmt.Errorf("failed to verify the chain of trust: %v", err)
 	}
 	return p7.Certificates[0], nil
 }
 
-// GenerateCMS takes an owner certificate keypair and converts it to a CMS message.
-// The CMS message contains the owner certificate in its list of certificates.
+// GenerateCMS takes an Ownership Certificate keypair and converts it to a CMS structure.
+// The CMS structure contains the Ownership Certificate in its list of certificates.
 func GenerateCMS(cert *x509.Certificate, priv crypto.PrivateKey) ([]byte, error) {
 	signedMessage, err := pkcs7.NewSignedData(nil)
 	if err != nil {
 		return nil, err
 	}
-	// Override the default SHA1 digest with SHA256.
 	signedMessage.SetDigestAlgorithm(pkcs7.OIDDigestAlgorithmSHA256)
+	signedMessage.SetEncryptionAlgorithm(pkcs7.OIDEncryptionAlgorithmRSA)
 	signedMessage.AddCertificate(cert)
 
 	err = signedMessage.AddSigner(cert, priv, pkcs7.SignerInfoConfig{})
@@ -62,44 +59,4 @@ func GenerateCMS(cert *x509.Certificate, priv crypto.PrivateKey) ([]byte, error)
 	}
 
 	return signedMessage.Finish()
-}
-
-// NewRSACertificate creates a new RSA certificate and its private key, signed by the given certificate authority.
-// If certificate authority is not provided, this new certificate will be created as a certificate authority instead.
-func NewRSACertificate(commonName, deviceSerial string, caCert *x509.Certificate, caKey crypto.PrivateKey) (*x509.Certificate, *rsa.PrivateKey, error) {
-	isCA := false
-	if caCert == nil || caKey == nil {
-		isCA = true
-	}
-	template := &x509.Certificate{
-		Subject: pkix.Name{
-			CommonName: commonName,
-		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(999, 0, 0),
-		IsCA:                  isCA,
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-	}
-	if deviceSerial != "" {
-		template.Subject.SerialNumber = deviceSerial
-	}
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, nil, err
-	}
-	if isCA {
-		caCert = template
-		caKey = key
-	}
-	der, err := x509.CreateCertificate(rand.Reader, template, caCert, &key.PublicKey, caKey)
-	if err != nil {
-		return nil, nil, err
-	}
-	cert, err := x509.ParseCertificate(der)
-	if err != nil {
-		return nil, nil, err
-	}
-	return cert, key, nil
 }

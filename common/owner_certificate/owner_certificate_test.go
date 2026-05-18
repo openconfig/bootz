@@ -17,26 +17,30 @@ package ownercertificate
 import (
 	"crypto/x509"
 	"testing"
+
+	_ "embed"
+
+	artifacts "github.com/openconfig/bootz/testdata"
 )
 
 // Tests that the CMS structure can be created and that it can be verified with a PDC.
 func TestGenerateAndVerify(t *testing.T) {
-	pdc, pdcPrivateKey, err := NewRSACertificate("Pinned Domain Cert", "", nil, nil)
+	pdc, pdcPrivateKey, err := artifacts.NewCertificateAuthority("Pinned Domain Cert", "Google", "localhost")
 	if err != nil {
-		t.Fatalf("failed to create PDC: %v", err)
+		t.Fatalf("NewCertificateAuthority(): %v", err)
 	}
-	oc, ocPrivateKey, err := NewRSACertificate("Owner Certificate", "", pdc, pdcPrivateKey)
+	oc, ocPrivateKey, err := artifacts.NewSignedCertificate("Owner Certificate", "Google", "localhost", pdc, pdcPrivateKey)
 	if err != nil {
-		t.Fatalf("failed to create owner certificate: %v", err)
+		t.Fatalf("NewSignedCertificate(): %v", err)
 	}
 	cms, err := GenerateCMS(oc, ocPrivateKey)
 	if err != nil {
-		t.Fatalf("failed to create CMS: %v", err)
+		t.Fatalf("GenerateCMS(): %v", err)
 	}
 	pdcPool := x509.NewCertPool()
 	pdcPool.AddCert(pdc)
 	_, err = Verify(cms, pdcPool)
 	if err != nil {
-		t.Fatalf("failed to verify owner certificate: %v", err)
+		t.Fatalf("Verify(): %v", err)
 	}
 }

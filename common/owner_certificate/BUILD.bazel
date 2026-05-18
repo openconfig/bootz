@@ -12,4 +12,5 @@ go_test(
     name = "owner_certificate_test",
     srcs = ["owner_certificate_test.go"],
     embed = [":owner_certificate"],
+    deps = ["//testdata:testdata_lib"],
 )

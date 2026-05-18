@@ -81,13 +81,14 @@ func TLSConfiguration(opts *Opts) (*tls.Config, error) {
 	keyHash := sha256.Sum256(pubKeyBytes)
 	// Create the template and cert.
 	template := x509.Certificate{
-		Subject:      *opts.ServerCertSubject,
-		IPAddresses:  []net.IP{opts.IPAddress},
-		NotBefore:    time.Now().AddDate(0, 0, -1), // One day before server start-up.
-		NotAfter:     time.Now().AddDate(11, 0, 0), // 11 years after server start-up.
-		SubjectKeyId: keyHash[:],
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		KeyUsage:     x509.KeyUsageDigitalSignature,
+		Subject:        *opts.ServerCertSubject,
+		IPAddresses:    []net.IP{opts.IPAddress},
+		NotBefore:      time.Now().AddDate(0, 0, -1), // One day before server start-up.
+		NotAfter:       time.Now().AddDate(11, 0, 0), // 11 years after server start-up.
+		SubjectKeyId:   keyHash[:],
+		AuthorityKeyId: opts.CACert.SubjectKeyId,
+		ExtKeyUsage:    []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:       x509.KeyUsageDigitalSignature,
 	}
 
 	cert, err := x509.CreateCertificate(
