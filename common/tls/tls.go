@@ -10,7 +10,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
-	"math/big"
 	"net"
 	"time"
 
@@ -69,18 +68,19 @@ func TLSConfiguration(opts *Opts) (*tls.Config, error) {
 	if opts.ServerCertSubject == nil {
 		return nil, fmt.Errorf("ServerCertSubject is nil")
 	}
-	// 1. Generate a private key for the server.
+	// Generate a private key for the server.
 	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		return nil, fmt.Errorf("unable to generate private key: %v", err)
 	}
-	// 2. Calculate SubjectKeyId
-	pubKeyBytes := x509.MarshalPKCS1PublicKey(&privateKey.PublicKey)
+	// Calculate SubjectKeyId
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal public key: %v", err)
+	}
 	keyHash := sha256.Sum256(pubKeyBytes)
-
-	// 3. Create the template and cert.
+	// Create the template and cert.
 	template := x509.Certificate{
-		SerialNumber:   big.NewInt(int64(time.Now().Year())),
 		Subject:        *opts.ServerCertSubject,
 		IPAddresses:    []net.IP{opts.IPAddress},
 		NotBefore:      time.Now().AddDate(0, 0, -1), // One day before server start-up.
@@ -107,11 +107,11 @@ func TLSConfiguration(opts *Opts) (*tls.Config, error) {
 		Certificate: [][]byte{cert},
 	}
 
-	// 4. Create the Root CAs trust bundle.
+	// Create the Root CAs trust bundle.
 	rootCAs := x509.NewCertPool()
 	rootCAs.AddCert(opts.CACert)
 
-	// 5. Create the final TLS server config.
+	// Create the final TLS server config.
 	return &tls.Config{
 		Certificates:     []tls.Certificate{*tlsCert},
 		RootCAs:          rootCAs,
