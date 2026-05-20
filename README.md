@@ -237,12 +237,12 @@ certificates, keys and device configuration.
 
 ### Bootz Operation
 
-Devices are expected to perform a standard DHCP boot. The DHCP server passes a
-boot option to the device for an endpoint (URL) from which the boot package can
-be retrieved. The package returned by the endpoint consists of a binary encoded
-protocol buffer containing all data for being able to complete the boot process.
-In this context, “complete the boot process” implies the device reaching a fully
-manageable state - with the relevant gRPC services running.
+Devices obtain the address of the Bootz server endpoint from which the boot
+package can be retrieved. The package returned by the endpoint consists of a
+binary encoded protocol buffer containing all data for being able to complete
+the boot process. In this context, “complete the boot process” implies the
+device reaching a fully manageable state - with the relevant gRPC services
+running.
 
 Upon receiving the bootz protocol buffer, the device is responsible for
 unmarshalling the bootz message and distributing to the relevant system
@@ -260,11 +260,29 @@ where the device can be interrogated from a trusted system to enroll the TPM and
 validate specific TPM values to attest the device. Once attested, the systems
 can install production configuration and certificates into the device.
 
+### Operating modes
+
+#### DHCP (default)
+
+By default, devices are expected to perform a standard DHCP boot via the active
+control card's out-of-band (OOB) management interface. The DHCP server passes an
+option to the device for the Bootz URI from which the boot package can be
+retrieved.
+
+#### DHCP-less (inband)
+
+In environments where DHCP is not available or out-of-band (OOB) management
+plane connectivity is restricted, Bootz can be initiated using inband
+connectivity provided by an existing local configuration on the device. This
+mode bypasses the DHCP discovery phase entirely and expects the device to
+already have reachability to the Bootz server.
+
 ## Detailed Design
 
 ### Boot Procedure: Unary Bootz
 
-1. DHCP Discovery of Bootstrap Server
+1. Entry points to Bootz
+   - **Option A: DHCP Discovery (default)**
    1. Device sends DHCP messages, containing the mac-address of the active
       control card. The DHCP server has been configured with all possible
       mac-addresses of the device, and responds with the static IP address of
@@ -275,9 +293,30 @@ can install production configuration and certificates into the device.
    4. The format of the DHCP message (other than response option code) follows
       [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
       1. The URI will be in the format of `bootz://<hostname or ip>:<port>`
+   - **Option B: DHCP-less**
+   1. A network operator manually configures the device with a local
+      configuration that gives it reachability to the Bootz server. This
+      includes static routing, interface configuration and local admin
+      credentials.
+   2. A network operator triggers DHCP-less Bootz via CLI, providing the
+      Bootz Server URI and Source Interface. These are saved to a
+      persistent parameters file on disk to survive reboots.
+   3. The device enters a Bootz loop, attempting to connect to the
+      specified Bootz server from the source interface using its local
+      configuration. It should not perform a disk wipe or factory reset
+      during the initiation phase, though a reboot may be performed if
+      required.
+   4. If the DHCP-less Bootz process fails at any point, the device MUST
+      revert back to the operator-provided local configuration and attempt
+      to connect to the Bootz server again. The device MUST remain in this
+      recovery loop until either:
+      1. Bootz completes successfully
+      2. The operator manually resets the device to standard DHCP mode
+         via the CLI, at which point Option A takes effect.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.GetBootstrapData` to
-      the bootz-server whose address was obtained from the DHCP server.
+      the bootz-server whose address was obtained either from the DHCP server
+      (Option A) or from the persistent Bootz parameter file (Option B).
    2. In the TLS handshake, the server will send a CertificateRequest message.
       The device **MUST** present the IDevID cert of the active control card
       in this TLS handshake.
@@ -286,7 +325,7 @@ can install production configuration and certificates into the device.
       ownership-certificate. The device verifies the signature of the message
       body before accepting the message.
    4. If the signature could not be verified, the bootstrap process starts
-      from Step 1.
+      from the respective entry point (Step 1).
 
 Note: though a device SHOULD validate ownership by default, in some environment
 (e.g. a lab) we might not want to do so. In this case, the device can be
@@ -386,10 +425,13 @@ the ownership voucher and ownership certificate.
          active control card must check that the standby's TPM-backed IDevID.
          For example, it may request the IDevID cert, then issue a decrypt
          challenge to the standby control card.
-8. Final state:
+8. Final state and cleanup:
    1. At this point, the device has an initial configuration and user
       accounts. We have validated the identity and integrity of the device and
       its software components. It is ready to serve traffic.
+   2. If the device was bootstrapped via DHCP-less Bootz, it MUST
+      now automatically delete the persistent Bootz parameter file and wipe
+      the temporary pre-configuration used for initial connectivity.
 
 ### Bootz Procedure: BootstrapStream v0.6
 
@@ -399,7 +441,8 @@ below instead.**
 BootstrapStream v0.6 only supports TPM 2.0 (with or without IDevID) systems,
 while TPM 1.2 systems are not supported.
 
-1. DHCP Discovery of Bootstrap Server
+1. Entry points to Bootz
+   - **Option A: DHCP Discovery (default)**
    1. Device sends DHCP messages, containing the mac-address of the active
       control card. The DHCP server has been configured with all possible
       mac-addresses of the device, and responds with the static IP address of
@@ -410,9 +453,30 @@ while TPM 1.2 systems are not supported.
    4. The format of the DHCP message (other than response option code) follows
       [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
       1. The URI will be in the format of `bootz://<hostname or ip>:<port>`
+   - **Option B: DHCP-less**
+   1. A network operator manually configures the device with a local
+      configuration that gives it reachability to the Bootz server. This
+      includes static routing, interface configuration and local admin
+      credentials.
+   2. A network operator triggers DHCP-less Bootz via CLI, providing the
+      Bootz Server URI and Source Interface. These are saved to a
+      persistent parameters file on disk to survive reboots.
+   3. The device enters a Bootz loop, attempting to connect to the
+      specified Bootz server from the source interface using its local
+      configuration. It should not perform a disk wipe or factory reset
+      during the initiation phase, though a reboot may be performed if
+      required.
+   4. If the DHCP-less Bootz process fails at any point, the device MUST
+      revert back to the operator-provided local configuration and attempt
+      to connect to the Bootz server again. The device MUST remain in this
+      recovery loop until either:
+      1. Bootz completes successfully
+      2. The operator manually resets the device to standard DHCP mode
+         via the CLI, at which point Option A takes effect.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.BootstrapStream` to
-      the bootz-server whose address was obtained from the DHCP server.
+      the bootz-server whose address was obtained either from the DHCP server
+      (Option A) or from the persistent Bootz parameter file (Option B).
    2. The device **MUST NOT** present a client certificate in the TLS
       handshake.
 3. BootstrapStreamRequest.bootstrap_request
@@ -505,10 +569,15 @@ while TPM 1.2 systems are not supported.
      out an empty `ReportStatusResponse` message to acknowledge the status
      report. If the challenge fails, an error will be returned and the device
      must start over from Step 9.
+9. Final state and cleanup:
+   1. If the device was bootstrapped via DHCP-less Bootz, it MUST
+      now automatically delete the persistent Bootz parameter file and wipe
+      the temporary pre-configuration used for initial connectivity.
 
 ### Bootz Procedure: BootstrapStream v1.0
 
-1. DHCP Discovery of Bootstrap Server
+1. Entry points to Bootz
+   - **Option A: DHCP Discovery (default)**
    1. Device sends DHCP messages, containing the mac-address of the active
       control card. The DHCP server has been configured with all possible
       mac-addresses of the device, and responds with the static IP address of
@@ -519,9 +588,30 @@ while TPM 1.2 systems are not supported.
    4. The format of the DHCP message (other than response option code) follows
       [RFC](https://www.rfc-editor.org/rfc/rfc8572#page-56).
       1. The URI will be in the format of `bootz://<hostname or ip>:<port>`
+   - **Option B: DHCP-less**
+   1. A network operator manually configures the device with a local
+      configuration that gives it reachability to the Bootz server. This
+      includes static routing, interface configuration and local admin
+      credentials.
+   2. A network operator triggers DHCP-less Bootz via CLI, providing the
+      Bootz Server URI and Source Interface. These are saved to a
+      persistent parameters file on disk to survive reboots.
+   3. The device enters a Bootz loop, attempting to connect to the
+      specified Bootz server from the source interface using its local
+      configuration. It should not perform a disk wipe or factory reset
+      during the initiation phase, though a reboot may be performed if
+      required.
+   4. If the DHCP-less Bootz process fails at any point, the device MUST
+      revert back to the operator-provided local configuration and attempt
+      to connect to the Bootz server again. The device MUST remain in this
+      recovery loop until either:
+      1. Bootz completes successfully
+      2. The operator manually resets the device to standard DHCP mode
+         via the CLI, at which point Option A takes effect.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.BootstrapStreamV1` to
-      the bootz-server whose address was obtained from the DHCP server.
+      the bootz-server whose address was obtained either from the DHCP server
+      (Option A) or from the persistent Bootz parameter file (Option B).
    2. In the TLS handshake, the server will send a CertificateRequest message.
       The device **MUST NOT** present a client certificate in this TLS
       handshake. The server MUST be configured to allow the handshake to
@@ -671,6 +761,45 @@ while TPM 1.2 systems are not supported.
      will finally send out an empty `ReportStatusResponse` message to
      acknowledge the status report. If the challenge fails, an error will be
      returned and the device must start over from Step 7.
+9. Cleanup
+   - If the device was bootstrapped via DHCP-less Bootz, it MUST
+     now automatically delete the persistent Bootz parameter file and wipe
+     the temporary pre-configuration used for initial connectivity.
+
+### DHCP-less CLI Specification
+
+Vendors supporting DHCP-less Bootz MUST implement the following standardized CLI
+commands:
+
+- **Initiate DHCP-less Bootz**:
+
+  ```bash
+  bootz no-dhcp src_interface <interface> bootz_uri <bootz_uri>
+  ```
+
+  - This command configures the Bootz agent to start in DHCP-less mode using
+    the specified source interface and Bootz server URI.
+  - The URI of the Bootz server is in the format
+    `bootz://<host_or_ip>:<port>`.
+  - It must save the currently loaded configuration so that it can revert
+    back to it in the event of a failure.
+  - It must save the CLI parameters (Bootz URI and source interface) to the
+    persistent Bootz parameter file.
+  - It puts the device into the Bootz loop (may trigger a reboot).
+
+- **Exit/Reset DHCP-less Bootz**:
+
+  ```bash
+  bootz no-dhcp reset
+  ```
+
+  - This command stops the DHCP-less Bootz loop.
+  - It MUST wipe the temporary pre-configuration and the persistent Bootz
+    parameter file.
+  - It reboots the device into standard DHCP Bootz mode.
+
+- **Logging**: The device MUST log initiation, exit, and reset events to
+  syslog or a Bootz-specific log.
 
 ### A Note on Modular Devices
 
@@ -739,6 +868,119 @@ the IDevID cert.
 This is the preferred workflow for security considerations. This workflow
 utilizes Enrollz and Attestz to provide enrollment then measured boot to
 validate the state of device before providing any "production" certificates.
+
+### DHCP-less/Inband Bootz scenarios
+
+#### Scenario 1: Failure before contacting Bootz server
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Operator as Network Operator
+    participant Device
+    participant Server as Bootz Server
+
+    Operator->>Device: Pre-configure device with minimal config
+    activate Device
+    Device->>Device: Apply startup config
+    deactivate Device
+    Operator->>Device: Initiate Bootz (Bootz URI, Source interface)
+    activate Device
+    Device->>Device: Write Bootz parameters to file system
+    Device->>Device: Reboot
+    Note over Device: Device reboots
+    Device->>Device: Check for existence of Bootz parameters
+    loop Retry Loop (Indefinite)
+        Device->>Server: GetBootstrapData()
+        activate Server
+        Server-->>Device: Error / Timeout
+        deactivate Server
+        Note over Device: Wait 10 seconds for retry
+    end
+    deactivate Device
+```
+
+#### Scenario 2: Failure after contacting Bootz server
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Operator as Network Operator
+    participant Device
+    participant Server as Bootz Server
+
+    Operator->>Device: Pre-configure device with minimal config
+    activate Device
+    Device->>Device: Apply startup config
+    deactivate Device
+    Operator->>Device: Initiate Bootz (Bootz URI, Source interface)
+    activate Device
+    Device->>Device: Write Bootz parameters to file system
+    Device->>Device: Reboot
+    Note over Device: Device reboots
+    Device->>Device: Check for existence of Bootz parameters
+    loop Retry Loop (Indefinite)
+        Device->>Server: GetBootstrapData()
+        activate Server
+        Server-->>Device: GetBootstrapDataResponse()
+        deactivate Server
+        Device->>Device: Apply bootstrap config (overwrite)
+        Note over Device: Config commit fails
+        Device->>Device: Revert to pre-Bootz config
+    end
+    deactivate Device
+```
+
+#### Scenario 3: Reverting to DHCP Bootz
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Operator as Network Operator
+    participant Device
+    participant Server as Bootz Server
+    participant DHCP
+
+    Operator->>Device: Pre-configure device with minimal config
+    activate Device
+    Device->>Device: Apply startup config
+    deactivate Device
+    Operator->>Device: Initiate Bootz (Bootz URI, Source interface)
+    activate Device
+    Device->>Device: Write Bootz parameters to file system
+    Device->>Device: Reboot
+    Note over Device: Device reboots
+    Device->>Device: Check for existence of Bootz parameters
+    Device->>Server: GetBootstrapData()
+    activate Server
+    Server-->>Device: Error / Timeout
+    deactivate Server
+    Device->>Device: Revert to pre-Bootz config
+    Note over Device: Retry loop continues indefinitely
+
+    Operator->>Device: Reset Bootz parameters
+    Device->>Device: Wipe Bootz parameters from file system
+    Device->>Device: Wipe startup config
+    Device->>Device: Reboot
+    Note over Device: Device reboots
+    Device->>Device: Check for existence of Bootz parameters (none found)
+
+    Device->>DHCP: DHCP Request
+    activate DHCP
+    DHCP-->>Device: DHCP Response (IP address, Bootz URI)
+    deactivate DHCP
+
+    Device->>Server: GetBootstrapDataRequest()
+    activate Server
+    Server-->>Device: GetBootstrapDataResponse()
+    deactivate Server
+    Device->>Device: Apply bootstrap config
+    Device->>Server: ReportStatus(Success)
+    activate Server
+    Server-->>Device: Acknowledge
+    deactivate Server
+    deactivate Device
+```
 
 ### Protobuf Payload for Bootstrap
 
