@@ -9,12 +9,12 @@ require (
 	github.com/google/go-tpm v0.9.8
 	github.com/h-fam/errdiff v1.0.2
 	github.com/insomniacslk/dhcp v0.0.0-20260407060928-11b94ed970f2
-	github.com/openconfig/attestz v0.6.12
+	github.com/openconfig/attestz v0.6.13
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnsi v1.9.1
 	go.mozilla.org/pkcs7 v0.9.0
-	google.golang.org/grpc v1.81.0
-	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.1
+	google.golang.org/grpc v1.81.1
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.2
 	google.golang.org/protobuf v1.36.11
 )
 
