@@ -312,7 +312,14 @@ already have reachability to the Bootz server.
       recovery loop until either:
       1. Bootz completes successfully
       2. The operator manually resets the device to standard DHCP mode
-         via the CLI, at which point Option A takes effect.
+         via the CLI (`bootz no-dhcp reset`).
+      3. The operator explicitly terminates the Bootz process manually
+         via the CLI (`bootz no-dhcp terminate`).
+      4. A manual configuration commit is completed on the device. The
+         device MUST intercept manual configuration commitments that are not
+         originating from the active Bootz agent transaction. Upon intercepting
+         such a commit, the device MUST cleanly stop the Bootz background loop
+         and delete the persistent Bootz parameter file.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.GetBootstrapData` to
       the bootz-server whose address was obtained either from the DHCP server
@@ -472,7 +479,14 @@ while TPM 1.2 systems are not supported.
       recovery loop until either:
       1. Bootz completes successfully
       2. The operator manually resets the device to standard DHCP mode
-         via the CLI, at which point Option A takes effect.
+         via the CLI (`bootz no-dhcp reset`).
+      3. The operator explicitly terminates the Bootz process manually
+         via the CLI (`bootz no-dhcp terminate`).
+      4. A manual configuration commit is completed on the device. The
+         device MUST intercept manual configuration commitments that are not
+         originating from the active Bootz agent transaction. Upon intercepting
+         such a commit, the device MUST cleanly stop the Bootz background loop
+         and delete the persistent Bootz parameter file.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.BootstrapStream` to
       the bootz-server whose address was obtained either from the DHCP server
@@ -607,7 +621,14 @@ while TPM 1.2 systems are not supported.
       recovery loop until either:
       1. Bootz completes successfully
       2. The operator manually resets the device to standard DHCP mode
-         via the CLI, at which point Option A takes effect.
+         via the CLI (`bootz no-dhcp reset`).
+      3. The operator explicitly terminates the Bootz process manually
+         via the CLI (`bootz no-dhcp terminate`).
+      4. A manual configuration commit is completed on the device. The
+         device MUST intercept manual configuration commitments that are not
+         originating from the active Bootz agent transaction. Upon intercepting
+         such a commit, the device MUST cleanly stop the Bootz background loop
+         and delete the persistent Bootz parameter file.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.BootstrapStreamV1` to
       the bootz-server whose address was obtained either from the DHCP server
@@ -774,7 +795,7 @@ commands:
 - **Initiate DHCP-less Bootz**:
 
   ```bash
-  bootz no-dhcp src_interface <interface> bootz_uri <bootz_uri>
+  bootz no-dhcp initiate --src_interface <interface> --bootz_uri <bootz_uri>
   ```
 
   - This command configures the Bootz agent to start in DHCP-less mode using
@@ -794,9 +815,23 @@ commands:
   ```
 
   - This command stops the DHCP-less Bootz loop.
-  - It MUST wipe the temporary pre-configuration and the persistent Bootz
-    parameter file.
+  - This is a destructive operation. It MUST wipe the temporary
+    pre-configuration (restoring the device back to its factory-default state)
+    and delete the persistent Bootz parameter file.
   - It reboots the device into standard DHCP Bootz mode.
+
+- **Terminate DHCP-less Bootz**:
+
+  ```bash
+  bootz no-dhcp terminate
+  ```
+
+  - This command stops the DHCP-less Bootz loop.
+  - It MUST immediately kill the running background Bootz agent.
+  - It MUST delete the persistent Bootz parameter file from the disk.
+  - It MUST NOT wipe or alter the current local configuration (running or startup).
+  - It transitions the device out of bootstrap state, leaving all current
+    routing, interface, and credential configurations intact for local operations.
 
 - **Logging**: The device MUST log initiation, exit, and reset events to
   syslog or a Bootz-specific log.
@@ -884,7 +919,7 @@ sequenceDiagram
     activate Device
     Device->>Device: Apply startup config
     deactivate Device
-    Operator->>Device: Initiate Bootz (Bootz URI, Source interface)
+    Operator->>Device: `bootz no-dhcp initiate --src_interface mgmt0 --bootz_uri bootz://192.168.1.2:15006`
     activate Device
     Device->>Device: Write Bootz parameters to file system
     Device->>Device: Reboot
@@ -913,7 +948,7 @@ sequenceDiagram
     activate Device
     Device->>Device: Apply startup config
     deactivate Device
-    Operator->>Device: Initiate Bootz (Bootz URI, Source interface)
+    Operator->>Device: `bootz no-dhcp initiate --src_interface mgmt0 --bootz_uri bootz://192.168.1.2:15006`
     activate Device
     Device->>Device: Write Bootz parameters to file system
     Device->>Device: Reboot
@@ -945,7 +980,7 @@ sequenceDiagram
     activate Device
     Device->>Device: Apply startup config
     deactivate Device
-    Operator->>Device: Initiate Bootz (Bootz URI, Source interface)
+    Operator->>Device: `bootz no-dhcp initiate --src_interface mgmt0 --bootz_uri bootz://192.168.1.2:15006`
     activate Device
     Device->>Device: Write Bootz parameters to file system
     Device->>Device: Reboot
@@ -958,7 +993,7 @@ sequenceDiagram
     Device->>Device: Revert to pre-Bootz config
     Note over Device: Retry loop continues indefinitely
 
-    Operator->>Device: Reset Bootz parameters
+    Operator->>Device: `bootz no-dhcp reset`
     Device->>Device: Wipe Bootz parameters from file system
     Device->>Device: Wipe startup config
     Device->>Device: Reboot
@@ -978,6 +1013,76 @@ sequenceDiagram
     Device->>Server: ReportStatus(Success)
     activate Server
     Server-->>Device: Acknowledge
+    deactivate Server
+    deactivate Device
+```
+
+#### Scenario 4: Terminating DHCP-less Bootz via CLI
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Operator as Network Operator
+    participant Device
+    participant Server as Bootz Server
+    participant DHCP
+
+    Operator->>Device: Pre-configure device with minimal config
+    activate Device
+    Device->>Device: Apply startup config
+    deactivate Device
+    Operator->>Device: Initiate Bootz `bootz no-dhcp initiate --src_interface mgmt0 --bootz_uri bootz://192.168.1.2:15006`
+    activate Device
+    Device->>Device: Write Bootz parameters to file system
+    Device->>Device: Reboot
+    Note over Device: Device reboots
+    Device->>Device: Check for existence of Bootz parameters
+    Device->>Server: GetBootstrapData()
+    activate Server
+    Server-->>Device: Error / Timeout
+    deactivate Server
+    Device->>Device: Revert to pre-Bootz config
+    Note over Device: Retry loop continues indefinitely
+
+    Operator->>Device: `bootz no-dhcp terminate`
+    Device->>Device: Wipe Bootz parameters from file system
+    Device->>Device: Exit Bootz loop
+
+    deactivate Server
+    deactivate Device
+```
+
+#### Scenario 5: Terminating DHCP-less Bootz via manual commit
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Operator as Network Operator
+    participant Device
+    participant Server as Bootz Server
+    participant DHCP
+
+    Operator->>Device: Pre-configure device with minimal config
+    activate Device
+    Device->>Device: Apply startup config
+    deactivate Device
+    Operator->>Device: Initiate Bootz `bootz no-dhcp initiate --src_interface mgmt0 --bootz_uri bootz://192.168.1.2:15006`
+    activate Device
+    Device->>Device: Write Bootz parameters to file system
+    Device->>Device: Reboot
+    Note over Device: Device reboots
+    Device->>Device: Check for existence of Bootz parameters
+    Device->>Server: GetBootstrapData()
+    activate Server
+    Server-->>Device: Error / Timeout
+    deactivate Server
+    Device->>Device: Revert to pre-Bootz config
+    Note over Device: Retry loop continues indefinitely
+
+    Operator->>Device: Commit new startup config manually
+    Device->>Device: Wipe Bootz parameters from file system
+    Device->>Device: Exit Bootz loop
+
     deactivate Server
     deactivate Device
 ```
