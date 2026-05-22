@@ -1048,7 +1048,6 @@ sequenceDiagram
     Device->>Device: Wipe Bootz parameters from file system
     Device->>Device: Exit Bootz loop
 
-    deactivate Server
     deactivate Device
 ```
 
@@ -1083,7 +1082,6 @@ sequenceDiagram
     Device->>Device: Wipe Bootz parameters from file system
     Device->>Device: Exit Bootz loop
 
-    deactivate Server
     deactivate Device
 ```
 
