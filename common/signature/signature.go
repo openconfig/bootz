@@ -23,7 +23,6 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
-	"encoding/base64"
 	"fmt"
 )
 
@@ -42,29 +41,29 @@ func computeHash(algorithm x509.SignatureAlgorithm, input []byte) (crypto.Hash, 
 	}
 }
 
-// Sign generates a base64-encoded signature of the input data using the provided private key.
-func Sign(privateKey crypto.PrivateKey, algorithm x509.SignatureAlgorithm, input []byte) (string, error) {
+// Sign generates a signature of the input data using the provided private key.
+func Sign(privateKey crypto.PrivateKey, algorithm x509.SignatureAlgorithm, input []byte) ([]byte, error) {
 	hashAlgo, hashed, err := computeHash(algorithm, input)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	var sig []byte
 	switch priv := privateKey.(type) {
 	case *rsa.PrivateKey:
 		sig, err = rsa.SignPKCS1v15(rand.Reader, priv, hashAlgo, hashed)
 		if err != nil {
-			return "", fmt.Errorf("Sign(): unable to sign signature: %w", err)
+			return nil, fmt.Errorf("Sign(): unable to sign signature: %w", err)
 		}
 	case *ecdsa.PrivateKey:
 		sig, err = ecdsa.SignASN1(rand.Reader, priv, hashed)
 		if err != nil {
-			return "", fmt.Errorf("Sign(): unable to sign signature: %w", err)
+			return nil, fmt.Errorf("Sign(): unable to sign signature: %w", err)
 		}
 	default:
-		return "", fmt.Errorf("Sign(): unsupported private key type: %T", priv)
+		return nil, fmt.Errorf("Sign(): unsupported private key type: %T", priv)
 	}
 
-	return base64.StdEncoding.EncodeToString(sig), nil
+	return sig, nil
 }
 
 // Verify verifies a signature of the input data using the provided certificate.

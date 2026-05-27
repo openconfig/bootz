@@ -2,13 +2,10 @@ package types
 
 import (
 	"crypto"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 
-	epb "github.com/openconfig/attestz/proto/tpm_enrollz"
 	bpb "github.com/openconfig/bootz/proto/bootz"
-	apb "github.com/openconfig/gnsi/authz"
 )
 
 // OVList is a mapping of control card serial number to ownership voucher.
@@ -55,10 +52,6 @@ type Chassis struct {
 	// All the fields below are resolved from Bootz server inventory.
 	// ================================================================================
 
-	// The public key owned by the active control card.
-	ActivePublicKey *rsa.PublicKey
-	// The type of the public key (EK or PPK) owned by the active control card.
-	ActivePublicKeyType epb.Key
 	// The intended hostname of the chassis.
 	Hostname string
 	// The mode this chassis should boot into.
@@ -73,9 +66,4 @@ type Chassis struct {
 	Manufacturer string
 	// The part number of this chassis.
 	PartNumber string
-	// The below fields are normally unset and are primarily used for
-	// cases where this data should be hardcoded e.g. for testing.
-	BootConfig             *bpb.BootConfig
-	Authz                  *apb.UploadRequest
-	BootloaderPasswordHash string
 }

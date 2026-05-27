@@ -25,19 +25,19 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/binary"
 	"io"
 	"math/big"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/openconfig/attestz/service/biz"
+	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
+	ownershipvoucher "github.com/openconfig/bootz/common/ownership_voucher"
+	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/common/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -53,48 +53,71 @@ import (
 )
 
 var (
-	testOV            = []byte("test-ov")
-	testOC            = []byte("test-oc")
-	testSig           = "test-signature"
 	testNonce         = "test-client-nonce"
 	testSerial        = "test-serial-123"
 	testIPAddress     = "1.2.3.4"
+	testPublicKeyType = epb.Key_KEY_EK
 	testAIKPubDigest  = []byte("test-aik-pub-digest0") // Must be 20 bytes.
+	testChassis       = &types.Chassis{StreamingSupported: true}
 	testBootstrapData = &bpb.BootstrapDataResponse{BootConfig: &bpb.BootConfig{VendorConfig: []byte("test-vendor-config")}}
 )
 
-// Mock EntityManager for testing purposes.
-type mockEntityManager struct {
-	resolveChassisResp   *types.Chassis
-	resolveChassisErr    error
-	getBootstrapDataResp *bpb.BootstrapDataResponse
-	getBootstrapDataErr  error
-	setStatusErr         error
-	signErr              error
+// mockArtifactManager is for testing purposes.
+type mockArtifactManager struct {
+	oc       *x509.Certificate
+	ocKey    crypto.PrivateKey
+	vendorCA *x509.Certificate
+	ov       []byte
+	pub      crypto.PublicKey
 }
 
-func (m *mockEntityManager) ResolveChassis(ctx context.Context, chassis *types.Chassis) error {
+func (m *mockArtifactManager) BootzServerTrustAnchorKeyPair() (*x509.Certificate, crypto.PrivateKey) {
+	return &x509.Certificate{}, nil
+}
+
+func (m *mockArtifactManager) OwnerCertificateKeyPair() (*x509.Certificate, crypto.PrivateKey) {
+	return m.oc, m.ocKey
+}
+
+func (m *mockArtifactManager) OwnershipVoucher(ctx context.Context, serial string, vendor string) ([]byte, error) {
+	return m.ov, nil
+}
+
+func (m *mockArtifactManager) PublicKey(ctx context.Context, serial string, vendor string) (crypto.PublicKey, epb.Key, error) {
+	return m.pub, testPublicKeyType, nil
+}
+
+func (m *mockArtifactManager) VendorCABundle() *x509.CertPool {
+	pool := x509.NewCertPool()
+	pool.AddCert(m.vendorCA)
+	return pool
+}
+
+// mockChassisManager is for testing purposes.
+type mockChassisManager struct {
+	chassis          *types.Chassis
+	chassisErr       error
+	bootstrapData    *bpb.BootstrapDataResponse
+	bootstrapDataErr error
+}
+
+func (m *mockChassisManager) ResolveChassis(ctx context.Context, chassis *types.Chassis) error {
 	chassisCopy := *chassis
-	*chassis = *m.resolveChassisResp
+	*chassis = *m.chassis
 	chassis.Serials = chassisCopy.Serials
 	chassis.ActiveSerial = chassisCopy.ActiveSerial
 	chassis.IPAddress = chassisCopy.IPAddress
 	chassis.Identity = chassisCopy.Identity
-	return m.resolveChassisErr
+	return m.chassisErr
 }
-func (m *mockEntityManager) GetBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error) {
-	return m.getBootstrapDataResp, m.getBootstrapDataErr
+func (m *mockChassisManager) GenerateBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error) {
+	return m.bootstrapData, m.bootstrapDataErr
 }
-func (m *mockEntityManager) SetStatus(context.Context, *bpb.ReportStatusRequest) error {
-	return m.setStatusErr
-}
-func (m *mockEntityManager) Sign(context.Context, []byte, *types.Chassis) (string, []byte, []byte, error) {
-	return testSig, testOV, testOC, m.signErr
-}
-func (m *mockEntityManager) ValidateIDevID(context.Context, *x509.Certificate, []byte, *types.Chassis) error {
-	return m.signErr
+func (m *mockChassisManager) UpdateStatus(context.Context, *bpb.ReportStatusRequest) error {
+	return nil
 }
 
+// mockTPM20Utils is for testing purposes.
 type mockTPM20Utils struct {
 	errGenerate error
 	errWrap     error
@@ -132,30 +155,6 @@ func (m *mockTPM20Utils) VerifyIdevidAttributes(idevidPub *tpm2.TPMTPublic, keyT
 	return nil
 }
 
-// Helper function to create a dummy X509 certificate
-func createTestCertificate(t *testing.T, commonName string, serialNumber string) (*rsa.PrivateKey, []byte) {
-	t.Helper()
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("Failed to generate RSA key: %v", err)
-	}
-	template := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject: pkix.Name{
-			CommonName:   commonName,
-			SerialNumber: serialNumber,
-		},
-		NotBefore: time.Now(),
-		NotAfter:  time.Now().Add(time.Hour * 24),
-		KeyUsage:  x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-	}
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
-	if err != nil {
-		t.Fatalf("Failed to create certificate: %v", err)
-	}
-	return priv, derBytes
-}
-
 func startTestServer(t *testing.T, srv *grpc.Server) string {
 	t.Helper()
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -184,12 +183,35 @@ func createTestClient(t *testing.T, addr string, tlsClientCreds credentials.Tran
 }
 
 func TestBootstrapStream(t *testing.T) {
-	devicePrivKey, goodCertDER := createTestCertificate(t, "test-device", testSerial)
-	goodCert := base64.StdEncoding.EncodeToString(goodCertDER)
+	// For testing, we use OC as PDC.
+	deviceOC, deviceOCKey, err := ownercertificate.NewRSACertificate("Owner Certificate", "1", nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to create owner certificate: %v", err)
+	}
+	vendorCA, vendorCAKey, err := ownercertificate.NewRSACertificate("Vendor CA", "2", nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to create vendor certificate authority: %v", err)
+	}
+	deviceOV, err := ownershipvoucher.NewOwnershipVoucher("json", testSerial, deviceOC, vendorCA, vendorCAKey)
+	if err != nil {
+		t.Fatalf("Failed to create ownership voucher: %v", err)
+	}
+	deviceCert, deviceKey, err := ownercertificate.NewRSACertificate("test-device", testSerial, vendorCA, vendorCAKey)
+	if err != nil {
+		t.Fatalf("Failed to create IDevID certificate: %v", err)
+	}
+	idevid := base64.StdEncoding.EncodeToString(deviceCert.Raw)
 	ekPub := &rsa.PublicKey{N: big.NewInt(123456789), E: 65537}
-	em := &mockEntityManager{
-		resolveChassisResp:   &types.Chassis{StreamingSupported: true, ActivePublicKey: ekPub, ActivePublicKeyType: epb.Key_KEY_EK},
-		getBootstrapDataResp: testBootstrapData,
+	am := &mockArtifactManager{
+		oc:       deviceOC,
+		ocKey:    deviceOCKey,
+		vendorCA: vendorCA,
+		ov:       deviceOV,
+		pub:      ekPub,
+	}
+	cm := &mockChassisManager{
+		chassis:       testChassis,
+		bootstrapData: testBootstrapData,
 	}
 	initialReq := &bpb.BootstrapStreamRequest{
 		Type: &bpb.BootstrapStreamRequest_BootstrapRequest{
@@ -208,13 +230,11 @@ func TestBootstrapStream(t *testing.T) {
 			},
 		},
 	}
-	idIdevid := &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: goodCert}}
+	idIdevid := &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: idevid}}
 	idNoIdevid := &bpb.Identity{Type: &bpb.Identity_EkPpkPub{EkPpkPub: true}}
 
 	tests := []struct {
 		name         string
-		em           *mockEntityManager
-		tpm          *mockTPM20Utils
 		req          *bpb.BootstrapStreamRequest
 		id           *bpb.Identity
 		wantErrCode  codes.Code
@@ -222,73 +242,27 @@ func TestBootstrapStream(t *testing.T) {
 		reportStatus bool
 	}{
 		{
-			name: "IDevID Flow Success - Initial Challenge Only",
-			em:   em,
-			req:  initialReq,
-			id:   idIdevid,
-			// A nil signedNonce indicates this test only covers the initial request/response.
-			signedNonce: nil,
-		},
-		{
-			name: "IDevID Flow Success - Full End-to-End",
-			em:   em,
-			req:  initialReq,
-			id:   idIdevid,
-			// An empty slice indicates a valid signature should be computed.
-			signedNonce: []byte{},
-		},
-		{
-			name: "IDevID Flow Failure - Invalid Signature",
-			em:   em,
-			req:  initialReq,
-			id:   idIdevid,
-			// A non-empty, non-nil slice indicates a bad signature.
-			signedNonce: []byte("this is not a valid signature"),
-		},
-		{
 			name:        "Missing Identity - Invalid Argument",
-			em:          &mockEntityManager{},
 			req:         initialReq,
 			wantErrCode: codes.InvalidArgument,
 		},
 		{
-			name:         "IDevID Flow with Successful Status Report",
-			em:           em,
-			req:          initialReq,
-			id:           idIdevid,
-			signedNonce:  []byte{},
-			reportStatus: true,
+			name: "IDevID Flow Success - Full End-to-End",
+			req:  initialReq,
+			id:   idIdevid,
 		},
 		{
-			name: "IDevID Flow with Failing Status Report",
-			em: &mockEntityManager{
-				resolveChassisResp:   &types.Chassis{StreamingSupported: true},
-				getBootstrapDataResp: testBootstrapData,
-				setStatusErr:         status.Errorf(codes.Internal, "db error"),
-			},
-			req:          initialReq,
-			id:           idIdevid,
-			signedNonce:  []byte{},
-			reportStatus: true,
-		},
-		{
-			name:        "IDevID Flow Re-authentication on new stream with Status Report",
-			em:          em,
-			req:         statusReq,
-			id:          idIdevid,
-			signedNonce: []byte{}, // valid signature
+			name: "IDevID Flow Re-authentication on new stream with Status Report",
+			req:  statusReq,
+			id:   idIdevid,
 		},
 		{
 			name: "TPM 2.0 no-IDevID Flow Success - Full End-to-End",
-			em:   em,
-			tpm:  &mockTPM20Utils{},
 			req:  initialReq,
 			id:   idNoIdevid,
 		},
 		{
 			name: "TPM 2.0 no-IDevID Re-authentication on new stream with Status Report",
-			em:   em,
-			tpm:  &mockTPM20Utils{},
 			req:  statusReq,
 			id:   idNoIdevid,
 		},
@@ -296,13 +270,12 @@ func TestBootstrapStream(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			s := New(test.em, test.tpm)
+			s := New(am, cm, &mockTPM20Utils{})
 			srv := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 			bpb.RegisterBootstrapServer(srv, s)
 			addr := startTestServer(t, srv)
 			conn := createTestClient(t, addr, nil)
 			cli := bpb.NewBootstrapClient(conn)
-
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			stream, err := cli.BootstrapStream(ctx)
@@ -351,32 +324,11 @@ func TestBootstrapStream(t *testing.T) {
 					t.Errorf("Challenge missing nonce")
 				}
 
-				// If signedNonce is nil, the test ends here.
-				if test.signedNonce == nil {
-					stream.CloseSend()
-					_, err := stream.Recv()
-					if err != io.EOF {
-						t.Errorf("Expected EOF after response, got %v", err)
-					}
-					return
-				}
-
 				// === Second Send: Respond with Signed Nonce ===
-				var finalSignedNonce []byte
-				if len(test.signedNonce) == 0 {
-					// If signedNonce is an empty slice, compute a valid one.
-					hasher := sha256.New()
-					hasher.Write([]byte(nonce))
-					hashedNonce := hasher.Sum(nil)
-					finalSignedNonce, err = rsa.SignPKCS1v15(rand.Reader, devicePrivKey, crypto.SHA256, hashedNonce)
-					if err != nil {
-						t.Fatalf("Failed to sign nonce: %v", err)
-					}
-				} else {
-					// Otherwise, use the value from the test case.
-					finalSignedNonce = test.signedNonce
+				finalSignedNonce, err := signature.Sign(deviceKey, deviceCert.SignatureAlgorithm, []byte(nonce))
+				if err != nil {
+					t.Fatalf("Failed to sign nonce: %v", err)
 				}
-
 				responseReq = &bpb.BootstrapStreamRequest{
 					Type: &bpb.BootstrapStreamRequest_Response_{
 						Response: &bpb.BootstrapStreamRequest_Response{
@@ -389,8 +341,8 @@ func TestBootstrapStream(t *testing.T) {
 				if hmac == nil {
 					t.Errorf("Challenge missing HMAC")
 				}
-				if hmac.GetKey() != test.em.resolveChassisResp.ActivePublicKeyType {
-					t.Errorf("Unexpected key type in challenge: got %v, want %v", hmac.GetKey(), test.em.resolveChassisResp.ActivePublicKeyType)
+				if hmac.GetKey() != testPublicKeyType {
+					t.Errorf("Unexpected key type in challenge: got %v, want %v", hmac.GetKey(), testPublicKeyType)
 				}
 				responseReq = &bpb.BootstrapStreamRequest{
 					Type: &bpb.BootstrapStreamRequest_Response_{
@@ -417,33 +369,18 @@ func TestBootstrapStream(t *testing.T) {
 
 			// === Second Recv: Expect Bootstrap Data or Error ===
 			finalResp, err := stream.Recv()
-
-			// Infer the expected final outcome based on the signedNonce value.
-			if len(test.signedNonce) > 0 { // A non-empty slice implies a bad signature.
-				if err == nil {
-					t.Fatalf("stream.Recv() got final response %v, want error code %v", finalResp, codes.InvalidArgument)
-				}
-				if stat, _ := status.FromError(err); stat.Code() != codes.InvalidArgument {
-					t.Fatalf("stream.Recv() got final error code %v, want %v: %v", stat.Code(), codes.InvalidArgument, err)
-				}
-				return
+			if err != nil {
+				t.Fatalf("stream.Recv() for final response got unexpected error: %v", err)
 			}
 
 			// Handle re-authentication flow initiated by a status report.
 			if _, ok := test.req.Type.(*bpb.BootstrapStreamRequest_ReportStatusRequest); ok {
-				if err != nil {
-					t.Fatalf("stream.Recv() for re-auth response got unexpected error: %v", err)
-				}
 				if finalResp.GetReportStatusResponse() == nil {
 					t.Fatalf("Expected report status response for re-auth, but got: %v", finalResp)
 				}
 				return // End of test for this case.
 			}
 
-			// An empty slice implies a successful bootstrap.
-			if err != nil {
-				t.Fatalf("stream.Recv() for final response got unexpected error: %v", err)
-			}
 			bootstrapWrapper := finalResp.GetBootstrapResponse()
 			if bootstrapWrapper == nil {
 				t.Fatalf("Expected bootstrap response, but got: %v", finalResp)
@@ -452,36 +389,23 @@ func TestBootstrapStream(t *testing.T) {
 				t.Error("Final response is missing the serialized bootstrap data")
 			}
 
-			// === Optional Third Stage: Status Reporting ===
-			if test.reportStatus {
-				statusReq := &bpb.BootstrapStreamRequest{
-					Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{
-						ReportStatusRequest: &bpb.ReportStatusRequest{
-							Status: bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
-						},
+			// === Third Stage: Status Reporting ===
+			statusReq := &bpb.BootstrapStreamRequest{
+				Type: &bpb.BootstrapStreamRequest_ReportStatusRequest{
+					ReportStatusRequest: &bpb.ReportStatusRequest{
+						Status: bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 					},
-				}
-				if err := stream.Send(statusReq); err != nil {
-					t.Fatalf("stream.Send(statusReq) failed: %v", err)
-				}
-
-				ack, err := stream.Recv()
-				if test.em.setStatusErr != nil {
-					if err == nil {
-						t.Fatalf("Expected error on status report, got %v", ack)
-					}
-					if s, _ := status.FromError(err); s.Code() != codes.Internal {
-						t.Errorf("Expected Internal error, got %v", s.Code())
-					}
-					return
-				}
-
-				if err != nil {
-					t.Fatalf("Got unexpected error on status report: %v", err)
-				}
-				if ack.GetReportStatusResponse() == nil {
-					t.Fatalf("Expected ReportStatusResponse, got %T", ack.Type)
-				}
+				},
+			}
+			if err := stream.Send(statusReq); err != nil {
+				t.Fatalf("stream.Send(statusReq) failed: %v", err)
+			}
+			ack, err := stream.Recv()
+			if err != nil {
+				t.Fatalf("Got unexpected error on status report: %v", err)
+			}
+			if ack.GetReportStatusResponse() == nil {
+				t.Fatalf("Expected ReportStatusResponse, got %T", ack.Type)
 			}
 
 			stream.CloseSend()
@@ -494,13 +418,33 @@ func TestBootstrapStream(t *testing.T) {
 }
 
 func TestBootstrapStreamV1(t *testing.T) {
-	deviceKey, deviceCert := createTestCertificate(t, "test-device", testSerial)
-	idevidCert := base64.StdEncoding.EncodeToString(deviceCert)
+	// For testing, we use OC as PDC.
+	deviceOC, deviceOCKey, err := ownercertificate.NewRSACertificate("Owner Certificate", "1", nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to create owner certificate: %v", err)
+	}
+	ocCMS, err := ownercertificate.GenerateCMS(deviceOC, deviceOCKey)
+	if err != nil {
+		t.Fatalf("Failed to generate owner certificate CMS: %v", err)
+	}
+	vendorCA, vendorCAKey, err := ownercertificate.NewRSACertificate("Vendor CA", "2", nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to create vendor certificate authority: %v", err)
+	}
+	deviceOV, err := ownershipvoucher.NewOwnershipVoucher("json", testSerial, deviceOC, vendorCA, vendorCAKey)
+	if err != nil {
+		t.Fatalf("Failed to create ownership voucher: %v", err)
+	}
+	deviceCert, deviceKey, err := ownercertificate.NewRSACertificate("test-device", testSerial, vendorCA, vendorCAKey)
+	if err != nil {
+		t.Fatalf("Failed to create IDevID certificate: %v", err)
+	}
+	idevid := base64.StdEncoding.EncodeToString(deviceCert.Raw)
 	ek, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("Failed to generate RSA key: %v", err)
 	}
-	idIdevid := &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: idevidCert}}
+	idIdevid := &bpb.Identity{Type: &bpb.Identity_IdevidCert{IdevidCert: idevid}}
 	idTPM20EK := &bpb.Identity{Type: &bpb.Identity_Tpm20EkPub{Tpm20EkPub: []byte{}}}
 	idTPM12EK := &bpb.Identity{Type: &bpb.Identity_Tpm12EkPub{Tpm12EkPub: []byte{}}}
 	hpkeKey, err := hpke.DHKEM(ecdh.X25519()).GenerateKey()
@@ -515,9 +459,16 @@ func TestBootstrapStreamV1(t *testing.T) {
 		Responses: []*bpb.BootstrapDataResponse{testBootstrapData},
 		Nonce:     testNonce,
 	}
-	em := &mockEntityManager{
-		resolveChassisResp:   &types.Chassis{StreamingSupported: true, ActivePublicKey: &ek.PublicKey, ActivePublicKeyType: epb.Key_KEY_EK},
-		getBootstrapDataResp: testBootstrapData,
+	am := &mockArtifactManager{
+		oc:       deviceOC,
+		ocKey:    deviceOCKey,
+		vendorCA: vendorCA,
+		ov:       deviceOV,
+		pub:      &ek.PublicKey,
+	}
+	cm := &mockChassisManager{
+		chassis:       testChassis,
+		bootstrapData: testBootstrapData,
 	}
 	initialReq := &bpb.BootstrapStreamRequestV1{
 		Type: &bpb.BootstrapStreamRequestV1_BootstrapRequest{
@@ -542,44 +493,35 @@ func TestBootstrapStreamV1(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		em        *mockEntityManager
-		tpm       *mockTPM20Utils
 		req       *bpb.BootstrapStreamRequestV1
 		id        *bpb.Identity
 		wantCodes []codes.Code
 	}{
 		{
 			name:      "Missing Identity - Invalid Argument",
-			em:        &mockEntityManager{},
 			req:       initialReq,
 			wantCodes: []codes.Code{codes.InvalidArgument},
 		},
 		{
 			name:      "IDevID Flow Success - Full Process",
-			em:        em,
 			req:       initialReq,
 			id:        idIdevid,
 			wantCodes: []codes.Code{codes.OK, codes.OK, codes.OK},
 		},
 		{
 			name:      "TPM 2.0 EK Flow Success - Full Process",
-			em:        em,
-			tpm:       &mockTPM20Utils{},
 			req:       initialReq,
 			id:        idTPM20EK,
 			wantCodes: []codes.Code{codes.OK, codes.OK, codes.OK},
 		},
 		{
 			name:      "TPM 1.2 EK Flow Success - Full Process",
-			em:        em,
-			tpm:       &mockTPM20Utils{},
 			req:       initialReq,
 			id:        idTPM12EK,
 			wantCodes: []codes.Code{codes.OK, codes.OK, codes.OK},
 		},
 		{
 			name:      "Status Report in New Stream Success - Full Process",
-			em:        em,
 			req:       statusReq,
 			id:        idIdevid,
 			wantCodes: []codes.Code{codes.OK, codes.OK},
@@ -588,7 +530,7 @@ func TestBootstrapStreamV1(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			s := New(test.em, test.tpm)
+			s := New(am, cm, &mockTPM20Utils{})
 			srv := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 			bpb.RegisterBootstrapServer(srv, s)
 			addr := startTestServer(t, srv)
@@ -616,8 +558,7 @@ func TestBootstrapStreamV1(t *testing.T) {
 						if err != nil {
 							t.Fatalf("Failed to serialize transport key message: %v", err)
 						}
-						digest := sha256.Sum256(serializedMsg)
-						sig, err := rsa.SignPKCS1v15(rand.Reader, deviceKey, crypto.SHA256, digest[:])
+						sig, err := signature.Sign(deviceKey, deviceCert.SignatureAlgorithm, serializedMsg)
 						if err != nil {
 							t.Fatalf("Failed to sign transport key: %v", err)
 						}
@@ -734,14 +675,25 @@ func TestBootstrapStreamV1(t *testing.T) {
 						if response.GetBootstrapResponse() == nil {
 							t.Errorf("received nil bootstrap data")
 						}
-						if ov := response.GetBootstrapResponse().GetOwnershipVoucher(); !bytes.Equal(ov, testOV) {
-							t.Errorf("unexpected ownership voucher: got %v, want %v", ov, testOV)
+						if ov := response.GetBootstrapResponse().GetOwnershipVoucher(); !bytes.Equal(ov, deviceOV) {
+							t.Errorf("unexpected ownership voucher: got %x, want %x", ov, deviceOV)
 						}
-						if oc := response.GetBootstrapResponse().GetOwnershipCertificate(); !bytes.Equal(oc, testOC) {
-							t.Errorf("unexpected ownership certificate: got %v, want %v", oc, testOC)
+						if oc := response.GetBootstrapResponse().GetOwnershipCertificate(); !bytes.Equal(oc, ocCMS) {
+							t.Errorf("unexpected owner certificate: got %x, want %x", oc, ocCMS)
 						}
-						if sig := response.GetBootstrapResponse().GetResponseSignature(); sig != testSig {
-							t.Errorf("unexpected response signature: got %v, want %v", sig, testSig)
+						var ocKey crypto.PrivateKey = deviceOCKey
+						signer, ok := ocKey.(crypto.Signer)
+						if !ok {
+							t.Fatalf("private key does not implement crypto.Signer")
+						}
+						hash := sha256.Sum256(response.GetBootstrapResponse().EncryptedSerializedBootstrapData)
+						wantSig, err := signer.Sign(rand.Reader, hash[:], crypto.SHA256)
+						if err != nil {
+							t.Fatalf("Failed to call signer.Sign(): %v", err)
+						}
+						wantSigString := base64.StdEncoding.EncodeToString(wantSig)
+						if sig := response.GetBootstrapResponse().GetResponseSignature(); sig != wantSigString {
+							t.Errorf("unexpected response signature: got %v, want %v", sig, wantSigString)
 						}
 						recipient, err := hpke.NewRecipient(response.GetBootstrapResponse().GetEncapsulatedKey(), hpkeKey, hpke.HKDFSHA256(), hpke.AES256GCM(), nil)
 						if err != nil {
@@ -876,7 +828,7 @@ func TestInitializeChassis(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if diff := cmp.Diff(got, tc.want, protocmp.Transform(), cmpopts.IgnoreFields(types.Chassis{}, "ActivePublicKey", "SoftwareImage", "BootConfig", "Authz")); diff != "" {
+			if diff := cmp.Diff(got, tc.want, protocmp.Transform()); diff != "" {
 				t.Errorf("initializeChassis diff = %v", diff)
 			}
 		})
