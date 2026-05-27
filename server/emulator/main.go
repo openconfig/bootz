@@ -47,7 +47,7 @@ func convertAddress(addr string) string {
 	items := strings.Split(addr, ":")
 	listenAddr := addr
 	if len(items) == 1 {
-		listenAddr = fmt.Sprintf("127.0.0.1:%v", addr)
+		listenAddr = fmt.Sprintf("localhost:%v", addr)
 	}
 	return listenAddr
 }
@@ -85,13 +85,13 @@ func main() {
 	}
 
 	log.Infof("Setting up entities")
-	em, err := entitymanager.New(*inventoryConfig, sa)
+	_, err = entitymanager.New(*inventoryConfig, sa)
 	if err != nil {
 		log.Exit("unable to initiate inventory manager %v", err)
 	}
 
-	// TODO: instantiate ArtifactManager and ChassisManager.
-	s, err := server.NewServer(convertAddress(*bootzAddr), em, nil, nil)
+	// TODO: Create a proper config.
+	s, err := server.NewServer(nil)
 	if err != nil {
 		log.Exit(err)
 	}

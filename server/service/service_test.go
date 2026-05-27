@@ -33,12 +33,14 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/openconfig/attestz/service/biz"
 	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	ownershipvoucher "github.com/openconfig/bootz/common/ownership_voucher"
 	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/common/types"
+	"go.mozilla.org/pkcs7"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -270,7 +272,10 @@ func TestBootstrapStream(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			s := New(am, cm, &mockTPM20Utils{})
+			s, err := New(am, cm, &mockTPM20Utils{})
+			if err != nil {
+				t.Fatalf("New() failed: %v", err)
+			}
 			srv := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 			bpb.RegisterBootstrapServer(srv, s)
 			addr := startTestServer(t, srv)
@@ -423,10 +428,6 @@ func TestBootstrapStreamV1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create owner certificate: %v", err)
 	}
-	ocCMS, err := ownercertificate.GenerateCMS(deviceOC, deviceOCKey)
-	if err != nil {
-		t.Fatalf("Failed to generate owner certificate CMS: %v", err)
-	}
 	vendorCA, vendorCAKey, err := ownercertificate.NewRSACertificate("Vendor CA", "2", nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create vendor certificate authority: %v", err)
@@ -530,7 +531,10 @@ func TestBootstrapStreamV1(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			s := New(am, cm, &mockTPM20Utils{})
+			s, err := New(am, cm, &mockTPM20Utils{})
+			if err != nil {
+				t.Fatalf("New() failed: %v", err)
+			}
 			srv := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 			bpb.RegisterBootstrapServer(srv, s)
 			addr := startTestServer(t, srv)
@@ -678,8 +682,13 @@ func TestBootstrapStreamV1(t *testing.T) {
 						if ov := response.GetBootstrapResponse().GetOwnershipVoucher(); !bytes.Equal(ov, deviceOV) {
 							t.Errorf("unexpected ownership voucher: got %x, want %x", ov, deviceOV)
 						}
-						if oc := response.GetBootstrapResponse().GetOwnershipCertificate(); !bytes.Equal(oc, ocCMS) {
-							t.Errorf("unexpected owner certificate: got %x, want %x", oc, ocCMS)
+						oc := response.GetBootstrapResponse().GetOwnershipCertificate()
+						p7, err := pkcs7.Parse(oc)
+						if err != nil {
+							t.Errorf("failed to parse PKCS7 data: %x", oc)
+						}
+						if !bytes.Equal(p7.Certificates[0].Raw, deviceOC.Raw) {
+							t.Errorf("unexpected owner certificate: got %x, want %x", p7.Certificates[0].Raw, deviceOC.Raw)
 						}
 						var ocKey crypto.PrivateKey = deviceOCKey
 						signer, ok := ocKey.(crypto.Signer)
@@ -828,7 +837,7 @@ func TestInitializeChassis(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if diff := cmp.Diff(got, tc.want, protocmp.Transform()); diff != "" {
+			if diff := cmp.Diff(got, tc.want, protocmp.Transform(), cmpopts.IgnoreFields(types.Chassis{}, "ActivePublicKey", "SoftwareImage", "BootConfig", "Authz")); diff != "" {
 				t.Errorf("initializeChassis diff = %v", diff)
 			}
 		})

@@ -872,9 +872,9 @@ func (s *Service) validateIDevID(chassis *types.Chassis) (*x509.Certificate, err
 	// cert.Subject.SerialNumber can come in the format PID:xxxxxxx SN:1234JF or just the serial number as it is. We need the value after "SN:".
 	var certSerial string
 	if sn := strings.Split(cert.Subject.SerialNumber, "SN:"); len(sn) != 2 {
-		certSerial = sn[0]
+		certSerial = strings.TrimSpace(sn[0])
 	} else {
-		certSerial = sn[1]
+		certSerial = strings.TrimSpace(sn[1])
 	}
 
 	if !slices.ContainsFunc(chassis.Serials, func(serial string) bool {
@@ -1072,10 +1072,16 @@ func initializeChassis(ctx context.Context, msg proto.Message) (*types.Chassis, 
 }
 
 // New creates a new service.
-func New(am ArtifactManager, cm ChassisManager, tpm20 biz.TPM20Utils) *Service {
+func New(am ArtifactManager, cm ChassisManager, tpm20 biz.TPM20Utils) (*Service, error) {
+	if am == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ArtifactManager cannot be nil")
+	}
+	if cm == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ChassisManager cannot be nil")
+	}
 	return &Service{
 		am:    am,
 		cm:    cm,
 		tpm20: tpm20,
-	}
+	}, nil
 }

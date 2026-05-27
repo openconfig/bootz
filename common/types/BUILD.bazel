@@ -5,5 +5,9 @@ go_library(
     srcs = ["types.go"],
     importpath = "github.com/openconfig/bootz/common/types",
     visibility = ["//visibility:public"],
-    deps = ["//proto:bootz"],
+    deps = [
+        "//proto:bootz",
+        "@openconfig_attestz//proto:tpm_enrollz_go",
+        "@openconfig_gnsi//authz",
+    ],
 )

@@ -135,13 +135,16 @@ func NewServer(config *cpb.Config, opts ...bootzServerOpts) (*Server, error) {
 	}
 
 	log.Infof("Creating server...")
+	c, err := service.New(am, cm, &biz.DefaultTPM20Utils{})
+	if err != nil {
+		return nil, fmt.Errorf("error creating service: %v", err)
+	}
 	s := &grpc.Server{}
 	if interceptor != nil {
 		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(conf)), interceptor)
 	} else {
 		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(conf)))
 	}
-	c := service.New(am, cm, &biz.DefaultTPM20Utils{})
 	bpb.RegisterBootstrapServer(s, c)
 
 	lis, err := net.Listen("tcp", ":"+addrParts[1])

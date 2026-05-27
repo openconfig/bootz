@@ -280,7 +280,7 @@ func (m *InMemoryEntityManager) Sign(ctx context.Context, data []byte, chassis *
 	}
 	log.Infof("Signature generated")
 
-	return sig, ov, oc, nil
+	return base64.StdEncoding.EncodeToString(sig), ov, oc, nil
 }
 
 // ValidateIDevID verifies the authenticity and authorization of a device by validating its IDevID certificate.
