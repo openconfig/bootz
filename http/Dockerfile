@@ -6,7 +6,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /bootz-http ./http/main
 
 # hadolint ignore=DL3007
-FROM gcr.io/distroless/static-debian12:latest
+FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /www
 COPY --from=builder /bootz-http /bootz-http
 # HTTP server might need to run as root to bind to port 80.
