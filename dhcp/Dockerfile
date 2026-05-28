@@ -13,3 +13,6 @@ COPY --from=builder /bootz-dhcp /bootz-dhcp
 USER nonroot
 ENTRYPOINT ["/bootz-dhcp"]
 
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD pgrep dhcp || exit 1
+
