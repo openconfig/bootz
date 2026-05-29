@@ -61,7 +61,8 @@ func (m *InMemoryArtifactManager) OwnershipVoucher(ctx context.Context, serial s
 		if err != nil {
 			return nil, fmt.Errorf("base64 decoding failed: %v", err)
 		}
-		unmarshaled, err := ownershipvoucher.Unmarshal(ov, m.vendorCAPool)
+		// We do not have the full trust chain to verify the ownership vouchers issued by the vendors.
+		unmarshaled, err := ownershipvoucher.Unmarshal(ov, nil)
 		if err != nil {
 			return nil, fmt.Errorf("unmarshalling failed: %v", err)
 		}

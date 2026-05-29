@@ -20,6 +20,8 @@ go_library(
     importpath = "github.com/openconfig/bootz/server/service",
     visibility = ["//visibility:public"],
     deps = [
+        "//common/owner_certificate",
+        "//common/ownership_voucher",
         "//common/signature",
         "//common/types",
         "//proto:bootz",
@@ -28,7 +30,6 @@ go_library(
         "@openconfig_attestz//proto:tpm_enrollz_go",
         "@openconfig_attestz//service/biz:enrollz_biz",
         "@openconfig_attestz//service/biz:tpm20_utils",
-        "@openconfig_gnmi//errlist",
         "@org_golang_google_grpc//codes",
         "@org_golang_google_grpc//peer",
         "@org_golang_google_grpc//status",
@@ -41,6 +42,9 @@ go_test(
     srcs = ["service_test.go"],
     embed = [":service"],
     deps = [
+        "//common/owner_certificate",
+        "//common/ownership_voucher",
+        "//common/signature",
         "//common/types",
         "//proto:bootz",
         "@com_github_google_go_cmp//cmp",
@@ -55,6 +59,8 @@ go_test(
         "@org_golang_google_grpc//credentials/insecure",
         "@org_golang_google_grpc//peer",
         "@org_golang_google_grpc//status",
+        "@org_golang_google_protobuf//proto",
         "@org_golang_google_protobuf//testing/protocmp",
+        "@org_mozilla_go_pkcs7//:pkcs7",
     ],
 )

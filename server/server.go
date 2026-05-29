@@ -20,22 +20,23 @@
 package server
 
 import (
-	"crypto/tls"
-	"crypto/x509"
+	"crypto/x509/pkix"
 	"fmt"
 	"net"
+	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/openconfig/attestz/service/biz"
-	"github.com/openconfig/bootz/common/types"
-	"github.com/openconfig/bootz/dhcp"
+	bootztls "github.com/openconfig/bootz/common/tls"
 	"github.com/openconfig/bootz/http"
-	"github.com/openconfig/bootz/server/entitymanager"
+	"github.com/openconfig/bootz/server/artifactmanager"
+	"github.com/openconfig/bootz/server/chassismanager"
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
+	cpb "github.com/openconfig/bootz/server/proto/config"
 )
 
 // Server is the bootz emulator server.
@@ -83,16 +84,45 @@ type InterceptorOpts struct {
 
 func (*InterceptorOpts) isbootzServerOpts() {}
 
-// NewServer start a new Bootz gRPC , dhcp, and image server based on specified flags.
-func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *types.SecurityArtifacts, opts ...bootzServerOpts) (*Server, error) {
+// NewServer start a new Bootz gRPC, DHCP, and HTTP image server based on specified flags.
+func NewServer(config *cpb.Config, opts ...bootzServerOpts) (*Server, error) {
+	addrParts := strings.Split(config.GetServerAddress(), ":")
+	if len(addrParts) != 2 {
+		return nil, fmt.Errorf("bootz server address must be in the format of 'IP:Port', got: %q", config.GetServerAddress())
+	}
+	ip := net.ParseIP(addrParts[0])
+	if ip == nil {
+		return nil, fmt.Errorf("invalid Bootz server IP address: %q", addrParts[0])
+	}
+	am, err := artifactmanager.New(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ArtifactManager: %v", err)
+	}
+	cm := chassismanager.New(config)
+	trustAnchorCert, trustAnchorKey := am.BootzServerTrustAnchorKeyPair()
+	conf, err := bootztls.TLSConfiguration(&bootztls.Opts{
+		CAPrivateKey: trustAnchorKey,
+		CACert:       trustAnchorCert,
+		IPAddress:    ip,
+		ClientCAs:    am.VendorCABundle(),
+		ServerCertSubject: &pkix.Name{
+			CommonName: "Bootz Server TLS Certificate",
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating bootz server cert: %v", err)
+	}
+
 	var interceptor grpc.ServerOption
-	server := &Server{}
 	for _, opt := range opts {
 		switch opt := opt.(type) {
 		case *DHCPOpts:
-			if err := StartDhcpServer(em, opt.intf); err != nil {
-				return nil, fmt.Errorf("unable to start dhcp server %v", err)
-			}
+			// TODO: Remove EntityManager dependency from DHCP server config.
+			/*
+				if err := StartDhcpServer(em, opt.intf); err != nil {
+					return nil, fmt.Errorf("unable to start dhcp server %v", err)
+				}
+			*/
 		case *ImgSrvOpts:
 			if err := StartImageServer(opt); err != nil {
 				return nil, fmt.Errorf("unable to start image server %v", err)
@@ -104,55 +134,35 @@ func NewServer(bootzAddr string, em *entitymanager.InMemoryEntityManager, sa *ty
 		}
 	}
 
-	c := service.New(em, &biz.DefaultTPM20Utils{})
-
-	trustBundle := x509.NewCertPool()
-	trustBundle.AddCert(sa.TrustAnchor)
-
-	// In a real scenario, this cert pool would contain CA(s) that
-	// signed the device's IDevID cert.
-	vendorIDevIDPool := x509.NewCertPool()
-	vendorIDevIDPool.AddCert(sa.VendorCA)
-
-	tls := &tls.Config{
-		Certificates: []tls.Certificate{*sa.TLSKeypair},
-		RootCAs:      trustBundle,
-		// The client does not have to present a certificate, but if it does, it must
-		// be verified against the ClientCAs cert pool.
-		// For BootstrapStream, the client should NOT present a certificate in the TLS
-		// handshake and instead establish trust using the challenge-response process.
-		// For unary Bootz gRPCs, the client should present a valid IDevID cert in
-		// the TLS handshake so that Bootz server can verify it.
-		// Although not shown here, the Bootz server implementation must ensure that
-		// either TLS cert verification OR the challenge-response process is completed.
-		// E.g., if a client attempts to perform a unary gRPC call without an IDevID
-		// cert in the TLS handshake, Bootz server should reject.
-		ClientAuth: tls.VerifyClientCertIfGiven,
-		ClientCAs:  vendorIDevIDPool,
-	}
 	log.Infof("Creating server...")
+	c, err := service.New(am, cm, &biz.DefaultTPM20Utils{})
+	if err != nil {
+		return nil, fmt.Errorf("error creating service: %v", err)
+	}
 	s := &grpc.Server{}
 	if interceptor != nil {
-		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)), interceptor)
+		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(conf)), interceptor)
 	} else {
-		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(tls)))
+		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(conf)))
 	}
-
 	bpb.RegisterBootstrapServer(s, c)
 
-	lis, err := net.Listen("tcp", bootzAddr)
+	lis, err := net.Listen("tcp", ":"+addrParts[1])
 	if err != nil {
 		return nil, fmt.Errorf("error listening on port: %v", err)
 	}
 	log.Infof("Server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
-	server.serv = s
-	server.service = c
-	server.lis = lis
-	return server, nil
 
+	return &Server{
+		serv:    s,
+		lis:     lis,
+		service: c,
+	}, nil
 }
 
+// TODO: Remove EntityManager dependency from DHCP server config.
+/*
 // StartDhcpServer start dhcp server based on the dhcpIntf interface and dhcp configuration added for devices
 func StartDhcpServer(em *entitymanager.InMemoryEntityManager, dhcpIntf string) error {
 	conf := &dhcp.Config{
@@ -175,6 +185,7 @@ func StartDhcpServer(em *entitymanager.InMemoryEntityManager, dhcpIntf string) e
 
 	return dhcp.Start(conf)
 }
+*/
 
 // StartImageServer starts an http server as an image server.
 func StartImageServer(opt *ImgSrvOpts) error {

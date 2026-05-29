@@ -85,12 +85,13 @@ func main() {
 	}
 
 	log.Infof("Setting up entities")
-	em, err := entitymanager.New(*inventoryConfig, sa)
+	_, err = entitymanager.New(*inventoryConfig, sa)
 	if err != nil {
 		log.Exit("unable to initiate inventory manager %v", err)
 	}
 
-	s, err := server.NewServer(convertAddress(*bootzAddr), em, sa)
+	// TODO: Create a proper config.
+	s, err := server.NewServer(nil)
 	if err != nil {
 		log.Exit(err)
 	}

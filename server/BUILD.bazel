@@ -20,11 +20,14 @@ go_library(
     importpath = "github.com/openconfig/bootz/server",
     visibility = ["//visibility:public"],
     deps = [
+        "//common/tls",
         "//common/types",
         "//dhcp",
         "//http",
         "//proto:bootz",
-        "//server/entitymanager",
+        "//server/artifactmanager",
+        "//server/chassismanager",
+        "//server/proto:config",
         "//server/service",
         "@com_github_golang_glog//:glog",
         "@openconfig_attestz//service/biz:enrollz_biz",
@@ -39,7 +42,7 @@ go_test(
     srcs = ["server_test.go"],
     embed = [":server_lib"],
     deps = [
-        "//server/entitymanager",
-        "//testdata:testdata_lib",
+        "//common/owner_certificate",
+        "//server/proto:config",
     ],
 )

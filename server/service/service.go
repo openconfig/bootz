@@ -32,13 +32,15 @@ import (
 	"encoding/pem"
 	"io"
 	"net"
+	"slices"
+	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/openconfig/attestz/service/biz"
+	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/common/types"
-	"github.com/openconfig/gnmi/errlist"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -63,45 +65,34 @@ const (
 // associated either with the Bootz server itself (e.g. the Bootz server trust anchor keypair), or with a specific
 // control card in a chassis (e.g. Ownership Vouchers, EK/PPK keys).
 type ArtifactManager interface {
-	// BootzServerTrustAnchorKeyPair returns the Bootz server trust anchor. This is the keypair that will generate
-	// the server's TLS certificate.
-	BootzServerTrustAnchorKeyPair() (crypto.PrivateKey, *x509.Certificate)
+	// BootzServerTrustAnchorKeyPair returns the Bootz server trust anchor. This is the keypair that will generate the server's TLS certificate.
+	BootzServerTrustAnchorKeyPair() (*x509.Certificate, crypto.PrivateKey)
+	// OwnerCertificateKeypair returns the owner certificate keypair for signing the bootstrap response.
+	OwnerCertificateKeyPair() (*x509.Certificate, crypto.PrivateKey)
 	// OwnershipVoucher returns the ownership voucher for the given serial number and vendor.
 	OwnershipVoucher(ctx context.Context, serial string, vendor string) ([]byte, error)
-	// OwnershipCertificateKeypair returns the ownership certificate keypair for signing the bootstrap response.
-	OwnershipCertificateKeyPair() (crypto.PrivateKey, *x509.Certificate)
-	// PublicKey retrieves the EK or PPK public key for use in the BootstrapStream HMAC challenge.
-	PublicKey(ctx context.Context, serial string, vendor string) (*rsa.PublicKey, epb.Key, error)
-	// Returns the pool of certificates that the server should use to validate the provided IDevID TLS certificates.
+	// PublicKey retrieves the EK or PPK public key of the chassis for use in the BootstrapStream challenge.
+	PublicKey(ctx context.Context, serial string, vendor string) (crypto.PublicKey, epb.Key, error)
+	// VendorCABundle returns the pool of certificates that the server should use to validate the provided IDevID certificates.
 	VendorCABundle() *x509.CertPool
 }
 
-// ChassisManager is an interface for managing the chassis in an organization's inventory. Chassis in an inventory are
-// identified by the IP address they use to communicate with Bootz server. The data provided by this interface relates
-// to the chassis as a whole, and not specific to any individual control card in the chassis.
+// ChassisManager is an interface for managing the chassis in an organization's inventory.
+// The data provided by this interface relates to the chassis as a whole, and not specific to any individual control card in the chassis.
 type ChassisManager interface {
-	// Resolve fetches details about a chassis with the given IP address.
-	Resolve(ctx context.Context, addr net.IP) (*types.Chassis, error)
-	// Update updates the status of a chassis in its bootstrapping lifecycle based on the provided status report.
-	Update(ctx context.Context, addr net.IP, req *bpb.ReportStatusRequest) error
-	// GenerateBootstrapData generates the bootstrap data (Boot Config, Credz, Certz, Authz, Pathz policies) for the
-	// given chassis.
-	GenerateBootstrapData(ctx context.Context, chassis *types.Chassis) (*bpb.BootstrapDataResponse, error)
-}
-
-// EntityManager maintains the entities and their states.
-type EntityManager interface {
-	ResolveChassis(context.Context, *types.Chassis) error
-	GetBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error)
-	SetStatus(context.Context, *bpb.ReportStatusRequest) error
-	Sign(context.Context, []byte, *types.Chassis) (string, []byte, []byte, error)
-	ValidateIDevID(context.Context, *x509.Certificate, []byte, *types.Chassis) error
+	// ResolveChassis fetches details about a chassis.
+	ResolveChassis(ctx context.Context, chassis *types.Chassis) error
+	// GenerateBootstrapData generates the bootstrap data (Boot Config, Credz, Certz, Authz, Pathz policies) for the given serial number.
+	GenerateBootstrapData(ctx context.Context, chassis *types.Chassis, serial string) (*bpb.BootstrapDataResponse, error)
+	// UpdateStatus updates the status of a chassis in its bootstrapping lifecycle based on the provided status report.
+	UpdateStatus(ctx context.Context, req *bpb.ReportStatusRequest) error
 }
 
 // Service represents the server and entity manager.
 type Service struct {
 	bpb.UnimplementedBootstrapServer
-	em    EntityManager
+	am    ArtifactManager
+	cm    ChassisManager
 	tpm20 biz.TPM20Utils
 }
 
@@ -111,7 +102,6 @@ type streamSession struct {
 	chassis       *types.Chassis           // Store chassis info for later stages
 	status        *bpb.ReportStatusRequest // Store status for later stages
 	clientNonce   string                   // client nonce from bootstrap request
-	idevidCert    *x509.Certificate        // For IDevID flow
 	serverNonce   string                   // For TPM 2.0 with IDevID nonce challenge
 	hmacSensitive *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
 }
@@ -163,7 +153,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		IPAddress:    peerAddr,
 	}
 	// Validate the chassis can be serviced
-	err = s.em.ResolveChassis(ctx, chassis)
+	err = s.cm.ResolveChassis(ctx, chassis)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", chassisDesc, err)
 	}
@@ -174,25 +164,26 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		return nil, status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
 	}
 
-	// Iterate over the control cards and fetch data for each card.
-	var errs errlist.List
-
 	log.Infof("=============================================================================")
 	log.Infof("==================== Fetching data for each control card ====================")
 	log.Infof("=============================================================================")
 	var responses []*bpb.BootstrapDataResponse
+	trustAnchorCert, _ := s.am.BootzServerTrustAnchorKeyPair()
+	if trustAnchorCert == nil {
+		return nil, status.Errorf(codes.Internal, "failed to retrieve server trust cert")
+	}
+	trustAnchor := base64.StdEncoding.EncodeToString(trustAnchorCert.Raw)
+	// Iterate over the control cards and fetch data for each card.
 	for _, v := range serials {
-		bootdata, err := s.em.GetBootstrapData(ctx, chassis, v)
+		bootdata, err := s.cm.GenerateBootstrapData(ctx, chassis, v)
 		if err != nil {
-			errs.Add(err)
-			log.Infof("Error occurred while retrieving data for serial number %v", v)
+			log.Infof("Error occurred while retrieving bootstrap data for serial number %v", v)
+			return nil, err
 		}
+		bootdata.ServerTrustCert = trustAnchor
 		responses = append(responses, bootdata)
 	}
 
-	if errs.Err() != nil {
-		return nil, errs.Err()
-	}
 	log.Infof("Successfully fetched data for each control card")
 	log.Infof("=============================================================================")
 
@@ -220,7 +211,7 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		log.Infof("=============================================================================")
 		log.Infof("====================== Signing the response with nonce ======================")
 		log.Infof("=============================================================================")
-		sig, ov, oc, err := s.em.Sign(ctx, signedResponseBytes, chassis)
+		sig, ov, oc, err := s.sign(ctx, signedResponseBytes, chassis)
 		if err != nil {
 			return nil, err
 		}
@@ -243,7 +234,7 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 		return nil, err
 	}
 	log.Infof("Received ReportStatus request(%+v) from %v", req, peerAddr)
-	return &bpb.EmptyResponse{}, s.em.SetStatus(ctx, req)
+	return &bpb.EmptyResponse{}, s.cm.UpdateStatus(ctx, req)
 }
 
 // BootstrapStream implements the RPC handler for Streaming Bootz v0.6.
@@ -307,7 +298,13 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				if len(session.serverNonce) == 0 {
 					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM 2.0 nonce challenge response")
 				}
-				if err := signature.Verify(session.idevidCert, []byte(session.serverNonce), challengeResponse.GetNonceSigned()); err != nil {
+				cert, err := s.validateIDevID(session.chassis)
+				if err != nil {
+					return err
+				}
+				log.Infof("Successfully validated IDevID certificate for device %s", session.chassis.ActiveSerial)
+
+				if err := signature.Verify(cert, []byte(session.serverNonce), challengeResponse.GetNonceSigned()); err != nil {
 					log.Errorf("Nonce signature verification failed for device %s. Signature: %v, Error: %v", session.chassis.ActiveSerial, challengeResponse.GetNonceSigned(), err)
 					return status.Errorf(codes.InvalidArgument, "nonce signature verification failed: %v", err)
 				}
@@ -358,12 +355,19 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 			// If verification is successful, fetch and send the bootstrap data.
 			var responses []*bpb.BootstrapDataResponse
+			trustAnchorCert, _ := s.am.BootzServerTrustAnchorKeyPair()
+			if trustAnchorCert == nil {
+				return status.Errorf(codes.Internal, "failed to retrieve server trust cert")
+			}
+			trustAnchor := base64.StdEncoding.EncodeToString(trustAnchorCert.Raw)
 			for _, v := range session.chassis.Serials {
 				log.Infof("Fetching bootstrap data for serial number %s", v)
-				bootdata, err := s.em.GetBootstrapData(ctx, session.chassis, v)
+				bootdata, err := s.cm.GenerateBootstrapData(ctx, session.chassis, v)
 				if err != nil {
-					return status.Errorf(codes.Internal, "failed to get bootstrap data for serial number %s: %v", v, err)
+					log.Infof("Error occurred while retrieving bootstrap data for serial number %v", v)
+					return err
 				}
+				bootdata.ServerTrustCert = trustAnchor
 				responses = append(responses, bootdata)
 			}
 			serializedSignedData, err := proto.Marshal(&bpb.BootstrapDataSigned{
@@ -373,7 +377,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			if err != nil {
 				return status.Errorf(codes.Internal, "failed to serialize bootstrap data: %v", err)
 			}
-			sig, ov, oc, err := s.em.Sign(ctx, serializedSignedData, session.chassis)
+			sig, ov, oc, err := s.sign(ctx, serializedSignedData, session.chassis)
 			if err != nil {
 				return err
 			}
@@ -481,26 +485,12 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM20IDevID challenge response")
 				}
 				// Verify IDevID certificate.
-				var certDER, intermediates []byte
-				var pemBlock *pem.Block
-				idevid := session.chassis.Identity.GetIdevidCert()
-				if certDER, err = base64.StdEncoding.DecodeString(idevid); err != nil {
-					// If we can't base64 decode the cert, it might be a PEM-encoded cert chain.
-					// Find the first (leaf) cert in the PEM block, then decode it to a DER string.
-					if pemBlock, intermediates = pem.Decode([]byte(idevid)); pemBlock == nil {
-						return status.Errorf(codes.InvalidArgument, "idevid_cert is not a valid PEM block or base64 encoded DER cert")
-					}
-					certDER = pemBlock.Bytes
-				}
-				cert, err := x509.ParseCertificate(certDER)
+				cert, err := s.validateIDevID(session.chassis)
 				if err != nil {
-					return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
-				}
-				if err = s.em.ValidateIDevID(stream.Context(), cert, intermediates, session.chassis); err != nil {
 					log.Errorf("Tpm20Idevid challenge certificate verification failed for device %s, error: %v", session.chassis.ActiveSerial, err)
-					return status.Errorf(codes.InvalidArgument, "failed to validate idevid_cert: %v", err)
+					return err
 				}
-				log.Infof("Successfully validated IDevID cert for %s", cert.Subject.CommonName)
+				log.Infof("Successfully validated IDevID certificate for device %s", session.chassis.ActiveSerial)
 				// Verify IDevID signature.
 				serializedTransportKey = challengeResponse.GetTpm20Idevid().GetSerializedTransportKey()
 				sig := challengeResponse.GetTpm20Idevid().GetSignature()
@@ -591,12 +581,19 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			} else {
 				// Otherwise fetch the bootstrap data.
 				var bootstrapData []*bpb.BootstrapDataResponse
+				trustAnchorCert, _ := s.am.BootzServerTrustAnchorKeyPair()
+				if trustAnchorCert == nil {
+					return status.Errorf(codes.Internal, "failed to retrieve server trust cert")
+				}
+				trustAnchor := base64.StdEncoding.EncodeToString(trustAnchorCert.Raw)
 				for _, v := range session.chassis.Serials {
 					log.Infof("Fetching bootstrap data for serial number: %s", v)
-					data, err := s.em.GetBootstrapData(stream.Context(), session.chassis, v)
+					data, err := s.cm.GenerateBootstrapData(stream.Context(), session.chassis, v)
 					if err != nil {
-						return status.Errorf(codes.Internal, "failed to get bootstrap data for serial number %s: %v", v, err)
+						log.Infof("Error occurred while retrieving bootstrap data for serial number %v", v)
+						return err
 					}
+					data.ServerTrustCert = trustAnchor
 					bootstrapData = append(bootstrapData, data)
 				}
 				serializedBootstrapData, err := proto.Marshal(&bpb.BootstrapDataSigned{
@@ -636,7 +633,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 					return status.Errorf(codes.InvalidArgument, "unsupported HPKE cipher suite enum: %v", transportKey.GetCipherSuite())
 				}
 				// Sign the bootstrap data.
-				sig, ov, oc, err := s.em.Sign(stream.Context(), response.GetBootstrapResponse().GetEncryptedSerializedBootstrapData(), session.chassis)
+				sig, ov, oc, err := s.sign(stream.Context(), response.GetBootstrapResponse().GetEncryptedSerializedBootstrapData(), session.chassis)
 				if err != nil {
 					return err
 				}
@@ -687,13 +684,30 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to initialize chassis from received message: %v", err)
 	}
-	if err = s.em.ResolveChassis(ctx, chassis); err != nil {
+	if err = s.cm.ResolveChassis(ctx, chassis); err != nil {
 		return nil, status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
 	}
+	log.Infof("Resolved device %s with identity %T to hostname %s", chassis.ActiveSerial, chassis.Identity.GetType(), chassis.Hostname)
+
 	if !chassis.StreamingSupported {
 		return nil, status.Errorf(codes.Unimplemented, "streaming bootstrap is not supported for this device")
 	}
-	log.Infof("Resolved device %s with identity %T to hostname %s", chassis.ActiveSerial, chassis.Identity.GetType(), chassis.Hostname)
+
+	var rsaKey *rsa.PublicKey
+	var pubKeyType epb.Key
+	switch chassis.Identity.GetType().(type) {
+	case *bpb.Identity_Tpm20EkPub, *bpb.Identity_Tpm20PpkPub, *bpb.Identity_Tpm12EkPub:
+		var pubKey crypto.PublicKey
+		pubKey, pubKeyType, err = s.am.PublicKey(ctx, chassis.ActiveSerial, chassis.Manufacturer)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "failed to retrieve device EK/PPK public key: %v", err)
+		}
+		var ok bool
+		rsaKey, ok = pubKey.(*rsa.PublicKey)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "the EK/PPK public key is not an RSA public key")
+		}
+	}
 	session.chassis = chassis
 
 	switch idType := chassis.Identity.GetType().(type) {
@@ -723,7 +737,7 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 			return nil, status.Errorf(codes.Internal, "failed to generate a restricted HMAC key: %v", err)
 		}
 		// Wrap HMAC key to EK/PPK public key.
-		duplicate, inSymSeed, err := s.tpm20.WrapHMACKeytoRSAPublicKey(chassis.ActivePublicKey, hmacPub, hmacSensitive)
+		duplicate, inSymSeed, err := s.tpm20.WrapHMACKeytoRSAPublicKey(rsaKey, hmacPub, hmacSensitive)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to wrap HMAC key to EK/PPK public key: %v", err)
 		}
@@ -733,7 +747,7 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 				ChallengeRequest: &bpb.BootstrapStreamResponseV1_ChallengeRequest{
 					Type: &bpb.BootstrapStreamResponseV1_ChallengeRequest_Tpm20Hmac{
 						Tpm20Hmac: &bpb.BootstrapStreamResponseV1_ChallengeRequest_ChallengeRequestTPM20HMAC{
-							KeyType: chassis.ActivePublicKeyType,
+							KeyType: pubKeyType,
 							HmacEncrypted: &epb.HMACChallenge{
 								HmacPubKey: tpm2.Marshal(tpm2.New2B(*hmacPub)),
 								Duplicate:  tpm2.Marshal(&tpm2.TPM2BPrivate{Buffer: duplicate}),
@@ -780,7 +794,7 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 			return nil, status.Errorf(codes.Internal, "failed to serialize TPM_ASYM_CA_CONTENTS to the blob: %v", err)
 		}
 		// Wrap the serialized TPM_ASYM_CA_CONTENTS blob to EK public key.
-		blobEncrypted, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, chassis.ActivePublicKey, blob, []byte("TCPA"))
+		blobEncrypted, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, rsaKey, blob, []byte("TCPA"))
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to encrypt the TPM_ASYM_CA_CONTENTS blob to EK: %v", err)
 		}
@@ -807,7 +821,7 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 
 // createReportStatusResponse creates a report status response message for Streaming Bootz v1.0.
 func (s *Service) createReportStatusResponse(session *streamSessionV1) (*bpb.BootstrapStreamResponseV1, error) {
-	if err := s.em.SetStatus(session.stream.Context(), session.status); err != nil {
+	if err := s.cm.UpdateStatus(session.stream.Context(), session.status); err != nil {
 		log.Errorf("Failed to set status for device %s: %v", session.chassis.ActiveSerial, err)
 		return nil, status.Errorf(codes.Internal, "failed to set status: %v", err)
 	}
@@ -822,125 +836,161 @@ func (s *Service) createReportStatusResponse(session *streamSessionV1) (*bpb.Boo
 	return reportStatusResponse, nil
 }
 
-// sendIdevidChallenge contains the logic for parsing an IDevID cert, and sending a nonce challenge.
-func (s *Service) sendIdevidChallenge(session *streamSession, idevidCertB64 string) error {
-	var certDER, intermediates []byte
+// validateIDevID validates the authenticity and authorization of an encoded IDevID presented by a chassis, and return it as a certificate.
+func (s *Service) validateIDevID(chassis *types.Chassis) (*x509.Certificate, error) {
 	var pemBlock *pem.Block
-	var err error
-	certDER, err = base64.StdEncoding.DecodeString(idevidCertB64)
+	var intermediates []byte
+	idevid := chassis.Identity.GetIdevidCert()
+	certDER, err := base64.StdEncoding.DecodeString(idevid)
 	if err != nil {
-		// If we can't base64 decode the cert, it might be a PEM-encoded string.
+		// If we can't base64 decode the cert, it might be a PEM-encoded cert chain.
 		// Find the first (leaf) cert in the PEM block, then decode it to a DER string.
-		pemBlock, intermediates = pem.Decode([]byte(idevidCertB64))
-		if pemBlock == nil {
-			return status.Errorf(codes.InvalidArgument, "idevid_cert is not a valid PEM block or base64 string: %v", idevidCertB64)
+		if pemBlock, intermediates = pem.Decode([]byte(idevid)); pemBlock == nil {
+			return nil, status.Errorf(codes.InvalidArgument, "IDevID certificate is not a valid PEM chain or base64 encoded DER cert")
 		}
 		certDER = pemBlock.Bytes
 	}
-
 	cert, err := x509.ParseCertificate(certDER)
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "failed to parse idevid_cert: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse IDevID certificate: %v", err)
 	}
 
-	if err := s.em.ValidateIDevID(session.stream.Context(), cert, intermediates, session.chassis); err != nil {
-		return status.Errorf(codes.PermissionDenied, "failed to validate idevid_cert: %v", err)
+	opts := x509.VerifyOptions{
+		Roots:     s.am.VendorCABundle(),
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
-	session.idevidCert = cert
-	log.Infof("Successfully parsed IDevID cert for %s", cert.Subject.CommonName)
+	if len(intermediates) > 0 {
+		opts.Intermediates = x509.NewCertPool()
+		if !opts.Intermediates.AppendCertsFromPEM(intermediates) {
+			return nil, status.Errorf(codes.InvalidArgument, "failed to parse PEM encoded intermediate certificates: %v", intermediates)
+		}
+	}
+	if _, err := cert.Verify(opts); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "IDevID certificate chain validation failed: %v", err)
+	}
 
-	nonceBytes := make([]byte, 32)
-	if _, err := rand.Read(nonceBytes); err != nil {
-		return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
+	// cert.Subject.SerialNumber can come in the format PID:xxxxxxx SN:1234JF or just the serial number as it is. We need the value after "SN:".
+	var certSerial string
+	if sn := strings.Split(cert.Subject.SerialNumber, "SN:"); len(sn) != 2 {
+		certSerial = strings.TrimSpace(sn[0])
+	} else {
+		certSerial = strings.TrimSpace(sn[1])
 	}
-	session.serverNonce = base64.StdEncoding.EncodeToString(nonceBytes)
 
-	challengeResp := &bpb.BootstrapStreamResponse{
-		Type: &bpb.BootstrapStreamResponse_Challenge_{
-			Challenge: &bpb.BootstrapStreamResponse_Challenge{
-				Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
-					Nonce: session.serverNonce,
-				},
-			},
-		},
+	if !slices.ContainsFunc(chassis.Serials, func(serial string) bool {
+		return strings.EqualFold(certSerial, serial)
+	}) {
+		return nil, status.Errorf(codes.InvalidArgument, "serial number from certificate (%v) does not match chassis serial (%v) or any control card serials", certSerial, chassis.Serials)
 	}
-	if err := session.stream.Send(challengeResp); err != nil {
-		return err
-	}
-	log.Infof("Sent nonce challenge to IDevID device %s", session.chassis.ActiveSerial)
-	return nil
+
+	return cert, nil
 }
 
-// sendHMACChallenge contains the logic for sending an HMAC challenge.
-func (s *Service) sendHMACChallenge(session *streamSession) error {
-	// Generate a restricted HMAC key.
-	hmacPub, hmacSensitive, err := s.tpm20.GenerateRestrictedHMACKey()
+// sign generates the signature over given data using the Owner Certificate, and returns the signature string, Ownership Voucher, and Owner Certificate.
+func (s *Service) sign(ctx context.Context, data []byte, chassis *types.Chassis) (string, []byte, []byte, error) {
+	if len(data) == 0 {
+		return "", nil, nil, status.Error(codes.InvalidArgument, "empty input data to sign")
+	}
+	oCert, oKey := s.am.OwnerCertificateKeyPair()
+	if oCert == nil || oKey == nil {
+		return "", nil, nil, status.Error(codes.FailedPrecondition, "owner certificate key pair not available")
+	}
+	ov, err := s.am.OwnershipVoucher(ctx, chassis.ActiveSerial, chassis.Manufacturer)
 	if err != nil {
-		return status.Errorf(codes.Internal, "failed to generate restricted HMAC key: %v", err)
+		return "", nil, nil, status.Errorf(codes.Internal, "failed to fetch ownership voucher: %v", err)
 	}
-
-	// Wrap HMAC key to EK/PPK public key.
-	duplicate, inSymSeed, err := s.tpm20.WrapHMACKeytoRSAPublicKey(session.chassis.ActivePublicKey, hmacPub, hmacSensitive)
+	oc, err := ownercertificate.GenerateCMS(oCert, oKey)
 	if err != nil {
-		return status.Errorf(codes.Internal, "failed to wrap HMAC key to EK/PPK public key: %v", err)
+		return "", nil, nil, status.Errorf(codes.Internal, "failed to generate owner certificate CMS: %v", err)
 	}
-
-	session.hmacSensitive = hmacSensitive
-
-	challengeResp := &bpb.BootstrapStreamResponse{
-		Type: &bpb.BootstrapStreamResponse_Challenge_{
-			Challenge: &bpb.BootstrapStreamResponse_Challenge{
-				Type: &bpb.BootstrapStreamResponse_Challenge_Tpm20HmacChallenge{
-					Tpm20HmacChallenge: &bpb.BootstrapStreamResponse_Challenge_TPM20HMACChallenge{
-						Key: session.chassis.ActivePublicKeyType,
-						HmacChallenge: &epb.HMACChallenge{
-							HmacPubKey: tpm2.Marshal(tpm2.New2B(*hmacPub)),
-							Duplicate:  tpm2.Marshal(&tpm2.TPM2BPrivate{Buffer: duplicate}),
-							InSymSeed:  tpm2.Marshal(&tpm2.TPM2BEncryptedSecret{Buffer: inSymSeed}),
-						},
-					},
-				},
-			},
-		},
+	sig, err := signature.Sign(oKey, oCert.SignatureAlgorithm, data)
+	if err != nil {
+		return "", nil, nil, status.Errorf(codes.Internal, "failed to sign input data with owner certificate: %v", err)
 	}
-	if err := session.stream.Send(challengeResp); err != nil {
-		return err
-	}
-	log.Infof("Sent HMAC challenge to device %s", session.chassis.ActiveSerial)
-	return nil
+	return base64.StdEncoding.EncodeToString(sig), ov, oc, nil
 }
 
 // establishSessionAndSendChallenge is a helper to establish session and send challenge for TPM 2.0 with or without IDevID.
 func (s *Service) establishSessionAndSendChallenge(session *streamSession) error {
-	err := s.em.ResolveChassis(session.stream.Context(), session.chassis)
+	ctx := session.stream.Context()
+	err := s.cm.ResolveChassis(ctx, session.chassis)
 	if err != nil {
 		return status.Errorf(codes.NotFound, "failed to resolve chassis: %v", err)
 	}
+	log.Infof("Resolved device %s to hostname %s", session.chassis.ActiveSerial, session.chassis.Hostname)
+
 	if !session.chassis.StreamingSupported {
 		return status.Errorf(codes.Unimplemented, "streaming bootstrap is not supported for this device")
 	}
-	log.Infof("Resolved device %s to hostname %s", session.chassis.ActiveSerial, session.chassis.Hostname)
 
+	var challenge *bpb.BootstrapStreamResponse
 	switch idType := session.chassis.Identity.GetType().(type) {
 	case *bpb.Identity_IdevidCert:
 		log.Infof("Starting sendIdevidChallenge for TPM 2.0 with IDevID flow for device %s", session.chassis.ActiveSerial)
-		if err := s.sendIdevidChallenge(session, idType.IdevidCert); err != nil {
-			return err
+		nonceBytes := make([]byte, 32)
+		if _, err := rand.Read(nonceBytes); err != nil {
+			return status.Errorf(codes.Internal, "failed to generate nonce: %v", err)
 		}
-		return nil
+		session.serverNonce = base64.StdEncoding.EncodeToString(nonceBytes)
+		challenge = &bpb.BootstrapStreamResponse{
+			Type: &bpb.BootstrapStreamResponse_Challenge_{
+				Challenge: &bpb.BootstrapStreamResponse_Challenge{
+					Type: &bpb.BootstrapStreamResponse_Challenge_Nonce{
+						Nonce: session.serverNonce,
+					},
+				},
+			},
+		}
 	case *bpb.Identity_EkPpkPub:
 		log.Infof("Starting sendHMACChallenge for TPM 2.0 without IDevID flow for device %s", session.chassis.ActiveSerial)
-		if err := s.sendHMACChallenge(session); err != nil {
-			return err
+		pubKey, pubKeyType, err := s.am.PublicKey(ctx, session.chassis.ActiveSerial, session.chassis.Manufacturer)
+		if err != nil {
+			return status.Errorf(codes.NotFound, "failed to retrieve device EK/PPK public key: %v", err)
 		}
-		return nil
+		rsaKey, ok := pubKey.(*rsa.PublicKey)
+		if !ok {
+			return status.Errorf(codes.Internal, "the EK/PPK public key is not an RSA public key")
+		}
+		// Generate a restricted HMAC key.
+		hmacPub, hmacSensitive, err := s.tpm20.GenerateRestrictedHMACKey()
+		if err != nil {
+			return status.Errorf(codes.Internal, "failed to generate restricted HMAC key: %v", err)
+		}
+		// Wrap HMAC key to EK/PPK public key.
+		duplicate, inSymSeed, err := s.tpm20.WrapHMACKeytoRSAPublicKey(rsaKey, hmacPub, hmacSensitive)
+		if err != nil {
+			return status.Errorf(codes.Internal, "failed to wrap HMAC key to EK/PPK public key: %v", err)
+		}
+		session.hmacSensitive = hmacSensitive
+		challenge = &bpb.BootstrapStreamResponse{
+			Type: &bpb.BootstrapStreamResponse_Challenge_{
+				Challenge: &bpb.BootstrapStreamResponse_Challenge{
+					Type: &bpb.BootstrapStreamResponse_Challenge_Tpm20HmacChallenge{
+						Tpm20HmacChallenge: &bpb.BootstrapStreamResponse_Challenge_TPM20HMACChallenge{
+							Key: pubKeyType,
+							HmacChallenge: &epb.HMACChallenge{
+								HmacPubKey: tpm2.Marshal(tpm2.New2B(*hmacPub)),
+								Duplicate:  tpm2.Marshal(&tpm2.TPM2BPrivate{Buffer: duplicate}),
+								InSymSeed:  tpm2.Marshal(&tpm2.TPM2BEncryptedSecret{Buffer: inSymSeed}),
+							},
+						},
+					},
+				},
+			},
+		}
 	default:
-		return status.Errorf(codes.InvalidArgument, "unsupported identity type for re-authentication: %T", idType)
+		return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
 	}
+
+	if err := session.stream.Send(challenge); err != nil {
+		return err
+	}
+	log.Infof("Sent challenge to device %s", session.chassis.ActiveSerial)
+	return nil
 }
 
 func (s *Service) updateStatusAndSendAcknowledgement(session *streamSession) error {
-	if err := s.em.SetStatus(session.stream.Context(), session.status); err != nil {
+	if err := s.cm.UpdateStatus(session.stream.Context(), session.status); err != nil {
 		log.Errorf("Failed to set status for device %s: %v", session.chassis.ActiveSerial, err)
 		return status.Errorf(codes.Internal, "failed to set status: %v", err)
 	}
@@ -1022,9 +1072,16 @@ func initializeChassis(ctx context.Context, msg proto.Message) (*types.Chassis, 
 }
 
 // New creates a new service.
-func New(em EntityManager, tpm20 biz.TPM20Utils) *Service {
-	return &Service{
-		em:    em,
-		tpm20: tpm20,
+func New(am ArtifactManager, cm ChassisManager, tpm20 biz.TPM20Utils) (*Service, error) {
+	if am == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ArtifactManager cannot be nil")
 	}
+	if cm == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ChassisManager cannot be nil")
+	}
+	return &Service{
+		am:    am,
+		cm:    cm,
+		tpm20: tpm20,
+	}, nil
 }
