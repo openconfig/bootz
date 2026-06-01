@@ -41,40 +41,26 @@ import (
 
 var (
 	// Bootz server flags
-	bootzAddr       = flag.String("bootz_addr", ":15006", "The [ip:]port to start the Bootz
- server.")
-	bootzSutAddr    = flag.String("bootz_sut_addr", ":4003", "The [ip:]port to start the Bo
-otzController SUT gRPC server.")
+	bootzAddr       = flag.String("bootz_addr", ":15006", "The [ip:]port to start the Bootz server.")
+	bootzSutAddr    = flag.String("bootz_sut_addr", ":4003", "The [ip:]port to start the BootzController SUT gRPC server.")
 	inventoryConfig = flag.String("inv_config", "../../testdata/inventory_local.prototxt", 
 "Devices' config files to be loaded by inventory manager")
-	generateOVsFor  = flag.String("generate_ovs_for", "123A,123B", "Comma-separated list of
- control card serial numbers to generate OVs for.")
-	vendorCACert    = flag.String("vendor_ca_cert", "../../testdata/vendor_ca_cert.txt", "V
-endor CA certificate file.")
-	vendorCAKey     = flag.String("vendor_ca_key", "../../testdata/vendor_ca_key.txt", "Ven
-dor CA private key file.")
+	generateOVsFor  = flag.String("generate_ovs_for", "123A,123B", "Comma-separated list of control card serial numbers to generate OVs for.")
+	vendorCACert    = flag.String("vendor_ca_cert", "../../testdata/vendor_ca_cert.txt", "Vendor CA certificate file.")
+	vendorCAKey     = flag.String("vendor_ca_key", "../../testdata/vendor_ca_key.txt", "Vendor CA private key file.")
 
 	// DHCP flags
-	dhcpIntf    = flag.String("dhcp_intf", "", "Network interface to use for DHCP server. I
-f empty, standard DHCP server won't start.")
-	dhcpSutAddr = flag.String("dhcp_sut_addr", ":4001", "The [ip:]port to start the DHCP SU
-T gRPC server.")
-	dhcpRecords = flag.String("dhcp_records", "", "Initial list of DHCP records separated b
-y a semi-colon (format: mac,ip/mask,gw).")
-	dhcpDns     = flag.String("dhcp_dns", "8.8.8.8", "List of DNS servers separated by a se
-mi-colon.")
+	dhcpIntf    = flag.String("dhcp_intf", "", "Network interface to use for DHCP server. If empty, standard DHCP server won't start.")
+	dhcpSutAddr = flag.String("dhcp_sut_addr", ":4001", "The [ip:]port to start the DHCP SUT gRPC server.")
+	dhcpRecords = flag.String("dhcp_records", "", "Initial list of DHCP records separated by a semi-colon (format: mac,ip/mask,gw).")
+	dhcpDns     = flag.String("dhcp_dns", "8.8.8.8", "List of DNS servers separated by a semi-colon.")
 
 	// HTTP flags
-	httpAddr      = flag.String("http_addr", ":80", "The address 'IP:port' to use for HTTP 
-server.")
-	httpFolder    = flag.String("http_folder", "/www", "The local folder to serve files fro
-m.")
-	httpSutAddr   = flag.String("http_sut_addr", ":4002", "The [ip:]port to start the HTTP 
-SUT gRPC server.")
-	httpPublicURL = flag.String("http_public_url", "http://bootz-http", "The public URL of 
-this HTTP server that the DUT can access.")
-	healthcheck   = flag.Bool("healthcheck", false, "Run healthcheck for all SUT services a
-nd exit.")
+	httpAddr      = flag.String("http_addr", ":80", "The address 'IP:port' to use for HTTP server.")
+	httpFolder    = flag.String("http_folder", "/www", "The local folder to serve files from.")
+	httpSutAddr   = flag.String("http_sut_addr", ":4002", "The [ip:]port to start the HTTP SUT gRPC server.")
+	httpPublicURL = flag.String("http_public_url", "http://bootz-http", "The public URL of this HTTP server that the DUT can access.")
+	healthcheck   = flag.Bool("healthcheck", false, "Run healthcheck for all SUT services and exit.")
 )
 
 func main() {
@@ -85,12 +71,9 @@ func main() {
 		return
 	}
 
-	log.Infof("============================================================================
-=")
-	log.Infof("========================= Monolithic SUT Emulator ==========================
-=")
-	log.Infof("============================================================================
-=")
+	log.Infof("=============================================================================")
+	log.Infof("========================= Monolithic SUT Emulator ===========================")
+	log.Infof("=============================================================================")
 
 	// 1. Load Security Artifacts
 	tlsCert, err := tls.LoadX509KeyPair(*vendorCACert, *vendorCAKey)

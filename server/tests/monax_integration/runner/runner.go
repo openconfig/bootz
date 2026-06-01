@@ -113,8 +113,7 @@ func Init(ctx context.Context, m *testing.M, newBindFn func() (binding.Binding, 
 	if newBindFn == nil {
 		// If no binding function is provided, pass nil to let Ondatra use its globally
 		// registered binding, which is the standard way Ondatra runs when a binding
-		// package is imported anonymously (e.g. `import _ "github.com/myorg/ondatrabin
-d"`).
+		// package is imported anonymously (e.g. `import _ "github.com/myorg/ondatrabind"`).
 		ondatra.RunTests(m, nil)
 	} else {
 		ondatra.RunTests(m, newBindFn)
@@ -167,8 +166,7 @@ func waitForBootz(t *testing.T, stream pbgrpc.BootzController_SubscribeClient) e
 		if err != nil {
 			return err
 		}
-		t.Logf("Received message from Bootz controller:\n%v", prototext.Format(message)
-)
+		t.Logf("Received message from Bootz controller:\n%v", prototext.Format(message))
 		if message.GetError() != "" {
 			return fmt.Errorf("Bootz controller returned an error to the DUT: %v", 
 message.GetError())
@@ -179,8 +177,7 @@ message.GetError())
 				t.Logf("Received BOOTSTRAP_STATUS_SUCCESS from DUT")
 				return nil
 			case bootzpb.ReportStatusRequest_BOOTSTRAP_STATUS_FAILURE:
-				return fmt.Errorf("Received BOOTSTRAP_STATUS_FAILURE from DUT: 
-%v", message.GetReportStatusRequest().GetStatusMessage())
+				return fmt.Errorf("Received BOOTSTRAP_STATUS_FAILURE from DUT: %v", message.GetReportStatusRequest().GetStatusMessage())
 			}
 		}
 	}
@@ -201,8 +198,7 @@ func attemptGNOIFactoryReset(ctx context.Context, t *testing.T, dut *ondatra.DUT
 			op := factoryreset.NewStartOperation().ZeroFill(false).FactoryOS(false)
 			_, err = gnoigo.Execute(attemptCtx, c, op)
 			if err != nil {
-				return fmt.Errorf("failed to execute gNOI factory reset: %v", e
-rr)
+				return fmt.Errorf("failed to execute gNOI factory reset: %v", err)
 			}
 			return nil
 		}()
@@ -219,8 +215,7 @@ rr)
 			}
 		}
 	}
-	return fmt.Errorf("failed to factory reset DUT over gNOI after 3 attempts: last error %
-v", err)
+	return fmt.Errorf("failed to factory reset DUT over gNOI after 3 attempts: last error %v", err)
 }
 
 
@@ -294,8 +289,7 @@ func Run(t *testing.T, parameters *dpb.TestParameters) {
 		setRecReq := &pb.SetRecoveryDataRequest{
 			RecoveryData: params.GetRecoveryData(),
 		}
-		if _, err := controllerService.SetRecoveryData(waitCtx, setRecReq); err != nil 
-{
+		if _, err := controllerService.SetRecoveryData(waitCtx, setRecReq); err != nil {
 			t.Fatalf("Failed to set Recovery Data: %v", err)
 		}
 		t.Logf("Set Recovery Data for DUT")

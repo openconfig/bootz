@@ -62,8 +62,7 @@ func (s *Server) Stop() {
 }
 
 // CreateLease creates a DHCP lease dynamically.
-func (s *Server) CreateLease(ctx context.Context, req *pb.CreateLeaseRequest) (*pb.CreateLeaseR
-esponse, error) {
+func (s *Server) CreateLease(ctx context.Context, req *pb.CreateLeaseRequest) (*pb.CreateLeaseResponse, error) {
 	ip, err := netip.ParseAddr(req.GetIpAddress())
 	if err != nil {
 		return nil, err
@@ -83,8 +82,7 @@ esponse, error) {
 }
 
 // RemoveLease removes a DHCP lease dynamically.
-func (s *Server) RemoveLease(ctx context.Context, req *pb.RemoveLeaseRequest) (*pb.RemoveLeaseR
-esponse, error) {
+func (s *Server) RemoveLease(ctx context.Context, req *pb.RemoveLeaseRequest) (*pb.RemoveLeaseResponse, error) {
 	for _, mac := range req.GetMacAddresses() {
 		slease.RemoveRecord4(mac)
 	}

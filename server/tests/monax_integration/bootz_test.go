@@ -82,8 +82,7 @@ func TestSUTConnectivity(t *testing.T) {
 			t.Fatalf("Failed to connect to SUT DHCPService: %v", err)
 		}
 		dhcpClient := pbgrpc.NewDHCPServiceClient(dhcpConn)
-		t.Logf("Successfully established gRPC channel to SUT DHCPService: %v", dhcpClie
-nt)
+		t.Logf("Successfully established gRPC channel to SUT DHCPService: %v", dhcpClient)
 	})
 
 	// 2. Dial and verify Image SUT service
@@ -93,8 +92,7 @@ nt)
 			t.Fatalf("Failed to connect to SUT ImageService: %v", err)
 		}
 		imageClient := pbgrpc.NewImageServiceClient(imageConn)
-		t.Logf("Successfully established gRPC channel to SUT ImageService: %v", imageCl
-ient)
+		t.Logf("Successfully established gRPC channel to SUT ImageService: %v", imageClient)
 	})
 
 	// 3. Dial and verify BootzController SUT service
@@ -104,7 +102,6 @@ ient)
 			t.Fatalf("Failed to connect to SUT BootzController: %v", err)
 		}
 		controllerClient := pbgrpc.NewBootzControllerClient(controllerConn)
-		t.Logf("Successfully established gRPC channel to SUT BootzController: %v", cont
-rollerClient)
+		t.Logf("Successfully established gRPC channel to SUT BootzController: %v", controllerClient)
 	})
 }
