@@ -1,0 +1,6 @@
+# proto-file: github.com/openconfig/ondatra/proto/testbed.proto
+# proto-message: ondatra.Testbed
+
+duts {
+  id: "dut"
+}

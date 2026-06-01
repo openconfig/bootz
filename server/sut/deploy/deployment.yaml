@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bootz-sut
+  labels:
+    app: bootz-sut
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bootz-sut
+  template:
+    metadata:
+      labels:
+        app: bootz-sut
+    spec:
+      containers:
+      - image: bootz-sut
+        name: bootz-sut
+        args:
+        - -bootz_addr=:15006
+        - -bootz_sut_addr=:4003
+        - -dhcp_sut_addr=:4001
+        - -dhcp_intf=eth0
+        - -http_addr=:80
+        - -http_sut_addr=:4002
+        - -http_public_url=http://bootz-sut
+        ports:
+        - containerPort: 15006
+          protocol: TCP
+          name: bootz
+        - containerPort: 4003
+          protocol: TCP
+          name: controller
+        - containerPort: 4001
+          protocol: TCP
+          name: dhcp-sut
+        - containerPort: 67
+          protocol: UDP
+          name: dhcp
+        - containerPort: 80
+          protocol: TCP
+          name: http
+        - containerPort: 4002
+          protocol: TCP
+          name: http-sut
+        securityContext:
+          runAsUser: 0
+          capabilities:
+            add:
+            - NET_ADMIN
+        imagePullPolicy: Never

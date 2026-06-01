@@ -1,0 +1,12 @@
+# proto-file: proto/monax.proto
+# proto-message: monax.RuntimeParameters
+
+parameters: {
+  [type.googleapis.com/monax.kubernetes.KubernetesRuntimeParameters]: {
+    name: "bootz"
+    kubernetes: {
+      kubeconfig_path: "${HOME}/.kube/config"
+      service_type: SERVICE_TYPE_NODE_PORT
+    }
+  }
+}

@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: bootz-sut
+spec:
+  ports:
+  - name: bootz
+    port: 15006
+    protocol: TCP
+    targetPort: 15006
+  - name: controller
+    port: 4003
+    protocol: TCP
+    targetPort: 4003
+  - name: dhcp-sut
+    port: 4001
+    protocol: TCP
+    targetPort: 4001
+  - name: dhcp
+    port: 67
+    protocol: UDP
+    targetPort: 67
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  - name: http-sut
+    port: 4002
+    protocol: TCP
+    targetPort: 4002
+  type: NodePort
+  selector:
+    app: bootz-sut

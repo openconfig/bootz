@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bootz-http
+  labels:
+    app: bootz-http
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bootz-http
+  template:
+    metadata:
+      labels:
+        app: bootz-http
+    spec:
+      containers:
+      - image: bootz-http
+        name: bootz-http
+        args:
+        - -address=:80
+        - -folder=/www
+        - -sut_addr=:4002
+        - -public_url=http://bootz-http
+        ports:
+        - containerPort: 80
+          name: http
+        - containerPort: 4002
+          name: grpc
+        imagePullPolicy: Never

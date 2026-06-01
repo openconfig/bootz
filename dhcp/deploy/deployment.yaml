@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bootz-dhcp
+  labels:
+    app: bootz-dhcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bootz-dhcp
+  template:
+    metadata:
+      labels:
+        app: bootz-dhcp
+    spec:
+      containers:
+      - image: bootz-dhcp
+        name: bootz-dhcp
+        args:
+        - -i=eth0
+        - -records=4c:5d:3c:ef:de:60,10.0.0.2/24,10.0.0.1
+        - -dns=8.8.8.8
+        - -bootz_urls=http://bootz-server:8080
+        - -sut_addr=:4001
+        ports:
+        - containerPort: 67
+          protocol: UDP
+          name: dhcp
+        - containerPort: 4001
+          protocol: TCP
+          name: grpc
+        securityContext:
+          runAsUser: 0
+          capabilities:
+            add:
+            - NET_ADMIN
+        imagePullPolicy: Never

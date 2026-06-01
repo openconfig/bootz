@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: bootz-dhcp
+spec:
+  ports:
+  - name: dhcp
+    port: 67
+    protocol: UDP
+    targetPort: 67
+  - name: grpc
+    port: 4001
+    protocol: TCP
+    targetPort: 4001
+  selector:
+    app: bootz-dhcp

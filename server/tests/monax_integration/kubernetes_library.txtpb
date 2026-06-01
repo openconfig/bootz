@@ -1,0 +1,4 @@
+# proto-file: proto/monax.proto
+# proto-message: monax.Library
+
+libraries: "../../sut/deploy/kubernetes.txtpb"

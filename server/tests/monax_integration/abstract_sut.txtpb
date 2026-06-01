@@ -1,0 +1,21 @@
+# proto-file: proto/monax.proto
+# proto-message: monax.AbstractSut
+
+required_interfaces: {
+  name: "dhcp_service"
+  grpc: {
+    service_name: "bootz.DHCPService"
+  }
+}
+required_interfaces: {
+  name: "image_service"
+  grpc: {
+    service_name: "bootz.ImageService"
+  }
+}
+required_interfaces: {
+  name: "controller_service"
+  grpc: {
+    service_name: "bootz.BootzController"
+  }
+}

@@ -1,0 +1,24 @@
+FROM golang:1.26 AS builder
+WORKDIR /app
+COPY bootz/go.mod bootz/go.sum ./
+# Map local monax repository so go mod download can resolve the replace directive inside Docker.
+COPY monax /monax
+RUN go mod download
+COPY bootz .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bootz-sut ./server/sut
+RUN mkdir -p /www_dir
+RUN mkdir -p server/sut
+
+FROM gcr.io/distroless/static-debian12:latest
+WORKDIR /app
+COPY --from=builder /bootz-sut /app/bootz-sut
+COPY --from=builder /www_dir /www
+COPY --from=builder /app/server/sut /app/server/sut
+COPY bootz/testdata /app/testdata
+# Set WORKDIR to /app/server/sut so relative paths in flags (../../testdata) resolve to /app/testdata.
+WORKDIR /app/server/sut
+# DHCP needs to run as root.
+USER root
+HEALTHCHECK --interval=5s --timeout=2s --start-period=3s --retries=3 \
+  CMD ["/app/bootz-sut", "--healthcheck"]
+ENTRYPOINT ["/app/bootz-sut"]

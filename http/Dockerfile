@@ -5,16 +5,12 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /bootz-http ./http/main
 
-# hadolint ignore=DL3007
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /www
 COPY --from=builder /bootz-http /bootz-http
 # HTTP server might need to run as root to bind to port 80.
-# hadolint ignore=DL3002
 USER nonroot
+HEALTHCHECK --interval=5s --timeout=2s --start-period=3s --retries=3 \
+  CMD ["/bootz-http", "--healthcheck"]
 ENTRYPOINT ["/bootz-http"]
-CMD ["-address", ":8080"]  
-
-HEALTHCHECK --interval=30s --timeout=3s \
-  CMD curl -f http://localhost:8080/health || exit 1
 
