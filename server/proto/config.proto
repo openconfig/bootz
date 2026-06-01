@@ -84,4 +84,13 @@ message ControlCard {
   // Public key type: EK or PPK.
   // This field is not populated for control cards having IDevID.
   openconfig.attestz.Key public_key_type = 4;
+
+  /////////////////////////////////////////////////////////////////////////////
+  // NOTE: All fields below are only used by the emulated client.
+  // If this config is for the server only, do not populate the fields below.
+  /////////////////////////////////////////////////////////////////////////////
+
+  // IDevID cert key pair.
+  // This field is not populated for control cards not having IDevID.
+  CertKeyPair idevid = 5;
 }

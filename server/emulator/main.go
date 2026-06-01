@@ -16,82 +16,45 @@
 //
 // The bootz server will provide a simple file based bootstrap
 // implementation for devices. The service can be extended by
-// providing your own implementation of the entity manager.
+// providing your own implementation of artifact manager and chassis manager.
 package main
 
 import (
-	"crypto/rsa"
-	"crypto/tls"
-	"crypto/x509"
 	"flag"
-	"fmt"
-	"strings"
+	"os"
 
 	"github.com/openconfig/bootz/server"
-	"github.com/openconfig/bootz/server/entitymanager"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	log "github.com/golang/glog"
-	artifacts "github.com/openconfig/bootz/testdata"
+
+	cpb "github.com/openconfig/bootz/server/proto/config"
 )
 
 var (
-	bootzAddr       = flag.String("bootz_addr", "15006", "The [ip:]port to start the Bootz server. When ip is not specified, the server starts on localhost")
-	inventoryConfig = flag.String("inv_config", "../../testdata/inventory_local.prototxt", "Devices' config files to be loaded by inventory manager")
-	generateOVsFor  = flag.String("generate_ovs_for", "123A,123B", "Comma-separated list of control card serial numbers to generate OVs for.")
-	vendorCACert    = flag.String("vendor_ca_cert", "../../testdata/vendor_ca_cert.txt", "Vendor CA certificate file.")
-	vendorCAKey     = flag.String("vendor_ca_key", "../../testdata/vendor_ca_key.txt", "Vendor CA private key file.")
+	configFile = flag.String("config_file", "../../testdata/bootz_config.textproto", "Bootz config file.")
 )
-
-// Convert address to localhost when no ip is specified.
-func convertAddress(addr string) string {
-	items := strings.Split(addr, ":")
-	listenAddr := addr
-	if len(items) == 1 {
-		listenAddr = fmt.Sprintf("localhost:%v", addr)
-	}
-	return listenAddr
-}
 
 func main() {
 	flag.Parse()
 
-	if *bootzAddr == "" {
-		log.Exit("no address selected. specify with the --addr [ip:]port flag")
+	configBytes, err := os.ReadFile(*configFile)
+	if err != nil {
+		log.Exit("failed to read config file. Specify with argument '--config_file path/to/file'")
+	}
+	config := &cpb.Config{}
+	if err := prototext.Unmarshal(configBytes, config); err != nil {
+		log.Exitf("failed to unmarshal config file: %v", err)
+	}
+	if config.GetServerAddress() == "" {
+		log.Exit("no server address found in config file.")
 	}
 
 	log.Infof("=============================================================================")
 	log.Infof("=========================== BootZ Server Emulator ===========================")
 	log.Infof("=============================================================================")
 
-	tlsCert, err := tls.LoadX509KeyPair(*vendorCACert, *vendorCAKey)
-	if err != nil {
-		log.Exitf("Invalid vendor CA cert/key pair: %v.", err)
-	}
-	cert, err := x509.ParseCertificate(tlsCert.Certificate[0])
-	if err != nil {
-		log.Exitf("Failed to parse vendor CA cert: %v.", err)
-	}
-	rsaKey, ok := tlsCert.PrivateKey.(*rsa.PrivateKey)
-	if !ok {
-		log.Exitf("Failed to parse vendor CA key as an RSA key")
-	}
-
-	log.Infof("Setting up server security artifacts: OC, OVs, PDC, VendorCA")
-	serials := strings.Split(*generateOVsFor, ",")
-
-	sa, err := artifacts.GenerateSecurityArtifacts(serials, "Google", cert, rsaKey)
-	if err != nil {
-		log.Exit("err")
-	}
-
-	log.Infof("Setting up entities")
-	_, err = entitymanager.New(*inventoryConfig, sa)
-	if err != nil {
-		log.Exit("unable to initiate inventory manager %v", err)
-	}
-
-	// TODO: Create a proper config.
-	s, err := server.NewServer(nil)
+	s, err := server.NewServer(config)
 	if err != nil {
 		log.Exit(err)
 	}
