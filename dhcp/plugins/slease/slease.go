@@ -203,3 +203,23 @@ func parseRecord6(r string) (string, net.IP, error) {
 	}
 	return parts[0], ip, nil
 }
+
+// AddRecord4 adds an IPv4 lease record dynamically.
+func AddRecord4(mac string, ip net.IP, mask net.IPMask, gw net.IP) {
+	muRw.Lock()
+	defer muRw.Unlock()
+	ipv4Records[mac] = &ipv4Entry{
+		ip:      ip,
+		netmask: mask,
+		gateway: gw,
+	}
+	log.Infof("Dynamically added ipv4 record: %v, %v, %v, %v", mac, ip, mask, gw)
+}
+
+// RemoveRecord4 removes an IPv4 lease record dynamically.
+func RemoveRecord4(mac string) {
+	muRw.Lock()
+	defer muRw.Unlock()
+	delete(ipv4Records, mac)
+	log.Infof("Dynamically removed ipv4 record for MAC: %v", mac)
+}
