@@ -98,7 +98,7 @@ func (m *InMemoryArtifactManager) VendorCABundle() *x509.CertPool {
 	return m.vendorCAPool
 }
 
-func parseCertKeyPair(pair *cpb.CertKeyPair) (*x509.Certificate, crypto.PrivateKey, error) {
+func ParseCertKeyPair(pair *cpb.CertKeyPair) (*x509.Certificate, crypto.PrivateKey, error) {
 	if pair == nil {
 		return nil, nil, fmt.Errorf("certificate key pair is nil")
 	}
@@ -125,11 +125,11 @@ func parseCertKeyPair(pair *cpb.CertKeyPair) (*x509.Certificate, crypto.PrivateK
 func New(config *cpb.Config) (*InMemoryArtifactManager, error) {
 	var err error
 	am := &InMemoryArtifactManager{}
-	am.trustAnchorCert, am.trustAnchorKey, err = parseCertKeyPair(config.GetTrustAnchor())
+	am.trustAnchorCert, am.trustAnchorKey, err = ParseCertKeyPair(config.GetTrustAnchor())
 	if err != nil {
 		return nil, fmt.Errorf("trust anchor error: %v", err)
 	}
-	am.ownerCert, am.ownerKey, err = parseCertKeyPair(config.GetOwnerCertificate())
+	am.ownerCert, am.ownerKey, err = ParseCertKeyPair(config.GetOwnerCertificate())
 	if err != nil {
 		return nil, fmt.Errorf("owner certificate error: %v", err)
 	}
