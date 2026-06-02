@@ -33,7 +33,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/openconfig/attestz/service/biz"
 	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
@@ -186,11 +185,11 @@ func createTestClient(t *testing.T, addr string, tlsClientCreds credentials.Tran
 
 func TestBootstrapStream(t *testing.T) {
 	// For testing, we use OC as PDC.
-	deviceOC, deviceOCKey, err := ownercertificate.NewRSACertificate("Owner Certificate", "1", nil, nil)
+	deviceOC, deviceOCKey, err := ownercertificate.NewRSACertificate("Owner Certificate", "", nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create owner certificate: %v", err)
 	}
-	vendorCA, vendorCAKey, err := ownercertificate.NewRSACertificate("Vendor CA", "2", nil, nil)
+	vendorCA, vendorCAKey, err := ownercertificate.NewRSACertificate("Vendor CA", "", nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create vendor certificate authority: %v", err)
 	}
@@ -424,11 +423,11 @@ func TestBootstrapStream(t *testing.T) {
 
 func TestBootstrapStreamV1(t *testing.T) {
 	// For testing, we use OC as PDC.
-	deviceOC, deviceOCKey, err := ownercertificate.NewRSACertificate("Owner Certificate", "1", nil, nil)
+	deviceOC, deviceOCKey, err := ownercertificate.NewRSACertificate("Owner Certificate", "", nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create owner certificate: %v", err)
 	}
-	vendorCA, vendorCAKey, err := ownercertificate.NewRSACertificate("Vendor CA", "2", nil, nil)
+	vendorCA, vendorCAKey, err := ownercertificate.NewRSACertificate("Vendor CA", "", nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create vendor certificate authority: %v", err)
 	}
@@ -837,7 +836,7 @@ func TestInitializeChassis(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if diff := cmp.Diff(got, tc.want, protocmp.Transform(), cmpopts.IgnoreFields(types.Chassis{}, "ActivePublicKey", "SoftwareImage", "BootConfig", "Authz")); diff != "" {
+			if diff := cmp.Diff(got, tc.want, protocmp.Transform()); diff != "" {
 				t.Errorf("initializeChassis diff = %v", diff)
 			}
 		})
