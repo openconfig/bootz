@@ -28,7 +28,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/openconfig/attestz/service/biz"
 	bootztls "github.com/openconfig/bootz/common/tls"
-	"github.com/openconfig/bootz/dhcp"
 	"github.com/openconfig/bootz/http"
 	"github.com/openconfig/bootz/server/artifactmanager"
 	"github.com/openconfig/bootz/server/chassismanager"
@@ -36,7 +35,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	dpb "github.com/openconfig/bootz/dhcp/proto/config"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	cpb "github.com/openconfig/bootz/server/proto/config"
 )
@@ -65,7 +63,7 @@ type bootzServerOpts interface {
 
 // DHCPOpts is an struct that captures dhcp server config.
 type DHCPOpts struct {
-	Config *dpb.Config
+	intf string
 }
 
 func (*DHCPOpts) isbootzServerOpts() {}
@@ -119,9 +117,12 @@ func NewServer(config *cpb.Config, opts ...bootzServerOpts) (*Server, error) {
 	for _, opt := range opts {
 		switch opt := opt.(type) {
 		case *DHCPOpts:
-			if err := dhcp.Start(opt.Config); err != nil {
-				return nil, fmt.Errorf("unable to start dhcp server %v", err)
-			}
+			// TODO: Remove EntityManager dependency from DHCP server config.
+			/*
+				if err := StartDhcpServer(em, opt.intf); err != nil {
+					return nil, fmt.Errorf("unable to start dhcp server %v", err)
+				}
+			*/
 		case *ImgSrvOpts:
 			if err := StartImageServer(opt); err != nil {
 				return nil, fmt.Errorf("unable to start image server %v", err)
@@ -159,6 +160,32 @@ func NewServer(config *cpb.Config, opts ...bootzServerOpts) (*Server, error) {
 		service: c,
 	}, nil
 }
+
+// TODO: Remove EntityManager dependency from DHCP server config.
+/*
+// StartDhcpServer start dhcp server based on the dhcpIntf interface and dhcp configuration added for devices
+func StartDhcpServer(em *entitymanager.InMemoryEntityManager, dhcpIntf string) error {
+	conf := &dhcp.Config{
+		Interface:  dhcpIntf,
+		AddressMap: make(map[string]*dhcp.Entry),
+	}
+
+	for _, c := range em.GetChassisInventory() {
+		if dhcpConf := c.GetDhcpConfig(); dhcpConf != nil {
+			key := dhcpConf.GetHardwareAddress()
+			if key == "" {
+				key = c.GetSerialNumber()
+			}
+			conf.AddressMap[key] = &dhcp.Entry{
+				IP: dhcpConf.GetIpAddress(),
+				Gw: dhcpConf.GetGateway(),
+			}
+		}
+	}
+
+	return dhcp.Start(conf)
+}
+*/
 
 // StartImageServer starts an http server as an image server.
 func StartImageServer(opt *ImgSrvOpts) error {

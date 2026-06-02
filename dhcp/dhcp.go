@@ -33,8 +33,6 @@ import (
 	cdserver "github.com/coredhcp/coredhcp/server"
 	plbootz "github.com/openconfig/bootz/dhcp/plugins/bootz"
 	plslease "github.com/openconfig/bootz/dhcp/plugins/slease"
-
-	cpb "github.com/openconfig/bootz/dhcp/proto/config"
 )
 
 const confTemplate = `
@@ -66,14 +64,6 @@ server4:
     {{ end }}
 `
 
-type Server struct {
-	server *cdserver.Servers
-}
-
-var instance *Server = nil
-var lock = &sync.Mutex{}
-var log = logger.GetLogger("bootz/dhcp")
-
 var desiredPlugins = []*cdplugins.Plugin{
 	&plserverid.Plugin,
 	&plleasetime.Plugin,
@@ -81,6 +71,29 @@ var desiredPlugins = []*cdplugins.Plugin{
 	&plbootz.Plugin,
 	&plslease.Plugin,
 }
+
+// Config contains the dhcp server configuration.
+type Config struct {
+	Interface  string
+	DNS        []string
+	AddressMap map[string]*Entry
+	BootzURLs  []string
+}
+
+// Entry represents a dhcp record.
+type Entry struct {
+	IP string
+	Gw string
+}
+
+type Server struct {
+	server *cdserver.Servers
+}
+
+var instance *Server = nil
+var lock = &sync.Mutex{}
+
+var log = logger.GetLogger("bootz/dhcp")
 
 func init() {
 	for _, plugin := range desiredPlugins {
@@ -91,7 +104,7 @@ func init() {
 }
 
 // Start starts the dhcp server with the given configuration.
-func Start(conf *cpb.Config) error {
+func Start(conf *Config) error {
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -103,7 +116,6 @@ func Start(conf *cpb.Config) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(configFile)
 
 	c, err := cdconfig.Load(configFile)
 	if err != nil {
@@ -114,6 +126,7 @@ func Start(conf *cpb.Config) error {
 	if err != nil {
 		return fmt.Errorf("error starting DHCP server: %v", err)
 	}
+	os.Remove(configFile)
 
 	instance = &Server{
 		server: srv,
@@ -132,7 +145,7 @@ func Stop() {
 	instance = nil
 }
 
-func generateConfigFile(conf *cpb.Config) (string, error) {
+func generateConfigFile(conf *Config) (string, error) {
 	configFile, err := os.CreateTemp("", "coredhcp_conf_*.yml")
 	if err != nil {
 		return "", fmt.Errorf("error creating configuration file: %v", err)
@@ -143,19 +156,18 @@ func generateConfigFile(conf *cpb.Config) (string, error) {
 		return "", fmt.Errorf("error parsing configuration template: %v", err)
 	}
 
-	intf, err := net.InterfaceByName(conf.GetInterface())
+	intf, err := net.InterfaceByName(conf.Interface)
 	if err != nil {
-		return "", fmt.Errorf("unknown interface %v: %v", conf.GetInterface(), err)
+		return "", fmt.Errorf("unknown interface %v: %v", conf.Interface, err)
 	}
-	log.Infof("%v", intf.HardwareAddr.String())
 
 	IPv4Addr := getIPv4Address(intf)
 	if IPv4Addr == nil {
-		return "", fmt.Errorf("unable to find IPv4 address for interface %v", conf.GetInterface())
+		return "", fmt.Errorf("unable to find IPv4 address for interface %v", conf.Interface)
 	}
 
 	DNSv4, DNSv6 := []string{}, []string{}
-	for _, v := range conf.GetDns() {
+	for _, v := range conf.DNS {
 		if isIPv6(v) {
 			DNSv6 = append(DNSv6, v)
 		} else {
@@ -164,11 +176,11 @@ func generateConfigFile(conf *cpb.Config) (string, error) {
 	}
 
 	v6Records, v4Records := []string{}, []string{}
-	for _, v := range conf.GetRecords() {
-		if isIPv6(v.GetIp()) {
-			v6Records = append(v6Records, fmt.Sprintf("%s,%s", v.GetMachine(), v.GetIp()))
+	for k, a := range conf.AddressMap {
+		if isIPv6(a.IP) {
+			v6Records = append(v6Records, fmt.Sprintf("%s,%s", k, a.IP))
 		} else {
-			v4Records = append(v4Records, fmt.Sprintf("%s,%s,%s", v.GetMachine(), v.GetIp(), v.GetGateway()))
+			v4Records = append(v4Records, fmt.Sprintf("%s,%s,%s", k, a.IP, a.Gw))
 		}
 	}
 
@@ -187,7 +199,7 @@ func generateConfigFile(conf *cpb.Config) (string, error) {
 		DNSv6:       strings.Join(DNSv6, " "),
 		IPv4Leases:  strings.Join(v4Records, " "),
 		IPv6Leases:  strings.Join(v6Records, " "),
-		BootzURLs:   strings.Join(conf.GetBootzUrls(), " "),
+		BootzURLs:   strings.Join(conf.BootzURLs, " "),
 	}); err != nil {
 		return "", fmt.Errorf("error generating configuration template: %v", err)
 	}
