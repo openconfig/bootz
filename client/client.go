@@ -18,22 +18,17 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto"
 	"crypto/ecdh"
 	"crypto/hpke"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
-	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -42,52 +37,48 @@ import (
 	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	ownershipvoucher "github.com/openconfig/bootz/common/ownership_voucher"
 	"github.com/openconfig/bootz/common/signature"
-
+	"github.com/openconfig/bootz/server/artifactmanager"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
-)
-
-const (
-	// Default vendor CA cert file for IDevID generation.
-	vendorCACert = "../testdata/vendor_ca_cert.txt"
-	// Default vendor CA key file for IDevID generation.
-	vendorCAKey = "../testdata/vendor_ca_key.txt"
-	// Represents a 128 bit nonce.
-	nonceLength = 16
-	// Emulated modular chassis with two control cards.
-	defaultChassisDescriptor = `
-		manufacturer: 'Cisco' 
-		control_cards { 
-			serial_number: '123A' 
-		} 
-		control_cards { 
-			serial_number: '123B' 
-		}`
+	cpb "github.com/openconfig/bootz/server/proto/config"
 )
 
 var (
-	port              = flag.String("port", "15006", "The port to connect to on localhost for the bootz server.")
-	streaming         = flag.Bool("streaming", false, "Whether to use the streaming bootstrap RPC.")
-	insecureBoot      = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
-	chassisDescriptor = flag.String("chassis_descriptor", defaultChassisDescriptor, "A textproto formatting of the ChassisDescriptor message.")
-	idevidCertFile    = flag.String("idevid_cert", "", "Path to the IDevID certificate.")
-	idevidKeyFile     = flag.String("idevid_key", "", "Path to the IDevID private key.")
+	configFile   = flag.String("config_file", "../testdata/bootz_config.textproto", "Bootz config file.")
+	streaming    = flag.Bool("streaming", false, "Whether to use the streaming bootstrap RPC.")
+	insecureBoot = flag.Bool("insecure_boot", false, "Whether to start the emulated device in non-secure mode. This informs Bootz server to not provide ownership certificates or vouchers.")
 
-	urlImageMap = map[string]string{"https://path/to/image": "../testdata/image.txt"}
+	urlImageMap = map[string]string{"http://127.0.0.1/path/to/image": "../testdata/image.bin"}
 
-	chassis = &bpb.ChassisDescriptor{}
-	idevid  = &tls.Certificate{}
+	idevid = &tls.Certificate{}
 )
 
-// validateArtifacts checks the Ownership Voucher, Ownership Certificate, and Bootstrap Data Signature.
+func validateChassis(chassis *cpb.Chassis) {
+	if chassis.GetManufacturer() == "" {
+		log.Exitf("Chassis validation error: chassis %v does not have manufacturer", chassis)
+	}
+	if len(chassis.GetControlCards()) == 0 {
+		log.Exitf("Chassis validation error: chassis %v does not have control cards", chassis)
+	}
+	for _, cc := range chassis.GetControlCards() {
+		if cc.GetSerialNumber() == "" {
+			log.Exitf("Chassis validation error: control card %v does not have serial number", cc)
+		}
+		if cc.GetIdevid() == nil {
+			log.Exitf("Chassis validation error: control card %v does not have IDevID", cc)
+		}
+	}
+}
+
+// validateArtifacts checks the Ownership Voucher, Owner Certificate, and Bootstrap Data Signature.
 // Specifically, it:
 // - Checks that the OV is signed by the manufacturer.
 // - Checks that the serial number in the OV matches the one in the original request.
-// - Verifies that the Ownership Certificate is in the chain of signers of the Pinned Domain Cert.
+// - Verifies that the Owner Certificate is in the chain of signers of the Pinned Domain Cert.
 // - Verifies the signature over the bootstrap data.
 func validateArtifacts(serialNumber string, ov, oc, data []byte, sigString string) error {
 	// Normally, clients should unmarshal the OV CMS struct and verify that it has been signed by a trusted CA.
@@ -95,20 +86,18 @@ func validateArtifacts(serialNumber string, ov, oc, data []byte, sigString strin
 	// certPool := x509.NewCertPool()
 	// certPool.AddCert(vendorCA)
 	// parsedOV, err := ownershipvoucher.Unmarshal(ov, certPool)
-	// In this emulator, we don't have a static Vendor Certificate Authority so we unmarshal without
-	// verifying.
+	// In this emulator, we don't have a static Vendor Certificate Authority so we unmarshal without verifying.
 	parsedOV, err := ownershipvoucher.Unmarshal(ov, nil)
 	if err != nil {
 		return fmt.Errorf("unable to verify ownership voucher: %v", err)
 	}
 	log.Infof("Validated ownership voucher signed by vendor")
 
-	// Verify the serial number for this OV
-	log.Infof("Verifying the serial number for this OV")
+	// Validate the serial number for this OV
 	if parsedOV.OV.SerialNumber != serialNumber {
 		return fmt.Errorf("serial number from OV does not match request")
 	}
-	log.Infof("Verified serial number is %v", serialNumber)
+	log.Infof("Validated serial number: %q", serialNumber)
 
 	// Create a new pool with this PDC.
 	log.Infof("Creating a new pool with the PDC")
@@ -119,18 +108,14 @@ func validateArtifacts(serialNumber string, ov, oc, data []byte, sigString strin
 	pdcPool := x509.NewCertPool()
 	pdcPool.AddCert(pdc)
 
-	// Parse the Ownership Certificate.
+	// Parse the Owner Certificate.
 	log.Infof("Parsing the OC")
 	ocCert, err := ownercertificate.Verify(oc, pdcPool)
 	if err != nil {
 		return err
 	}
-	log.Infof("Validated ownership certificate with OV PDC")
+	log.Infof("Validated owner certificate with OV PDC")
 
-	// Validate the response signature.
-	log.Infof("=============================================================================")
-	log.Infof("===================== Validating the response signature =====================")
-	log.Infof("=============================================================================")
 	sig, err := base64.StdEncoding.DecodeString(sigString)
 	if err != nil {
 		return fmt.Errorf("unable to base64 decode signature: %v", err)
@@ -138,13 +123,16 @@ func validateArtifacts(serialNumber string, ov, oc, data []byte, sigString strin
 	if err := signature.Verify(ocCert, data, sig); err != nil {
 		return err
 	}
-	log.Infof("Successfully validated the response")
+	log.Infof("Validated response signature")
+
+	log.Infof("=============================================================================")
+	log.Infof("===================== Successfully validated bootstrap data =================")
+	log.Infof("=============================================================================")
 	return nil
 }
 
 // validateImage validates if the hash of the downloaded OS image matches the received image hash.
 func validateImage(image []byte, softwareImage *bpb.SoftwareImage) error {
-	log.Info("Start to validate the downloaded image")
 	var hashed [32]byte
 	if softwareImage.GetHashAlgorithm() == "ietf-sztp-conveyed-info:sha-256" {
 		hashed = sha256.Sum256(image)
@@ -158,7 +146,7 @@ func validateImage(image []byte, softwareImage *bpb.SoftwareImage) error {
 		return fmt.Errorf("can not decode received hashed image to bytes, received hash: %q", softwareImage.GetOsImageHash())
 	}
 	if !bytes.Equal(hashed[:], receivedHashed) {
-		return fmt.Errorf("unmatched hash, recevived: %v, downloaded: %v, received hex string: %v, downloaded hex string: %v", receivedHashed, hashed[:], softwareImage.OsImageHash, hex.EncodeToString(hashed[:]))
+		return fmt.Errorf("unmatched hash, received: %x, downloaded: %x", receivedHashed, hashed[:])
 	}
 	log.Info("Verified image hash")
 	return nil
@@ -176,65 +164,6 @@ func downloadImage(url string) ([]byte, error) {
 	}
 	log.Infof("Image is successfully downloaded, content length: %v", len(f))
 	return f, nil
-}
-
-// generateNonce() generates a fixed-length nonce.
-func generateNonce() (string, error) {
-	b := make([]byte, nonceLength)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(b), nil
-}
-
-// createIDevID creates an IDevID cert/key pair.
-func createIDevID(serialNumber string) (*tls.Certificate, error) {
-	tlsCACert, err := tls.LoadX509KeyPair(vendorCACert, vendorCAKey)
-	if err != nil {
-		log.Exitf("Invalid vendor CA cert/key pair: %v.", err)
-	}
-	caCert, err := x509.ParseCertificate(tlsCACert.Certificate[0])
-	if err != nil {
-		log.Exitf("Failed to parse vendor CA cert: %v.", err)
-	}
-
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate IDevID RSA key: %v", err)
-	}
-	keyHash := sha256.Sum256(x509.MarshalPKCS1PublicKey(&priv.PublicKey))
-	template := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject: pkix.Name{
-			CommonName:   "TPM 2.0 with IDevID device",
-			SerialNumber: serialNumber,
-		},
-		NotBefore:      time.Now(),
-		NotAfter:       time.Now().Add(time.Hour * 24),
-		SubjectKeyId:   keyHash[:],
-		AuthorityKeyId: caCert.SubjectKeyId,
-		KeyUsage:       x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-	}
-	cert, err := x509.CreateCertificate(rand.Reader, &template, caCert, &priv.PublicKey, tlsCACert.PrivateKey.(*rsa.PrivateKey))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create IDevID certificate: %v", err)
-	}
-
-	certPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: cert,
-	})
-	keyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(priv),
-	})
-	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create IDevID TLS certificate: %v", err)
-	}
-
-	return &tlsCert, nil
 }
 
 // handleStream handles the streaming bootstrap workflow.
@@ -304,12 +233,7 @@ func handleStream(ctx context.Context, c bpb.BootstrapClient, msg proto.Message)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to serialize transport key message: %v", err)
 	}
-	digest := sha256.Sum256(serializedMsg)
-	rsaKey, ok := idevid.PrivateKey.(*rsa.PrivateKey)
-	if !ok {
-		return nil, nil, fmt.Errorf("failed to parse IDevID key as an RSA key")
-	}
-	sig, err := rsa.SignPKCS1v15(rand.Reader, rsaKey, crypto.SHA256, digest[:])
+	sig, err := signature.Sign(idevid.PrivateKey, idevid.Leaf.SignatureAlgorithm, serializedMsg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to sign transport key: %v", err)
 	}
@@ -371,23 +295,6 @@ func handleStream(ctx context.Context, c bpb.BootstrapClient, msg proto.Message)
 	return ret, dataDecrypted, nil
 }
 
-func validateChassisDescriptor(chassis *bpb.ChassisDescriptor) {
-	if chassis.GetManufacturer() == "" {
-		log.Exitf("Chassis validation error: chassis %v does not have manufacturer", chassis)
-	}
-	if len(chassis.GetControlCards()) > 0 {
-		for _, cc := range chassis.GetControlCards() {
-			if cc.GetSerialNumber() == "" {
-				log.Exitf("Chassis validation error: control card %v does not have serial number", cc)
-			}
-		}
-	} else {
-		if chassis.GetSerialNumber() == "" {
-			log.Exitf("Chassis validation error: fixed form factor chassis %v does not have serial number", chassis)
-		}
-	}
-}
-
 // reconnectWithTrustCert re-establishes the gRPC connection with the server using the provided trust certificate.
 func reconnectWithTrustCert(bootzAddress string, signedResp *bpb.BootstrapDataSigned) (*grpc.ClientConn, bpb.BootstrapClient, error) {
 	log.Infof("Re-establishing TLS connection with server using provided trust cert")
@@ -440,10 +347,10 @@ func processControlCardConfigs(signedResp *bpb.BootstrapDataSigned) {
 	}
 	for _, data := range signedResp.GetResponses() {
 		log.Infof("Received config for control card %v", data.GetSerialNum())
-		log.Infof("Start to download and validate image, received: %+v...", data.GetIntendedImage())
+		log.Infof("Start to download and validate image: %+v", data.GetIntendedImage())
 		image, err := downloadImage(data.GetIntendedImage().GetUrl())
 		if err != nil {
-			log.Exitf("unable to download image (url: %q): %v", data.GetIntendedImage().GetUrl(), err)
+			log.Exitf("Unable to download image (url: %q): %v", data.GetIntendedImage().GetUrl(), err)
 		}
 		err = validateImage(image, data.GetIntendedImage())
 		if err != nil {
@@ -461,60 +368,72 @@ func processControlCardConfigs(signedResp *bpb.BootstrapDataSigned) {
 func main() {
 	ctx := context.Background()
 	flag.Parse()
-	if *port == "" {
-		log.Exitf("No Bootz server port provided.")
+	configBytes, err := os.ReadFile(*configFile)
+	if err != nil {
+		log.Exit("Failed to read config file. Specify with argument '--config_file path/to/file'")
+	}
+	config := &cpb.Config{}
+	if err := prototext.Unmarshal(configBytes, config); err != nil {
+		log.Exitf("Failed to unmarshal config file: %v", err)
+	}
+	bootzAddress := config.GetServerAddress()
+	if bootzAddress == "" {
+		log.Exit("Bootz server address not found in config file.")
 	}
 	log.Infof("=============================================================================")
 	log.Infof("=========================== BootZ Client Emulator ===========================")
 	log.Infof("=============================================================================")
 
+	log.Infof("Use Streaming Bootz RPC: %v", *streaming)
+
 	log.Infof("=============================================================================")
 	log.Infof("================== Constructing a fake device for testing ===================")
 	log.Infof("=============================================================================")
-	// Construct the fake device.
-	err := prototext.Unmarshal([]byte(*chassisDescriptor), chassis)
-	if err != nil {
-		log.Exitf("Error un-marshalling chassis descriptor %s: %v", *chassisDescriptor, err)
+	if len(config.GetChassis()) == 0 {
+		log.Exit("Chassis not found in config file.")
 	}
-	validateChassisDescriptor(chassis)
-	var serial string
-	if len(chassis.GetControlCards()) > 0 {
-		// For this implementation, we pick the first control card as the active one. On a real device, the active control
-		// card should set its own serial number here.
-		serial = chassis.GetControlCards()[0].GetSerialNumber()
-		log.Infof("%v modular chassis with %d control cards starting with SecureOnly = %v", chassis.Manufacturer, len(chassis.GetControlCards()), !*insecureBoot)
+	// Construct a fake device from the first chassis found in the config file.
+	chassis := config.GetChassis()[0]
+	validateChassis(chassis)
+	// For this implementation, we pick the first control card as the active one. On a real device, the bootstrap request can initiate from any control card.
+	card := chassis.GetControlCards()[0]
+	serial := card.GetSerialNumber()
+	chassisDescriptor := &bpb.ChassisDescriptor{
+		Manufacturer: chassis.GetManufacturer(),
+	}
+	if len(chassis.GetControlCards()) > 1 {
+		log.Infof("Constructing a modular form factor chassis")
+		for _, v := range chassis.GetControlCards() {
+			chassisDescriptor.ControlCards = append(chassisDescriptor.GetControlCards(), &bpb.ControlCard{
+				SerialNumber: v.GetSerialNumber(),
+			})
+		}
 	} else {
-		serial = chassis.GetSerialNumber()
-		log.Infof("%v fixed form factor chassis %v starting with SecureOnly = %v", chassis.Manufacturer, chassis.SerialNumber, !*insecureBoot)
+		log.Infof("Constructing a fixed form factor chassis")
+		chassisDescriptor.SerialNumber = serial
 	}
 	controlCardState := &bpb.ControlCardState{
 		Status:       bpb.ControlCardState_CONTROL_CARD_STATUS_NOT_INITIALIZED,
 		SerialNumber: serial,
 	}
-	log.Infof("Active control card is %v", serial)
-	// Load IDevID certificate
-	if *idevidCertFile == "" && *idevidKeyFile == "" {
-		idevid, err = createIDevID(serial)
-		if err != nil {
-			log.Exitf("Error calling createIDevID: %v", err)
-		}
-	} else {
-		*idevid, err = tls.LoadX509KeyPair(*idevidCertFile, *idevidKeyFile)
-		if err != nil {
-			log.Exitf("Invalid IDevID cert/key pair provided.")
-		}
+	log.Infof("Active control card is %q", serial)
+	idevidCert, idevidKey, err := artifactmanager.ParseCertKeyPair(card.GetIdevid())
+	if err != nil {
+		log.Exitf("Error parsing active control card IDevID: %v", err)
+	}
+	idevid = &tls.Certificate{
+		Certificate: [][]byte{idevidCert.Raw},
+		PrivateKey:  idevidKey,
+		Leaf:        idevidCert,
 	}
 
 	// DHCP Discovery of Bootstrap Server
-	// This step emulates the retrieval of the bootz server IP
-	// address from a DHCP server. In this case we always connect to localhost.
+	// This step retrieves the Bootz server IP address from a DHCP server.
+	// For this implementation, we skip this step.
 	log.Infof("=============================================================================")
 	log.Infof("================ Starting DHCP discovery of bootstrap server ================")
 	log.Infof("=============================================================================")
-	bootzAddress := fmt.Sprintf("localhost:%v", *port)
-	log.Infof("Connecting to bootz server at address %q", bootzAddress)
 
-	// Bootstrapping Service
 	// Device initiates a TLS-secured gRPC connection with the Bootz server.
 	// For the initial BootstrapRequest, the client should not verify the Bootz server cert.
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
@@ -522,6 +441,7 @@ func main() {
 	if !*streaming {
 		tlsConfig.Certificates = []tls.Certificate{*idevid}
 	}
+	log.Infof("Connecting to bootz server at address %q", bootzAddress)
 	conn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	if err != nil {
 		log.Exitf("Client unable to connect to Bootstrap Server: %v", err)
@@ -535,30 +455,26 @@ func main() {
 
 	nonce := ""
 	if !*insecureBoot {
-		log.Infof("Device in secure boot mode, generating a nonce that the Bootz server will use to sign the response")
-		// Generate a nonce that the Bootz server will use to sign the response.
-		nonce, err = generateNonce()
-		if err != nil {
+		log.Infof("Device in secure boot mode, generating a client nonce")
+		nonceBytes := make([]byte, 32)
+		if _, err := rand.Read(nonceBytes); err != nil {
 			log.Exitf("Error generating nonce: %v", err)
 		}
-		log.Infof("Nonce of %v generated successfully", nonce)
+		nonce = base64.StdEncoding.EncodeToString(nonceBytes)
+		log.Infof("Nonce generated successfully: %q", nonce)
 	}
 
 	log.Infof("=============================================================================")
 	log.Infof("======================== Requesting bootstrap data ==========================")
 	log.Infof("=============================================================================")
-	log.Infof("Building bootstrap data request")
 
 	req := &bpb.GetBootstrapDataRequest{
-		ChassisDescriptor: chassis,
+		ChassisDescriptor: chassisDescriptor,
 		ControlCardState:  controlCardState,
 		Nonce:             nonce,
 	}
-	log.Infof("Built bootstrap data request with %v chassis %v and control card %v with status %v and nonce %v",
-		req.ChassisDescriptor.Manufacturer, req.ChassisDescriptor.SerialNumber, req.ControlCardState.SerialNumber, req.ControlCardState.Status, req.Nonce)
+	log.Infof("Sending bootstrap data request: %+v", req)
 
-	// Get bootstrapping data from Bootz server
-	log.Infof("Requesting Bootstrap Data from Bootz server")
 	var ov, oc, data, dataDecrypted []byte
 	var sig string
 	if *streaming {
@@ -583,6 +499,7 @@ func main() {
 		sig = resp.GetResponseSignature()
 		dataDecrypted = data
 	}
+
 	log.Infof("=============================================================================")
 	log.Infof("======================== Received bootstrap data ============================")
 	log.Infof("=============================================================================")
@@ -590,13 +507,13 @@ func main() {
 	// Only check OC, OV and response signature if SecureOnly is set.
 	if !*insecureBoot {
 		if err := validateArtifacts(controlCardState.GetSerialNumber(), ov, oc, data, sig); err != nil {
-			log.Exitf("Error validating signed data: %v", err)
+			log.Exitf("Error validating signed bootstrap data: %v", err)
 		}
 	}
 
 	var signedResp bpb.BootstrapDataSigned
 	if err := proto.Unmarshal(dataDecrypted, &signedResp); err != nil {
-		log.Exitf("unable to unmarshal serialized bootstrap data: %v", err)
+		log.Exitf("Error unmarshalling serialized bootstrap data: %v", err)
 	}
 
 	if !*insecureBoot && signedResp.GetNonce() != nonce {
@@ -617,17 +534,17 @@ func main() {
 		log.Exitf("Error reconnecting to server: %v", err)
 	}
 
-	// ReportProgress
 	log.Infof("=============================================================================")
 	log.Infof("=========================== Sending Status Report ===========================")
 	log.Infof("=============================================================================")
+
 	statusReq := &bpb.ReportStatusRequest{
 		Status:        bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS,
 		StatusMessage: "Bootstrap Success",
 	}
-	if len(chassis.GetControlCards()) > 0 {
-		for _, cc := range chassis.GetControlCards() {
-			statusReq.States = append(statusReq.States, &bpb.ControlCardState{
+	if len(chassisDescriptor.GetControlCards()) > 0 {
+		for _, cc := range chassisDescriptor.GetControlCards() {
+			statusReq.States = append(statusReq.GetStates(), &bpb.ControlCardState{
 				Status:       bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED,
 				SerialNumber: cc.GetSerialNumber(),
 			})
@@ -636,7 +553,7 @@ func main() {
 		statusReq.States = []*bpb.ControlCardState{
 			{
 				Status:       bpb.ControlCardState_CONTROL_CARD_STATUS_INITIALIZED,
-				SerialNumber: chassis.GetSerialNumber(),
+				SerialNumber: chassisDescriptor.GetSerialNumber(),
 			},
 		}
 	}
