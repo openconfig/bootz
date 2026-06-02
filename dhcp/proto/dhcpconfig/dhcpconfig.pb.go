@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v7.35.0
-// source: github.com/openconfig/bootz/dhcp/proto/config.proto
+// source: github.com/openconfig/bootz/dhcp/proto/dhcpconfig.proto
 
-package config
+package dhcpconfig
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -33,7 +33,7 @@ type Config struct {
 
 func (x *Config) Reset() {
 	*x = Config{}
-	mi := &file_github_com_openconfig_bootz_dhcp_proto_config_proto_msgTypes[0]
+	mi := &file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -45,7 +45,7 @@ func (x *Config) String() string {
 func (*Config) ProtoMessage() {}
 
 func (x *Config) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_openconfig_bootz_dhcp_proto_config_proto_msgTypes[0]
+	mi := &file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +58,7 @@ func (x *Config) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Config.ProtoReflect.Descriptor instead.
 func (*Config) Descriptor() ([]byte, []int) {
-	return file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDescGZIP(), []int{0}
+	return file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Config) GetInterface() string {
@@ -100,7 +100,7 @@ type Record struct {
 
 func (x *Record) Reset() {
 	*x = Record{}
-	mi := &file_github_com_openconfig_bootz_dhcp_proto_config_proto_msgTypes[1]
+	mi := &file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -112,7 +112,7 @@ func (x *Record) String() string {
 func (*Record) ProtoMessage() {}
 
 func (x *Record) ProtoReflect() protoreflect.Message {
-	mi := &file_github_com_openconfig_bootz_dhcp_proto_config_proto_msgTypes[1]
+	mi := &file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -125,7 +125,7 @@ func (x *Record) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Record.ProtoReflect.Descriptor instead.
 func (*Record) Descriptor() ([]byte, []int) {
-	return file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDescGZIP(), []int{1}
+	return file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Record) GetMachine() string {
@@ -149,41 +149,42 @@ func (x *Record) GetGateway() string {
 	return ""
 }
 
-var File_github_com_openconfig_bootz_dhcp_proto_config_proto protoreflect.FileDescriptor
+var File_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto protoreflect.FileDescriptor
 
-const file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDesc = "" +
+const file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDesc = "" +
 	"\n" +
-	"3github.com/openconfig/bootz/dhcp/proto/config.proto\x12\x06config\"\x81\x01\n" +
+	"7github.com/openconfig/bootz/dhcp/proto/dhcpconfig.proto\x12\n" +
+	"dhcpconfig\"\x85\x01\n" +
 	"\x06Config\x12\x1c\n" +
 	"\tinterface\x18\x01 \x01(\tR\tinterface\x12\x10\n" +
 	"\x03dns\x18\x02 \x03(\tR\x03dns\x12\x1d\n" +
 	"\n" +
-	"bootz_urls\x18\x03 \x03(\tR\tbootzUrls\x12(\n" +
-	"\arecords\x18\x04 \x03(\v2\x0e.config.RecordR\arecords\"L\n" +
+	"bootz_urls\x18\x03 \x03(\tR\tbootzUrls\x12,\n" +
+	"\arecords\x18\x04 \x03(\v2\x12.dhcpconfig.RecordR\arecords\"L\n" +
 	"\x06Record\x12\x18\n" +
 	"\amachine\x18\x01 \x01(\tR\amachine\x12\x0e\n" +
 	"\x02ip\x18\x02 \x01(\tR\x02ip\x12\x18\n" +
-	"\agateway\x18\x03 \x01(\tR\agatewayB/Z-github.com/openconfig/bootz/dhcp/proto/configb\x06proto3"
+	"\agateway\x18\x03 \x01(\tR\agatewayB3Z1github.com/openconfig/bootz/dhcp/proto/dhcpconfigb\x06proto3"
 
 var (
-	file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDescOnce sync.Once
-	file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDescData []byte
+	file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDescOnce sync.Once
+	file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDescData []byte
 )
 
-func file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDescGZIP() []byte {
-	file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDescOnce.Do(func() {
-		file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDesc), len(file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDesc)))
+func file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDescGZIP() []byte {
+	file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDescOnce.Do(func() {
+		file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDesc), len(file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDesc)))
 	})
-	return file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDescData
+	return file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDescData
 }
 
-var file_github_com_openconfig_bootz_dhcp_proto_config_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_github_com_openconfig_bootz_dhcp_proto_config_proto_goTypes = []any{
-	(*Config)(nil), // 0: config.Config
-	(*Record)(nil), // 1: config.Record
+var file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_goTypes = []any{
+	(*Config)(nil), // 0: dhcpconfig.Config
+	(*Record)(nil), // 1: dhcpconfig.Record
 }
-var file_github_com_openconfig_bootz_dhcp_proto_config_proto_depIdxs = []int32{
-	1, // 0: config.Config.records:type_name -> config.Record
+var file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_depIdxs = []int32{
+	1, // 0: dhcpconfig.Config.records:type_name -> dhcpconfig.Record
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
@@ -191,26 +192,26 @@ var file_github_com_openconfig_bootz_dhcp_proto_config_proto_depIdxs = []int32{
 	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_github_com_openconfig_bootz_dhcp_proto_config_proto_init() }
-func file_github_com_openconfig_bootz_dhcp_proto_config_proto_init() {
-	if File_github_com_openconfig_bootz_dhcp_proto_config_proto != nil {
+func init() { file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_init() }
+func file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_init() {
+	if File_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDesc), len(file_github_com_openconfig_bootz_dhcp_proto_config_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDesc), len(file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_github_com_openconfig_bootz_dhcp_proto_config_proto_goTypes,
-		DependencyIndexes: file_github_com_openconfig_bootz_dhcp_proto_config_proto_depIdxs,
-		MessageInfos:      file_github_com_openconfig_bootz_dhcp_proto_config_proto_msgTypes,
+		GoTypes:           file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_goTypes,
+		DependencyIndexes: file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_depIdxs,
+		MessageInfos:      file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_msgTypes,
 	}.Build()
-	File_github_com_openconfig_bootz_dhcp_proto_config_proto = out.File
-	file_github_com_openconfig_bootz_dhcp_proto_config_proto_goTypes = nil
-	file_github_com_openconfig_bootz_dhcp_proto_config_proto_depIdxs = nil
+	File_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto = out.File
+	file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_goTypes = nil
+	file_github_com_openconfig_bootz_dhcp_proto_dhcpconfig_proto_depIdxs = nil
 }

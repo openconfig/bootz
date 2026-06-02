@@ -24,7 +24,7 @@ import (
 	"github.com/openconfig/bootz/dhcp"
 	"google.golang.org/protobuf/encoding/prototext"
 
-	cpb "github.com/openconfig/bootz/dhcp/proto/config"
+	cpb "github.com/openconfig/bootz/dhcp/proto/dhcpconfig"
 )
 
 var (

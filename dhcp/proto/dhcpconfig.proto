@@ -14,9 +14,9 @@
 
 syntax = "proto3";
 
-package config;
+package dhcpconfig;
 
-option go_package = "github.com/openconfig/bootz/dhcp/proto/config";
+option go_package = "github.com/openconfig/bootz/dhcp/proto/dhcpconfig";
 
 // A binding configuration for DHCP server.
 message Config {
@@ -33,7 +33,7 @@ message Config {
 message Record {
   // The machine to assign IP, which can be either a MAC address or a hostname.
   string machine = 1;
-  // Assigned machine IP address.
+  // Assigned machine IPv4 or IPv6 address in CIDR notation.
   string ip = 2;
   // Assigned gateway address. Not populated for IPv6.
   string gateway = 3;

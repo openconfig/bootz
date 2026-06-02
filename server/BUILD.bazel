@@ -23,7 +23,7 @@ go_library(
         "//common/tls",
         "//common/types",
         "//dhcp",
-        "//dhcp/proto:config",
+        "//dhcp/proto:dhcpconfig",
         "//http",
         "//proto:bootz",
         "//server/artifactmanager",

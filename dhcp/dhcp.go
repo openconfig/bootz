@@ -34,7 +34,7 @@ import (
 	plbootz "github.com/openconfig/bootz/dhcp/plugins/bootz"
 	plslease "github.com/openconfig/bootz/dhcp/plugins/slease"
 
-	cpb "github.com/openconfig/bootz/dhcp/proto/config"
+	cpb "github.com/openconfig/bootz/dhcp/proto/dhcpconfig"
 )
 
 const confTemplate = `

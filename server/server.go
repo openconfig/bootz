@@ -36,7 +36,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	dpb "github.com/openconfig/bootz/dhcp/proto/config"
+	dpb "github.com/openconfig/bootz/dhcp/proto/dhcpconfig"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	cpb "github.com/openconfig/bootz/server/proto/config"
 )
