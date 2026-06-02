@@ -7,7 +7,9 @@ go_library(
     visibility = ["//visibility:private"],
     deps = [
         "//dhcp",
+        "//dhcp/proto:config",
         "@com_github_golang_glog//:glog",
+        "@org_golang_google_protobuf//encoding/prototext",
     ],
 )
 
