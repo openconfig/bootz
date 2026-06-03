@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
+	sutpb "github.com/openconfig/bootz/server/tests/proto/sut"
 )
 
 // Server is the bootz emulator server.
@@ -53,6 +54,11 @@ func (s *Server) Start() error {
 // Stop shuts down the bootz emulator server.
 func (s *Server) Stop() {
 	s.serv.GracefulStop()
+}
+
+// SetNotifyFn sets the notification function for SUT events.
+func (s *Server) SetNotifyFn(fn func(*sutpb.SubscribeResponse)) {
+	s.service.SetNotifyFn(fn)
 }
 
 // bootzServerOpts is used to pass optional args to NewServer.

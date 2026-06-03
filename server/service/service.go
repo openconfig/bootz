@@ -46,6 +46,7 @@ import (
 
 	epb "github.com/openconfig/attestz/proto/tpm_enrollz"
 	bpb "github.com/openconfig/bootz/proto/bootz"
+	sutpb "github.com/openconfig/bootz/server/tests/proto/sut"
 )
 
 const (
@@ -101,8 +102,14 @@ type EntityManager interface {
 // Service represents the server and entity manager.
 type Service struct {
 	bpb.UnimplementedBootstrapServer
-	em    EntityManager
-	tpm20 biz.TPM20Utils
+	em       EntityManager
+	tpm20    biz.TPM20Utils
+	NotifyFn func(*sutpb.SubscribeResponse)
+}
+
+// SetNotifyFn sets the notification function for SUT events.
+func (s *Service) SetNotifyFn(fn func(*sutpb.SubscribeResponse)) {
+	s.NotifyFn = fn
 }
 
 type streamSession struct {
@@ -274,6 +281,14 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			session.clientNonce = bootstrapReq.GetNonce()
 			log.Infof("Received initial BootstrapRequest: %+v", bootstrapReq)
 
+			if s.NotifyFn != nil {
+				s.NotifyFn(&sutpb.SubscribeResponse{
+					Event: &sutpb.SubscribeResponse_GetBootstrapDataRequest{
+						GetBootstrapDataRequest: bootstrapReq,
+					},
+				})
+			}
+
 			chassis, err := initializeChassis(ctx, bootstrapReq)
 			if err != nil {
 				return status.Errorf(codes.InvalidArgument, "failed to build entity lookup from request: %v", err)
@@ -406,6 +421,14 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			log.Infof("Received ReportStatusRequest from %s: %+v", session.chassis.ActiveSerial, req.ReportStatusRequest)
 			session.status = req.ReportStatusRequest
 
+			if s.NotifyFn != nil {
+				s.NotifyFn(&sutpb.SubscribeResponse{
+					Event: &sutpb.SubscribeResponse_ReportStatusRequest{
+						ReportStatusRequest: req.ReportStatusRequest,
+					},
+				})
+			}
+
 			if session.currentState == stateInitial {
 				log.Info("Received ReportStatusRequest on a new stream. Starting re-authentication...")
 				chassis, err := initializeChassis(ctx, req.ReportStatusRequest)
@@ -458,6 +481,14 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			}
 			log.Infof("Received initial BootstrapRequest: %+v", req.BootstrapRequest)
 			session.clientNonce = req.BootstrapRequest.GetNonce()
+
+			if s.NotifyFn != nil {
+				s.NotifyFn(&sutpb.SubscribeResponse{
+					Event: &sutpb.SubscribeResponse_GetBootstrapDataRequest{
+						GetBootstrapDataRequest: req.BootstrapRequest,
+					},
+				})
+			}
 
 			if response, err = s.createChallengeRequest(session, req.BootstrapRequest); err != nil {
 				return err
@@ -656,6 +687,14 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			}
 			log.Infof("Received ReportStatusRequest from %s: %+v", session.chassis.ActiveSerial, req.ReportStatusRequest)
 			session.status = req.ReportStatusRequest
+
+			if s.NotifyFn != nil {
+				s.NotifyFn(&sutpb.SubscribeResponse{
+					Event: &sutpb.SubscribeResponse_ReportStatusRequest{
+						ReportStatusRequest: req.ReportStatusRequest,
+					},
+				})
+			}
 
 			// Check whether this is a new stream.
 			if session.currentState == stateInitial {

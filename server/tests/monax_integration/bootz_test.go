@@ -51,8 +51,7 @@ func TestMain(m *testing.M) {
 	newRuntimeFn := kubernetesruntime.New
 
 	var err error
-	// Start the SUT (system under test) components only. This is independent of Ondatra an
-d
+	// Start the SUT (system under test) components only. This is independent of Ondatra and
 	// does not require a testbed or binding.
 	sut, err = monaxtest.Start(ctx, &config, newRuntimeFn)
 	if err != nil {

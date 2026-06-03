@@ -21,8 +21,6 @@ require (
 	google.golang.org/protobuf v1.36.11
 )
 
-replace github.com/openconfig/monax => ../monax
-
 require (
 	bitbucket.org/creachadair/stringset v0.0.14 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
@@ -82,7 +80,7 @@ require (
 	github.com/openconfig/goyang v1.6.0 // indirect
 	github.com/openconfig/gribi v1.8.1 // indirect
 	github.com/openconfig/ygnmi v0.11.1 // indirect
-	github.com/openconfig/ygot v0.29.20 // indirect
+	github.com/openconfig/ygot v0.34.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0 // indirect
 	github.com/p4lang/p4runtime v1.4.1 // indirect
@@ -96,7 +94,7 @@ require (
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
-	github.com/spf13/cobra v1.8.1 // indirect
+	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/spf13/viper v1.21.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
@@ -111,7 +109,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/exp v0.0.0-20241210194714-1829a127f884 // indirect
+	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa // indirect
 	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
