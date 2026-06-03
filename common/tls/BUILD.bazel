@@ -14,5 +14,5 @@ go_test(
     name = "tls_test",
     srcs = ["tls_test.go"],
     embed = [":tls"],
-    deps = ["//testdata:testdata_lib"],
+    deps = ["//common/owner_certificate"],
 )

@@ -10,26 +10,22 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	artifacts "github.com/openconfig/bootz/testdata"
+	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 )
 
 func selfSignedTLSCert(t *testing.T) *tls.Certificate {
-	selfSignedCA, selfSignedCAPriv, err := artifacts.NewCertificateAuthority("Self Signed CA", "Vendor", "::1")
+	selfSignedCA, selfSignedCAPriv, err := ownercertificate.NewRSACertificate("Self Signed CA", "", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate test self signed CA: %v", err)
 	}
-	selfSignedCert, selfSignedPriv, err := artifacts.NewSignedCertificate("Self Signed Cert", "Vendor", "::1", selfSignedCA, selfSignedCAPriv)
-	if err != nil {
-		t.Fatalf("unable to generate test self signed cert: %v", err)
-	}
 	return &tls.Certificate{
-		Certificate: [][]byte{selfSignedCert.Raw},
-		PrivateKey:  selfSignedPriv,
+		Certificate: [][]byte{selfSignedCA.Raw},
+		PrivateKey:  selfSignedCAPriv,
 	}
 }
 
 func validIDevIDTLSCert(t *testing.T, iDevIDCA *x509.Certificate, iDevIDCAPriv crypto.PrivateKey) *tls.Certificate {
-	vendorIDevID, vendorIDevIDPriv, err := artifacts.NewSignedCertificate("Vendor IDevID", "Vendor", "::1", iDevIDCA, iDevIDCAPriv)
+	vendorIDevID, vendorIDevIDPriv, err := ownercertificate.NewRSACertificate("Vendor IDevID", "1234", iDevIDCA, iDevIDCAPriv)
 	if err != nil {
 		t.Fatalf("unable to generate test IDevID: %v", err)
 	}
@@ -40,12 +36,12 @@ func validIDevIDTLSCert(t *testing.T, iDevIDCA *x509.Certificate, iDevIDCAPriv c
 }
 
 func TestTLSConfiguration(t *testing.T) {
-	ca, caPriv, err := artifacts.NewCertificateAuthority("Bootz Trust Anchor CA", "Google", "::1")
+	ca, caPriv, err := ownercertificate.NewRSACertificate("Bootz Trust Anchor CA", "", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate test trust anchor CA: %v", err)
 	}
 
-	iDevIDCA, iDevIDCAPriv, err := artifacts.NewCertificateAuthority("Vendor IDevID Root CA", "Vendor", "::1")
+	iDevIDCA, iDevIDCAPriv, err := ownercertificate.NewRSACertificate("Vendor IDevID Root CA", "", nil, nil)
 	if err != nil {
 		t.Fatalf("unable to generate test IDevID CA: %v", err)
 	}

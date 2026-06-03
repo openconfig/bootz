@@ -1,6 +1,7 @@
-# Bootz Client Reference emulation
+# Bootz Client Reference Emulation
 
 The code located in this directory is intended to emulate a typical Bootz client of TPM 2.0 with IDevID.
+The IDevID signing procedure is emulated in software without using a TPM chip.
 Both the Bootz server address and the information of the chassis it emulates are read from the config file.
 Where appropriate, some device-specific functions such as upgrading image and applying config are mocked out as loggings only.
 
