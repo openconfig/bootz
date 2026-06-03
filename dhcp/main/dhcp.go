@@ -19,45 +19,31 @@ import (
 	"flag"
 	"os"
 	"os/signal"
-	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/openconfig/bootz/dhcp"
+	"google.golang.org/protobuf/encoding/prototext"
+
+	cpb "github.com/openconfig/bootz/dhcp/proto/dhcpconfig"
 )
 
 var (
-	intf    = flag.String("i", "eth7", "Network interface to use for dhcp server.")
-	records = flag.String("records", "4c:5d:3c:ef:de:60,5.78.26.27/16,5.78.0.1;FOX2506P2QT,5::10/64", "List of dhcp records separated by a semi-colon.")
-	dns     = flag.String("dns", "5.38.4.124", "List of dns servers separated by a semi-colon.")
-	bootz   = flag.String("bootz_urls", "bootz://dev-mgbl-lnx6.cisco.com:50052/grpc;bootz://dev-mgbl-lnx2.cisco.com:50052/grpc", "List of Bootz server URLs separated by a semi-colon.")
+	configFile = flag.String("config_file", "../../testdata/dhcp_config.textproto", "DHCP config file.")
 )
 
 func main() {
 	flag.Parse()
-	if *intf == "" {
-		log.Exitf("no interface specified (-i)")
-	}
 
-	addressMap := map[string]*dhcp.Entry{}
-	for _, r := range strings.Split(*records, ";") {
-		parts := strings.Split(r, ",")
-		if len(parts) < 2 {
-			log.Exitf("incorrect record format: %v", r)
-		}
-		e := &dhcp.Entry{
-			IP: parts[1],
-		}
-		if len(parts) > 2 {
-			e.Gw = parts[2]
-		}
-		addressMap[parts[0]] = e
+	configBytes, err := os.ReadFile(*configFile)
+	if err != nil {
+		log.Exitf("failed to read config file: %v. Specify with argument '--config_file path/to/file'", err)
 	}
-
-	conf := &dhcp.Config{
-		Interface:  *intf,
-		DNS:        strings.Split(*dns, ";"),
-		AddressMap: addressMap,
-		BootzURLs:  strings.Split(*bootz, ";"),
+	config := &cpb.Config{}
+	if err := prototext.Unmarshal(configBytes, config); err != nil {
+		log.Exitf("failed to unmarshal config file: %v", err)
+	}
+	if config.GetInterface() == "" {
+		log.Exit("no interface specified in config file")
 	}
 
 	go func() {
@@ -68,7 +54,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	if err := dhcp.Start(conf); err != nil {
+	if err := dhcp.Start(config); err != nil {
 		log.Exitf("error starting dhcp server: %v", err)
 	}
 
