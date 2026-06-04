@@ -13,7 +13,7 @@ require (
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnoigo v0.0.0-20240820205259-23ac4e061cc2
 	github.com/openconfig/gnsi v1.9.1
-	github.com/openconfig/monax v0.0.0
+	github.com/openconfig/monax v0.0.0-20260603195803-1899be60f203
 	github.com/openconfig/ondatra v0.12.2
 	go.mozilla.org/pkcs7 v0.9.0
 	google.golang.org/grpc v1.81.0
