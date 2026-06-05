@@ -269,10 +269,10 @@ control card's out-of-band (OOB) management interface. The DHCP server passes an
 option to the device for the Bootz URI from which the boot package can be
 retrieved.
 
-#### DHCP-less (inband)
+#### DHCP-less
 
 In environments where DHCP is not available or out-of-band (OOB) management
-plane connectivity is restricted, Bootz can be initiated using inband
+plane connectivity is restricted, Bootz can be initiated using
 connectivity provided by an existing local configuration on the device. This
 mode bypasses the DHCP discovery phase entirely and expects the device to
 already have reachability to the Bootz server.
@@ -315,11 +315,6 @@ already have reachability to the Bootz server.
          via the CLI (`bootz no-dhcp reset`).
       3. The operator explicitly terminates the Bootz process manually
          via the CLI (`bootz no-dhcp terminate`).
-      4. A manual configuration commit is completed on the device. The
-         device MUST intercept manual configuration commitments that are not
-         originating from the active Bootz agent transaction. Upon intercepting
-         such a commit, the device MUST cleanly stop the Bootz background loop
-         and delete the persistent Bootz parameter file.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.GetBootstrapData` to
       the bootz-server whose address was obtained either from the DHCP server
@@ -438,7 +433,9 @@ the ownership voucher and ownership certificate.
       its software components. It is ready to serve traffic.
    2. If the device was bootstrapped via DHCP-less Bootz, it MUST
       now automatically delete the persistent Bootz parameter file and wipe
-      the temporary pre-configuration used for initial connectivity.
+      the temporary pre-configuration used for initial connectivity. This
+      may only happen if the received configuration from Bootz server is
+      committed and the device successfully reported to the server.
 
 ### Bootz Procedure: BootstrapStream v0.6
 
@@ -482,11 +479,6 @@ while TPM 1.2 systems are not supported.
          via the CLI (`bootz no-dhcp reset`).
       3. The operator explicitly terminates the Bootz process manually
          via the CLI (`bootz no-dhcp terminate`).
-      4. A manual configuration commit is completed on the device. The
-         device MUST intercept manual configuration commitments that are not
-         originating from the active Bootz agent transaction. Upon intercepting
-         such a commit, the device MUST cleanly stop the Bootz background loop
-         and delete the persistent Bootz parameter file.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.BootstrapStream` to
       the bootz-server whose address was obtained either from the DHCP server
@@ -584,9 +576,11 @@ while TPM 1.2 systems are not supported.
      report. If the challenge fails, an error will be returned and the device
      must start over from Step 9.
 9. Final state and cleanup:
-   1. If the device was bootstrapped via DHCP-less Bootz, it MUST
-      now automatically delete the persistent Bootz parameter file and wipe
-      the temporary pre-configuration used for initial connectivity.
+   - If the device was bootstrapped via DHCP-less Bootz, it MUST
+     now automatically delete the persistent Bootz parameter file and wipe
+     the temporary pre-configuration used for initial connectivity. This
+     may only happen if the received configuration from Bootz server is
+     committed and the device successfully reported to the server.
 
 ### Bootz Procedure: BootstrapStream v1.0
 
@@ -624,11 +618,6 @@ while TPM 1.2 systems are not supported.
          via the CLI (`bootz no-dhcp reset`).
       3. The operator explicitly terminates the Bootz process manually
          via the CLI (`bootz no-dhcp terminate`).
-      4. A manual configuration commit is completed on the device. The
-         device MUST intercept manual configuration commitments that are not
-         originating from the active Bootz agent transaction. Upon intercepting
-         such a commit, the device MUST cleanly stop the Bootz background loop
-         and delete the persistent Bootz parameter file.
 2. Bootstrapping Service
    1. Device initiates a gRPC connection `Bootstrap.BootstrapStreamV1` to
       the bootz-server whose address was obtained either from the DHCP server
@@ -785,56 +774,36 @@ while TPM 1.2 systems are not supported.
 9. Cleanup
    - If the device was bootstrapped via DHCP-less Bootz, it MUST
      now automatically delete the persistent Bootz parameter file and wipe
-     the temporary pre-configuration used for initial connectivity.
+     the temporary pre-configuration used for initial connectivity. This
+     may only happen if the received configuration from Bootz server is
+     committed and the device successfully reported to the server.
 
-### DHCP-less CLI Specification
+### DHCP-less Operational Interface (Recommended CLI)
 
-Vendors supporting DHCP-less Bootz MUST implement the following standardized CLI
-commands:
+Vendors supporting DHCP-less Bootz should provide a consistent mechanism (typically via CLI) to control its behavior. While the exact CLI syntax may vary by platform, vendors SHOULD support the following conceptual operations and their associated semantics.
 
-- **Initiate DHCP-less Bootz**:
-
-  ```bash
-  bootz no-dhcp initiate --src_interface <interface> --bootz_uri <bootz_uri>
-  ```
-
-  - This command configures the Bootz agent to start in DHCP-less mode using
-    the specified source interface and Bootz server URI.
-  - The URI of the Bootz server is in the format
-    `bootz://<host_or_ip>:<port>`.
-  - It must save the currently loaded configuration so that it can revert
-    back to it in the event of a failure.
-  - It must save the CLI parameters (Bootz URI and source interface) to the
-    persistent Bootz parameter file.
-  - It puts the device into the Bootz loop (may trigger a reboot).
-
-- **Exit/Reset DHCP-less Bootz**:
-
-  ```bash
-  bootz no-dhcp reset
-  ```
-
-  - This command stops the DHCP-less Bootz loop.
-  - This is a destructive operation. It MUST wipe the temporary
-    pre-configuration (restoring the device back to its factory-default state)
-    and delete the persistent Bootz parameter file.
-  - It reboots the device into standard DHCP Bootz mode.
-
-- **Terminate DHCP-less Bootz**:
-
-  ```bash
-  bootz no-dhcp terminate
-  ```
-
-  - This command stops the DHCP-less Bootz loop.
-  - It MUST immediately kill the running background Bootz agent.
-  - It MUST delete the persistent Bootz parameter file from the disk.
-  - It MUST NOT wipe or alter the current local configuration (running or startup).
-  - It transitions the device out of bootstrap state, leaving all current
-    routing, interface, and credential configurations intact for local operations.
-
-- **Logging**: The device MUST log initiation, exit, and reset events to
-  syslog or a Bootz-specific log.
+- **Initiate DHCP-less Bootz**
+  - _Recommended CLI:_ `bootz no-dhcp initiate --src_interface <interface> --bootz_uri <bootz_uri>`
+  - _Semantics:_
+    - Configures the Bootz agent to start in DHCP-less mode using the specified source interface and Bootz server URI.
+    - Saves the currently loaded configuration to allow reverting back to it in the event of a failure.
+    - Saves the execution parameters (Bootz URI and source interface) to the persistent Bootz parameter file.
+    - Puts the device into the Bootz loop (which may trigger a reboot).
+- **Reset DHCP-less Bootz**
+  - _Recommended CLI:_ `bootz no-dhcp reset`
+  - _Semantics:_
+    - Stops the DHCP-less Bootz loop.
+    - Performs an operation that wipes the temporary pre-configuration and deletes the persistent Bootz parameter file. A full disk wipe is not required.
+    - Reboots the device into standard DHCP Bootz mode.
+- **Terminate DHCP-less Bootz**
+  - _Recommended CLI:_ `bootz no-dhcp terminate`
+  - _Semantics:_
+    - Stops the DHCP-less Bootz loop.
+    - Immediately kills the running background Bootz agent.
+    - Deletes the persistent Bootz parameter file from the disk.
+    - MUST NOT wipe or alter the current local configuration (running or startup).
+    - Transitions the device out of bootstrap state, leaving all current routing, interface, and credential configurations intact for local operations.
+- **Logging:** The device MUST log initiation, termination, and reset events (as well as errors) to syslog or a Bootz-specific log.
 
 ### A Note on Modular Devices
 
@@ -904,7 +873,7 @@ This is the preferred workflow for security considerations. This workflow
 utilizes Enrollz and Attestz to provide enrollment then measured boot to
 validate the state of device before providing any "production" certificates.
 
-### DHCP-less/Inband Bootz scenarios
+### DHCP-less Bootz scenarios
 
 #### Scenario 1: Failure before contacting Bootz server
 
