@@ -370,7 +370,7 @@ func main() {
 	flag.Parse()
 	configBytes, err := os.ReadFile(*configFile)
 	if err != nil {
-		log.Exit("Failed to read config file. Specify with argument '--config_file path/to/file'")
+		log.Exitf("Failed to read config file; %v. Specify with argument '--config_file path/to/file'", err)
 	}
 	config := &cpb.Config{}
 	if err := prototext.Unmarshal(configBytes, config); err != nil {

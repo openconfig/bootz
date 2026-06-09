@@ -4,11 +4,6 @@ required_interfaces: {
   }
 }
 required_interfaces: {
-  dhcp: {
-    service_name: "DHCP"
-  }
-}
-required_interfaces: {
   http: {
     service_name: "HTTP"
   }

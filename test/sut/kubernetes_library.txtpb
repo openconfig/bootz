@@ -1,3 +1,2 @@
 libraries: "./bootz/kubernetes.txtpb"
-libraries: "./dhcp/kubernetes.txtpb"
 libraries: "./http/kubernetes.txtpb"

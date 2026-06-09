@@ -1,7 +1,7 @@
-# For the definition of this file, refer to "../dhcp/proto/config.proto".
+# For the definition of this file, refer to "../dhcp/proto/dhcpconfig.proto".
 
 interface: "eth0"
-bootz_urls: "bootz://10.0.0.2:15006"
+bootz_urls: "bootz://10.0.0.1:15006"
 records: {
   machine: "01:02:03:04:05:06"
   ip: "10.0.0.10/24"

@@ -35,6 +35,7 @@ import (
 	"github.com/openconfig/bootz/server/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/reflection"
 
 	dpb "github.com/openconfig/bootz/dhcp/proto/dhcpconfig"
 	bpb "github.com/openconfig/bootz/proto/bootz"
@@ -145,6 +146,8 @@ func NewServer(config *cpb.Config, opts ...bootzServerOpts) (*Server, error) {
 		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(conf)))
 	}
 	bpb.RegisterBootstrapServer(s, c)
+	// Register reflection service on gRPC server.
+	reflection.Register(s)
 
 	lis, err := net.Listen("tcp", ":"+addrParts[1])
 	if err != nil {
