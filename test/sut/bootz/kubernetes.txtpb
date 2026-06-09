@@ -1,0 +1,28 @@
+components: {
+  id: "Bootz"
+  kind: "kubernetes"
+  provided_interfaces: {
+    grpc: {
+      service_name: "Bootz"
+    }
+  }
+  parameters: {
+    [type.googleapis.com/monax.kubernetes.KubernetesComponentParameters] {
+      deployment_path: "deployment.yaml"
+      service_path: "service.yaml"
+      # This configures Monax to build the Docker image from the Dockerfile in
+      # the context_path and load it to the locally running kind cluster.
+      docker: {
+        # Relative to this file.
+        context_path: "../../../"
+        # Relative to context_path.
+        dockerfile_path: "test/sut/bootz/Dockerfile"
+        build_image: true
+        load_to_kind: true
+      }
+      # Shorter timeouts as the examples are simple and should start quickly.
+      wait_for_deployment_timeout_sec: 30
+      wait_for_service_timeout_sec: 30
+    }
+  }
+}
