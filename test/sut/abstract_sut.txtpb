@@ -1,0 +1,15 @@
+required_interfaces: {
+  grpc: {
+    service_name: "Bootz"
+  }
+}
+required_interfaces: {
+  dhcp: {
+    service_name: "DHCP"
+  }
+}
+required_interfaces: {
+  http: {
+    service_name: "HTTP"
+  }
+}

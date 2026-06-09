@@ -1,0 +1,18 @@
+# For the definition of this file, refer to "../../dhcp/proto/dhcpconfig.proto".
+#
+# How to test with your own switch chassis:
+#  1. Modify 'machine' to match the MAC address of your switch chassis. It must be the MAC address of the interface that sends out the DHCP requests.
+#  2. (Optional) Modify 'ip' to the desired IP address for your switch chassis.
+
+interface: "eth0"
+bootz_urls: "bootz://10.0.0.1:15006"
+records: {
+  machine: "01:02:03:04:05:06"
+  ip: "10.0.0.10/24"
+  gateway: "10.0.0.1"
+}
+records: {
+  machine: "07:08:09:0A:0B:0C"
+  ip: "10.0.0.11/24"
+  gateway: "10.0.0.1"
+}
