@@ -1,0 +1,12 @@
+parameters: {
+  [type.googleapis.com/monax.kubernetes.KubernetesRuntimeParameters]: {
+    name: "Bootz_E2E_Test"
+    kubernetes: {
+      kubeconfig_path: "${HOME}/.kube/config"
+
+      # If your cluster has a load balancer controller (like MetalLB), use
+      # SERVICE_TYPE_LOAD_BALANCER instead.
+      service_type: SERVICE_TYPE_NODE_PORT
+    }
+  }
+}

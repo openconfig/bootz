@@ -6,9 +6,6 @@ default.extend-ignore-re = [
 
 [files]
 extend-exclude = [
-  "testdata/cisco.cfg",
-  "testdata/vendor_ca_cert.txt",
-  "testdata/vendor_ca_key.txt",
   ".bazelversion",
   "MODULE.bazel",
   "MODULE.bazel.lock",

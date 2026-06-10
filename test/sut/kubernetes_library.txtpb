@@ -1,0 +1,2 @@
+libraries: "./bootz/kubernetes.txtpb"
+libraries: "./http/kubernetes.txtpb"
