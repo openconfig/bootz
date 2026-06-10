@@ -20,6 +20,7 @@ go_library(
     importpath = "github.com/openconfig/bootz/server/emulator",
     visibility = ["//visibility:private"],
     deps = [
+        "//dhcp/proto:dhcpconfig",
         "//server/proto:config",
         "//server:server_lib",
         "@com_github_golang_glog//:glog",

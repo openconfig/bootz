@@ -1,0 +1,12 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_test")
+
+go_test(
+    name = "bootz_test",
+    srcs = ["bootz_test.go"],
+    deps = [
+        "@com_github_golang_glog//:glog",
+        "@com_github_openconfig_monax//:monax",
+        "@com_github_openconfig_monax//monaxtest",
+        "@com_github_openconfig_monax//runtime/kubernetesruntime",
+    ],
+)

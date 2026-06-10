@@ -37,7 +37,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 
-	dpb "github.com/openconfig/bootz/dhcp/proto/dhcpconfig"
 	bpb "github.com/openconfig/bootz/proto/bootz"
 	cpb "github.com/openconfig/bootz/server/proto/config"
 )
@@ -59,25 +58,10 @@ func (s *Server) Stop() {
 	s.serv.GracefulStop()
 }
 
-// bootzServerOpts is used to pass optional args to NewServer.
-type bootzServerOpts interface {
-	isbootzServerOpts()
+// Opts is used to pass optional args to NewServer.
+type Opts interface {
+	IsBootzServerOpts()
 }
-
-// DHCPOpts is an struct that captures dhcp server config.
-type DHCPOpts struct {
-	Config *dpb.Config
-}
-
-func (*DHCPOpts) isbootzServerOpts() {}
-
-// ImgSrvOpts is an struct that captures dhcp server config.
-type ImgSrvOpts struct {
-	Address        string
-	ImagesLocation string
-}
-
-func (*ImgSrvOpts) isbootzServerOpts() {}
 
 // InterceptorOpts is an struct that is used to pass an interceptor function.
 // This option is added to enable proper testing of bootz.
@@ -85,10 +69,10 @@ type InterceptorOpts struct {
 	BootzInterceptor grpc.UnaryServerInterceptor
 }
 
-func (*InterceptorOpts) isbootzServerOpts() {}
+func (*InterceptorOpts) IsBootzServerOpts() {}
 
 // NewServer start a new Bootz gRPC, DHCP, and HTTP image server based on specified flags.
-func NewServer(config *cpb.Config, opts ...bootzServerOpts) (*Server, error) {
+func NewServer(config *cpb.Config, opts ...Opts) (*Server, error) {
 	addrParts := strings.Split(config.GetServerAddress(), ":")
 	if len(addrParts) != 2 {
 		return nil, fmt.Errorf("bootz server address must be in the format of 'IP:Port', got: %q", config.GetServerAddress())
@@ -119,13 +103,13 @@ func NewServer(config *cpb.Config, opts ...bootzServerOpts) (*Server, error) {
 	var interceptor grpc.ServerOption
 	for _, opt := range opts {
 		switch opt := opt.(type) {
-		case *DHCPOpts:
+		case *dhcp.Opts:
 			if err := dhcp.Start(opt.Config); err != nil {
 				return nil, fmt.Errorf("unable to start dhcp server %v", err)
 			}
-		case *ImgSrvOpts:
-			if err := StartImageServer(opt); err != nil {
-				return nil, fmt.Errorf("unable to start image server %v", err)
+		case *http.Opts:
+			if err := http.Start(opt); err != nil {
+				return nil, fmt.Errorf("unable to start http server %v", err)
 			}
 		case *InterceptorOpts:
 			interceptor = grpc.UnaryInterceptor(opt.BootzInterceptor)
@@ -134,7 +118,7 @@ func NewServer(config *cpb.Config, opts ...bootzServerOpts) (*Server, error) {
 		}
 	}
 
-	log.Infof("Creating server...")
+	log.Infof("Creating Bootz server...")
 	c, err := service.New(am, cm, &biz.DefaultTPM20Utils{})
 	if err != nil {
 		return nil, fmt.Errorf("error creating service: %v", err)
@@ -153,7 +137,7 @@ func NewServer(config *cpb.Config, opts ...bootzServerOpts) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error listening on port: %v", err)
 	}
-	log.Infof("Server ready and listening on %s", lis.Addr())
+	log.Infof("Bootz server ready and listening on %s", lis.Addr())
 	log.Infof("=============================================================================")
 
 	return &Server{
@@ -161,13 +145,4 @@ func NewServer(config *cpb.Config, opts ...bootzServerOpts) (*Server, error) {
 		lis:     lis,
 		service: c,
 	}, nil
-}
-
-// StartImageServer starts an http server as an image server.
-func StartImageServer(opt *ImgSrvOpts) error {
-	conf := &http.Config{
-		Address: opt.Address,
-		Folder:  opt.ImagesLocation,
-	}
-	return http.Start(conf)
 }

@@ -32,7 +32,7 @@ var (
 func main() {
 	flag.Parse()
 
-	conf := &http.Config{
+	conf := &http.Opts{
 		Address: *address,
 		Folder:  *folder,
 	}

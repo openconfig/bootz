@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	configFile = flag.String("config_file", "../../testdata/dhcp_config.textproto", "DHCP config file.")
+	configFile = flag.String("dhcp_file", "../../testdata/dhcp_config.textproto", "DHCP config file.")
 )
 
 func main() {

@@ -52,7 +52,7 @@ var ipv6Assigned = map[string]net.IP{}
 
 func setup4(args ...string) (handler.Handler4, error) {
 	for _, r := range args {
-		if k, r, err := parseRecord4(r); err == nil {
+		if k, r, err := parseRecord4(strings.ToLower(r)); err == nil {
 			ipv4Records[k] = r
 			log.Debugf("Added ipv4 record: %v, %v, %v, %v", k, r.ip, r.netmask, r.gateway)
 		} else {
@@ -64,7 +64,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 
 func setup6(args ...string) (handler.Handler6, error) {
 	for _, r := range args {
-		if k, r, err := parseRecord6(r); err == nil {
+		if k, r, err := parseRecord6(strings.ToLower(r)); err == nil {
 			ipv6Records[k] = r
 			log.Debugf("Added ipv6 record: %v, %v", k, r.String())
 		} else {
