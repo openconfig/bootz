@@ -1,0 +1,47 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bootz
+  labels:
+    app: bootz
+  annotations:
+    checkov.io/skip1: CKV_K8S_8
+    checkov.io/skip2: CKV_K8S_9
+    checkov.io/skip3: CKV_K8S_10
+    checkov.io/skip4: CKV_K8S_11
+    checkov.io/skip5: CKV_K8S_12
+    checkov.io/skip6: CKV_K8S_13
+    checkov.io/skip7: CKV_K8S_14
+    checkov.io/skip8: CKV_K8S_21
+    checkov.io/skip9: CKV_K8S_22
+    checkov.io/skip10: CKV_K8S_29
+    checkov.io/skip11: CKV_K8S_43
+    checkov.io/skip12: CKV2_K8S_6
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bootz
+  template:
+    metadata:
+      labels:
+        app: bootz
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: bootz
+          image: bootz
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 15006
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65535
+            runAsGroup: 65535
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - all
+            seccompProfile:
+              type: RuntimeDefault
