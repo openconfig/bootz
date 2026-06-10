@@ -24,11 +24,12 @@ import (
 	log "github.com/golang/glog"
 )
 
-// Config contains the http server configuration.
-type Config struct {
+type Opts struct {
 	Address string
 	Folder  string
 }
+
+func (*Opts) IsBootzServerOpts() {}
 
 type Server struct {
 	server *http.Server
@@ -38,7 +39,7 @@ var instance *Server = nil
 var lock = &sync.Mutex{}
 
 // Start starts the http server with the given configuration.
-func Start(conf *Config) error {
+func Start(conf *Opts) error {
 	lock.Lock()
 	defer lock.Unlock()
 
