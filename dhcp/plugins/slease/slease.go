@@ -52,7 +52,7 @@ var ipv6Assigned = map[string]net.IP{}
 
 func setup4(args ...string) (handler.Handler4, error) {
 	for _, r := range args {
-		if k, r, err := parseRecord4(r); err == nil {
+		if k, r, err := parseRecord4(strings.ToLower(r)); err == nil {
 			ipv4Records[k] = r
 			log.Debugf("Added ipv4 record: %v, %v, %v, %v", k, r.ip, r.netmask, r.gateway)
 		} else {
@@ -64,7 +64,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 
 func setup6(args ...string) (handler.Handler6, error) {
 	for _, r := range args {
-		if k, r, err := parseRecord6(r); err == nil {
+		if k, r, err := parseRecord6(strings.ToLower(r)); err == nil {
 			ipv6Records[k] = r
 			log.Debugf("Added ipv6 record: %v, %v", k, r.String())
 		} else {
@@ -84,6 +84,7 @@ func CleanLog() {
 
 // AssignedIP returns the assigned ip related to hwAddr (mac or serial)
 func AssignedIP(hwAddr string) string {
+	hwAddr = strings.ToLower(hwAddr)
 	muRw.RLock()
 	defer muRw.RUnlock()
 	ipv4, ok := ipv4Assigned[hwAddr]
@@ -107,7 +108,7 @@ func handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 		cid := req.GetOneOption(dhcpv4.OptionClientIdentifier)
 		if e, ok := ipv4Records[toString(cid)]; ok {
 			resp4(e, resp)
-			ipv4Assigned[toString(cid)] = resp.ServerIPAddr
+			ipv4Assigned[strings.ToLower(toString(cid))] = resp.ServerIPAddr
 		}
 	}
 	return resp, false
@@ -143,7 +144,7 @@ func handler6(req, resp dhcpv6.DHCPv6) (dhcpv6.DHCPv6, bool) {
 			ei := en.EnterpriseIdentifier[:len(en.EnterpriseIdentifier)]
 			if ip, ok := ipv6Records[toString(ei)]; ok {
 				resp.AddOption(createIpv6LeaseOption(m, ip))
-				ipv6Assigned[toString(ei)] = ip
+				ipv6Assigned[strings.ToLower(toString(ei))] = ip
 			}
 		}
 	}

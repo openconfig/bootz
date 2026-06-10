@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	configFile = flag.String("config_file", "../../testdata/dhcp_config.textproto", "DHCP config file.")
+	configFile = flag.String("dhcp_file", "../../testdata/dhcp_config.textproto", "DHCP config file.")
 )
 
 func main() {
@@ -36,7 +36,7 @@ func main() {
 
 	configBytes, err := os.ReadFile(*configFile)
 	if err != nil {
-		log.Exitf("failed to read config file: %v. Specify with argument '--config_file path/to/file'", err)
+		log.Exitf("failed to read config file: %v. Specify with argument '--dhcp_file path/to/file'", err)
 	}
 	config := &cpb.Config{}
 	if err := prototext.Unmarshal(configBytes, config); err != nil {

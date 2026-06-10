@@ -66,6 +66,12 @@ server4:
     {{ end }}
 `
 
+type Opts struct {
+	Config *cpb.Config
+}
+
+func (*Opts) IsBootzServerOpts() {}
+
 type Server struct {
 	server *cdserver.Servers
 }
