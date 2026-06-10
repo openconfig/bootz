@@ -1,0 +1,19 @@
+# For the definition of this file, refer to "../../dhcp/proto/dhcpconfig.proto".
+#
+# How to test with your own switch chassis:
+#  1. Modify 'interface' to the actual interface name of your PC's ethernet port.
+#  2. Modify 'machine' to match the MAC address of your switch chassis under test. It must be the MAC address of the management interface that sends out the DHCP requests.
+#  3. (Optional) Modify 'ip' to the desired IP address for your switch chassis. It must be in the same subnet with Bootz server.
+
+interface: "eth0"
+bootz_urls: "bootz://10.0.0.1:15006"
+records: {
+  machine: "01:02:03:04:05:06"
+  ip: "10.0.0.10/24"
+  gateway: "10.0.0.1"
+}
+records: {
+  machine: "0a:0b:0c:0d:0e:0f"
+  ip: "10.0.0.11/24"
+  gateway: "10.0.0.1"
+}
