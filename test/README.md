@@ -11,9 +11,9 @@ chassis of your choice.
 - A PC with an Ethernet port, running Linux operating system. This PC will be
   the host running the SUTs (Services Under Test), which are Bootz service, HTTP
   service, and optionally DHCP service.
-  - Bootz service: Listens to TCP port 15006.
-  - HTTP service: Listens to TCP port 8080.
-  - DHCP service: Listens to UDP port 67 and UDP port 547.
+  - Bootz service: Listens on TCP port 15006.
+  - HTTP service: Listens on TCP port 8080.
+  - DHCP service: Listens on UDP port 67 and UDP port 547.
 
 We provide two methods to run the Bootz test.
 
@@ -152,12 +152,12 @@ You can choose to test the DHCP Bootz flow or the DHCP-less Bootz flow.
 1. After you finish the testing, press `Ctrl+C` on the PC to stop the Monax
    SUTs.
 
-2. In the other terminal when you ran DHCP Bash script, press `Ctrl+C` to stop
+2. In the other terminal where you ran DHCP Bash script, press `Ctrl+C` to stop
    the DHCP service.
 
 3. Run the following command to delete the KIND virtual cluster.
 
-   `kind delete clusters -A`.
+   `kind delete clusters -A`
 
    NOTE: If you plan to run more testing later, then you can skip deleting the
    cluster so that next time you don't need to create it again before the
