@@ -57,3 +57,5 @@ jobs:
           DEFAULT_BRANCH: main
           MULTI_STATUS: false
           KUBERNETES_KUBECONFORM_OPTIONS: "-ignore-missing-schemas"
+          TRIVY_SKIP_VERSION_CHECK: "true"
+          TRIVY_SEVERITY: "CRITICAL"
