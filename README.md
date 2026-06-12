@@ -170,7 +170,7 @@ We propose to follow the “multiple namespaces for configuration” approach
 described above, whereby separate configuration stores, per the diagram and
 process below.
 
-![#configuration-mgmt](docs/img/config-mgmt.png)
+![#configuration-mgmt](design_images/config-mgmt.png)
 
 Figure 1: Proposed configuration namespaces and clients.
 

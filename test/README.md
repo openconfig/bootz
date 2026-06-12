@@ -24,7 +24,7 @@ We provide two methods to run the Bootz test.
 - Monax Method
 
   Run most SUTs inside Monax virtual Kubernetes cluster containers (when
-  possible). NOTE: DHCP service has to run on bare metal anyway, because Monax
+  possible). NOTE: DHCP service has to run on bare metal anyway, because KIND
   does not support layer 2 traffic.
 
 ## Bare Metal Method
@@ -152,8 +152,8 @@ You can choose to test the DHCP Bootz flow or the DHCP-less Bootz flow.
 1. After you finish the testing, press `Ctrl+C` on the PC to stop the Monax
    SUTs.
 
-2. In the other terminal where you ran DHCP Bash script, press `Ctrl+C` to stop
-   the DHCP service.
+2. In the other terminal where you ran the DHCP Bash script, press `Ctrl+C` to
+   stop the DHCP service.
 
 3. Run the following command to delete the KIND virtual cluster.
 
