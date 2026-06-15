@@ -8,7 +8,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-tpm v0.9.8
 	github.com/insomniacslk/dhcp v0.0.0-20260603135910-a415979eb11e
-	github.com/openconfig/attestz v0.6.10
+	github.com/openconfig/attestz v0.6.14
 	github.com/openconfig/gnsi v1.9.1
 	github.com/openconfig/monax v0.0.0-20260605190038-df2a1f5301cf
 	go.mozilla.org/pkcs7 v0.9.0
