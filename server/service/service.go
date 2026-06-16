@@ -42,6 +42,7 @@ import (
 	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/common/types"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -139,11 +140,11 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("Received GetBootstrapData request(%+v) from %v", req, peerAddr)
 	var serials []string
 	chassisDesc := req.GetChassisDescriptor()
-	if len(chassisDesc.GetControlCards()) > 0 { // Modular chassis
+	if len(chassisDesc.GetControlCards()) > 0 { // Modular chassis.
 		for _, v := range chassisDesc.GetControlCards() {
 			serials = append(serials, v.GetSerialNumber())
 		}
-	} else { // Fixed form factor chassis
+	} else { // Fixed form factor chassis.
 		serials = append(serials, chassisDesc.GetSerialNumber())
 	}
 	log.Infof("Requesting for %v chassis %v", chassisDesc.GetManufacturer(), chassisDesc.GetSerialNumber())
@@ -152,14 +153,19 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		ActiveSerial: req.GetControlCardState().GetSerialNumber(),
 		IPAddress:    peerAddr,
 	}
-	// Validate the chassis can be serviced
+	// Validate the serial number inside the IDevID certificate.
+	if _, err := s.validateIDevID(ctx, chassis); err != nil {
+		log.Errorf("IDevID validation failed for device %s, error: %v", chassis.ActiveSerial, err)
+		return nil, err
+	}
+	// Validate the chassis can be serviced.
 	err = s.cm.ResolveChassis(ctx, chassis)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", chassisDesc, err)
 	}
 	log.Infof("Verified server can resolve chassis")
 
-	// If chassis can only be booted into secure mode then return error
+	// If chassis can only be booted into secure mode then return error.
 	if chassis.BootMode == bpb.BootMode_BOOT_MODE_SECURE && req.GetNonce() == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "chassis requires secure boot only")
 	}
@@ -234,6 +240,23 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 		return nil, err
 	}
 	log.Infof("Received ReportStatus request(%+v) from %v", req, peerAddr)
+	var serials []string
+	for _, v := range req.GetStates() {
+		serials = append(serials, v.GetSerialNumber())
+	}
+	if len(serials) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "no serial numbers found in the status report")
+	}
+	chassis := &types.Chassis{
+		Serials:      serials,
+		ActiveSerial: serials[0], // Assume the first serial number is the active one.
+		IPAddress:    peerAddr,
+	}
+	// Validate the serial number inside the IDevID certificate.
+	if _, err := s.validateIDevID(ctx, chassis); err != nil {
+		log.Errorf("IDevID validation failed for device %s, error: %v", chassis.ActiveSerial, err)
+		return nil, err
+	}
 	return &bpb.EmptyResponse{}, s.cm.UpdateStatus(ctx, req)
 }
 
@@ -298,7 +321,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				if len(session.serverNonce) == 0 {
 					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM 2.0 nonce challenge response")
 				}
-				cert, err := s.validateIDevID(session.chassis)
+				cert, err := s.validateIDevID(ctx, session.chassis)
 				if err != nil {
 					return err
 				}
@@ -438,6 +461,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 
 // BootstrapStreamV1 implements the RPC handler for Streaming Bootz v1.0.
 func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server) error {
+	ctx := stream.Context()
 	session := &streamSessionV1{stream: stream, currentState: stateInitial, chassis: &types.Chassis{}}
 
 	for {
@@ -485,7 +509,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM20IDevID challenge response")
 				}
 				// Verify IDevID certificate.
-				cert, err := s.validateIDevID(session.chassis)
+				cert, err := s.validateIDevID(ctx, session.chassis)
 				if err != nil {
 					log.Errorf("Tpm20Idevid challenge certificate verification failed for device %s, error: %v", session.chassis.ActiveSerial, err)
 					return err
@@ -588,7 +612,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				trustAnchor := base64.StdEncoding.EncodeToString(trustAnchorCert.Raw)
 				for _, v := range session.chassis.Serials {
 					log.Infof("Fetching bootstrap data for serial number: %s", v)
-					data, err := s.cm.GenerateBootstrapData(stream.Context(), session.chassis, v)
+					data, err := s.cm.GenerateBootstrapData(ctx, session.chassis, v)
 					if err != nil {
 						log.Infof("Error occurred while retrieving bootstrap data for serial number %v", v)
 						return err
@@ -633,7 +657,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 					return status.Errorf(codes.InvalidArgument, "unsupported HPKE cipher suite enum: %v", transportKey.GetCipherSuite())
 				}
 				// Sign the bootstrap data.
-				sig, ov, oc, err := s.sign(stream.Context(), response.GetBootstrapResponse().GetEncryptedSerializedBootstrapData(), session.chassis)
+				sig, ov, oc, err := s.sign(ctx, response.GetBootstrapResponse().GetEncryptedSerializedBootstrapData(), session.chassis)
 				if err != nil {
 					return err
 				}
@@ -837,36 +861,57 @@ func (s *Service) createReportStatusResponse(session *streamSessionV1) (*bpb.Boo
 }
 
 // validateIDevID validates the authenticity and authorization of an encoded IDevID presented by a chassis, and return it as a certificate.
-func (s *Service) validateIDevID(chassis *types.Chassis) (*x509.Certificate, error) {
-	var pemBlock *pem.Block
-	var intermediates []byte
-	idevid := chassis.Identity.GetIdevidCert()
-	certDER, err := base64.StdEncoding.DecodeString(idevid)
-	if err != nil {
-		// If we can't base64 decode the cert, it might be a PEM-encoded cert chain.
-		// Find the first (leaf) cert in the PEM block, then decode it to a DER string.
-		if pemBlock, intermediates = pem.Decode([]byte(idevid)); pemBlock == nil {
-			return nil, status.Errorf(codes.InvalidArgument, "IDevID certificate is not a valid PEM chain or base64 encoded DER cert")
+func (s *Service) validateIDevID(ctx context.Context, chassis *types.Chassis) (*x509.Certificate, error) {
+	if chassis == nil {
+		return nil, status.Error(codes.InvalidArgument, "chassis cannot be nil")
+	}
+	var cert *x509.Certificate
+	if chassis.Identity == nil {
+		// Unary Bootz doesn't have identity populated, and IDevID trust chain is already validated during TLS handshake.
+		p, ok := peer.FromContext(ctx)
+		if !ok {
+			return nil, status.Error(codes.FailedPrecondition, "client information not found in request context")
 		}
-		certDER = pemBlock.Bytes
-	}
-	cert, err := x509.ParseCertificate(certDER)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "failed to parse IDevID certificate: %v", err)
-	}
+		tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+		if !ok {
+			return nil, status.Error(codes.FailedPrecondition, "client credentials are not TLSInfo")
+		}
+		if len(tlsInfo.State.PeerCertificates) == 0 {
+			return nil, status.Error(codes.FailedPrecondition, "client TLS certificate not found")
+		}
+		cert = tlsInfo.State.PeerCertificates[0]
+	} else {
+		// Otherwise it is Streaming Bootz, and we must validate the IDevID trust chain manually.
+		var pemBlock *pem.Block
+		var intermediates []byte
+		idevid := chassis.Identity.GetIdevidCert()
+		certDER, err := base64.StdEncoding.DecodeString(idevid)
+		if err != nil {
+			// If we can't base64 decode the cert, it might be a PEM-encoded cert chain.
+			// Find the first (leaf) cert in the PEM block, then decode it to a DER string.
+			if pemBlock, intermediates = pem.Decode([]byte(idevid)); pemBlock == nil {
+				return nil, status.Errorf(codes.InvalidArgument, "IDevID certificate is not a valid PEM chain or base64 encoded DER cert")
+			}
+			certDER = pemBlock.Bytes
+		}
+		cert, err = x509.ParseCertificate(certDER)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "failed to parse IDevID certificate: %v", err)
+		}
 
-	opts := x509.VerifyOptions{
-		Roots:     s.am.VendorCABundle(),
-		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
-	}
-	if len(intermediates) > 0 {
-		opts.Intermediates = x509.NewCertPool()
-		if !opts.Intermediates.AppendCertsFromPEM(intermediates) {
-			return nil, status.Errorf(codes.InvalidArgument, "failed to parse PEM encoded intermediate certificates: %v", intermediates)
+		opts := x509.VerifyOptions{
+			Roots:     s.am.VendorCABundle(),
+			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		}
-	}
-	if _, err := cert.Verify(opts); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "IDevID certificate chain validation failed: %v", err)
+		if len(intermediates) > 0 {
+			opts.Intermediates = x509.NewCertPool()
+			if !opts.Intermediates.AppendCertsFromPEM(intermediates) {
+				return nil, status.Errorf(codes.InvalidArgument, "failed to parse PEM encoded intermediate certificates: %v", intermediates)
+			}
+		}
+		if _, err := cert.Verify(opts); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "IDevID certificate chain validation failed: %v", err)
+		}
 	}
 
 	// cert.Subject.SerialNumber can come in the format PID:xxxxxxx SN:1234JF or just the serial number as it is. We need the value after "SN:".
