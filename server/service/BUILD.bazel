@@ -31,6 +31,7 @@ go_library(
         "@openconfig_attestz//service/biz:enrollz_biz",
         "@openconfig_attestz//service/biz:tpm20_utils",
         "@org_golang_google_grpc//codes",
+        "@org_golang_google_grpc//credentials",
         "@org_golang_google_grpc//peer",
         "@org_golang_google_grpc//status",
         "@org_golang_google_protobuf//proto",

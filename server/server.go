@@ -63,14 +63,6 @@ type Opts interface {
 	IsBootzServerOpts()
 }
 
-// InterceptorOpts is an struct that is used to pass an interceptor function.
-// This option is added to enable proper testing of bootz.
-type InterceptorOpts struct {
-	BootzInterceptor grpc.UnaryServerInterceptor
-}
-
-func (*InterceptorOpts) IsBootzServerOpts() {}
-
 // NewServer start a new Bootz gRPC, DHCP, and HTTP image server based on specified flags.
 func NewServer(config *cpb.Config, opts ...Opts) (*Server, error) {
 	addrParts := strings.Split(config.GetServerAddress(), ":")
@@ -100,7 +92,6 @@ func NewServer(config *cpb.Config, opts ...Opts) (*Server, error) {
 		return nil, fmt.Errorf("error creating bootz server cert: %v", err)
 	}
 
-	var interceptor grpc.ServerOption
 	for _, opt := range opts {
 		switch opt := opt.(type) {
 		case *dhcp.Opts:
@@ -111,8 +102,6 @@ func NewServer(config *cpb.Config, opts ...Opts) (*Server, error) {
 			if err := http.Start(opt); err != nil {
 				return nil, fmt.Errorf("unable to start http server %v", err)
 			}
-		case *InterceptorOpts:
-			interceptor = grpc.UnaryInterceptor(opt.BootzInterceptor)
 		default:
 			continue
 		}
@@ -123,12 +112,7 @@ func NewServer(config *cpb.Config, opts ...Opts) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating service: %v", err)
 	}
-	s := &grpc.Server{}
-	if interceptor != nil {
-		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(conf)), interceptor)
-	} else {
-		s = grpc.NewServer(grpc.Creds(credentials.NewTLS(conf)))
-	}
+	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(conf)))
 	bpb.RegisterBootstrapServer(s, c)
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
