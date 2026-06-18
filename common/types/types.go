@@ -80,4 +80,6 @@ type Chassis struct {
 	Manufacturer string
 	// The part number of this chassis.
 	PartNumber string
+	// Whether to skip IDevID serial number validation for this chassis.
+	SkipIDevIDSerialValidation bool
 }

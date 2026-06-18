@@ -153,17 +153,18 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 		ActiveSerial: req.GetControlCardState().GetSerialNumber(),
 		IPAddress:    peerAddr,
 	}
-	// Validate the serial number inside the IDevID certificate.
-	if _, err := s.validateIDevID(ctx, chassis); err != nil {
-		log.Errorf("IDevID validation failed for device %s, error: %v", chassis.ActiveSerial, err)
-		return nil, err
-	}
 	// Validate the chassis can be serviced.
 	err = s.cm.ResolveChassis(ctx, chassis)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", chassisDesc, err)
 	}
 	log.Infof("Verified server can resolve chassis")
+
+	// Validate the serial number inside the IDevID certificate.
+	if _, err := s.validateIDevID(ctx, chassis); err != nil {
+		log.Errorf("IDevID validation failed for device %s, error: %v", chassis.ActiveSerial, err)
+		return nil, err
+	}
 
 	// If chassis can only be booted into secure mode then return error.
 	if chassis.BootMode == bpb.BootMode_BOOT_MODE_SECURE && req.GetNonce() == "" {
@@ -252,6 +253,12 @@ func (s *Service) ReportStatus(ctx context.Context, req *bpb.ReportStatusRequest
 		ActiveSerial: serials[0], // Assume the first serial number is the active one.
 		IPAddress:    peerAddr,
 	}
+	// Validate the chassis can be serviced.
+	err = s.cm.ResolveChassis(ctx, chassis)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to resolve chassis to inventory %+v, err: %v", req.GetStates(), err)
+	}
+	log.Infof("Verified server can resolve chassis")
 	// Validate the serial number inside the IDevID certificate.
 	if _, err := s.validateIDevID(ctx, chassis); err != nil {
 		log.Errorf("IDevID validation failed for device %s, error: %v", chassis.ActiveSerial, err)
@@ -912,6 +919,10 @@ func (s *Service) validateIDevID(ctx context.Context, chassis *types.Chassis) (*
 		if _, err := cert.Verify(opts); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "IDevID certificate chain validation failed: %v", err)
 		}
+	}
+
+	if chassis.SkipIDevIDSerialValidation {
+		return cert, nil
 	}
 
 	// cert.Subject.SerialNumber can come in the format PID:xxxxxxx SN:1234JF or just the serial number as it is. We need the value after "SN:".
