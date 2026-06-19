@@ -15,38 +15,8 @@
 package types
 
 import (
-	"crypto"
-	"crypto/tls"
-	"crypto/x509"
-
 	bpb "github.com/openconfig/bootz/proto/bootz"
 )
-
-// OVList is a mapping of control card serial number to ownership voucher.
-type OVList map[string][]byte
-
-// SecurityArtifacts contains all KeyPairs and OVs needed for the Bootz Server.
-// Currently, RSA is the only encryption standard supported by these artifacts.
-type SecurityArtifacts struct {
-	// The Ownership Certificate is an x509 certificate/private key pair signed by the PDC.
-	// The certificate is presented to the device during bootstrapping and is used to validate the Ownership Voucher.
-	OwnerCert           *x509.Certificate
-	OwnerCertPrivateKey crypto.PrivateKey
-	// The Pinned Domain Certificate is an x509 certificate/private key pair which acts as a certificate authority on the owner's side.
-	// This certificate is included in OVs.
-	PDC           *x509.Certificate
-	PDCPrivateKey crypto.PrivateKey
-	// The Vendor CA represents a certificate authority on the vendor side. This CA signs Ownership Vouchers which are verified by the device.
-	VendorCA           *x509.Certificate
-	VendorCAPrivateKey crypto.PrivateKey
-	// The Trust Anchor is a self signed CA used to generate the TLS certificate.
-	TrustAnchor           *x509.Certificate
-	TrustAnchorPrivateKey crypto.PrivateKey
-	// Ownership Vouchers are a list of PKCS7 messages signed by the Vendor CA. There is one per control card.
-	OV OVList
-	// The TLSKeypair is a TLS certificate used to secure connections between device and server. It is derived from the Trust Anchor.
-	TLSKeypair *tls.Certificate
-}
 
 // Chassis describes a chassis that has been resolved from an organization's inventory.
 type Chassis struct {
