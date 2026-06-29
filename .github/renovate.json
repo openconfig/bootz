@@ -8,6 +8,7 @@
   "packageRules": [
     {
       "matchPackageNames": ["bazel"],
+      "matchManagers": ["bazelisk"],
       "allowedVersions": "<9.0.0"
     }
   ],
