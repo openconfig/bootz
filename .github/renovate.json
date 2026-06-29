@@ -5,6 +5,12 @@
   "commitMessageAction": "update",
   "groupName": "deps",
   "ignoreDeps": ["com_google_googleapis"],
+  "packageRules": [
+    {
+      "matchPackageNames": ["bazel"],
+      "allowedVersions": "<9.0.0"
+    }
+  ],
   "customManagers": [
     {
       "customType": "regex",
