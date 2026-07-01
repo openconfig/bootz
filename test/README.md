@@ -17,19 +17,23 @@ chassis of your choice.
 
 We provide two methods to run the Bootz test.
 
-- Bare Metal Method
+- Bare Metal Manual Test Method
 
-  Run all SUTs on bare metal (i.e. run all SUTs natively on the host PC).
+  Run all SUTs on bare metal (i.e. run all SUTs natively on the host PC), and
+  start the Bootz process on the DUT manually.
 
-- Monax Method
+- Monax Auto Test Method
 
   Run most SUTs inside Monax virtual Kubernetes cluster containers (when
-  possible). NOTE: DHCP service has to run on bare metal anyway, because KIND
+  possible), and start the Bootz process on the DUT automatically by calling
+  the vendor implemented `dut.StartBootz()` function.
+
+  NOTE: DHCP service has to run on bare metal anyway, because KIND
   does not support layer 2 traffic.
 
-## Bare Metal Method
+## Bare Metal Manual Test Method
 
-### Bare Metal Setup
+### Bare Metal Setup (a one-time effort)
 
 1. Configure the PC with a static IP address shown below.
 
@@ -80,9 +84,9 @@ You can choose to test the DHCP Bootz flow or the DHCP-less Bootz flow.
 
 1. After you finish the testing, press `Ctrl+C` on the PC to stop the services.
 
-## Monax Method
+## Monax Auto Test Method
 
-### Monax Setup
+### Monax Setup (a one-time effort)
 
 1. Install [Docker](https://www.docker.com/) and
    [KIND (Kubernetes IN Docker)](https://kind.sigs.k8s.io/) on the PC.
@@ -99,6 +103,13 @@ You can choose to test the DHCP Bootz flow or the DHCP-less Bootz flow.
    NOTE: If you configured the PC with a different static IP and/or different
    subnet in Step 2, you must also change the referenced IPs and subnets in the
    files above accordingly.
+
+4. Implement the `StartBootz()` function in file [./dut/dut.go](./dut/dut.go) to control your
+   switch chassis under test.
+
+   NOTE: Since this function is completely vendor-specific, you can keep your
+   implementation private for your own tests only. You don't need to submit
+   or publish your implementation on GitHub.
 
 ### Monax Prepare
 
@@ -117,35 +128,35 @@ You can choose to test the DHCP Bootz flow or the DHCP-less Bootz flow.
 
 #### Monax DHCP Bootz Flow
 
-1. Run the command below to build and start the Monax SUTs (Bootz, HTTP).
+1. Connect the management port of your switch chassis to the Ethernet port of
+   the PC.
 
-   `go run monax_bootz.go --alsologtostderr`
-
-1. Run the Bash script below in another terminal to build and start the DHCP
+2. Run the Bash script below in a terminal to build and start the DHCP
    service.
 
    `./run_dhcp_only.sh`
 
    NOTE: DHCP service needs root privilege to bind to the Ethernet interface.
 
-1. Connect the management port of your switch chassis to the Ethernet port of
-   the PC.
+3. Run the command below in another terminal to build the Monax SUTs
+   (Bootz, HTTP), then `dut.StartBootz()` function will be called to start the
+   testing automatically.
 
-1. Put your switch chassis into DHCP Bootz ZeroTouch mode to begin the testing.
+   `go run monax_bootz.go --alsologtostderr --dhcp`
 
 #### Monax DHCP-less Bootz Flow
 
-1. Run the command below to build and start the Monax SUTs (Bootz, HTTP).
-
-   `go run monax_bootz.go --alsologtostderr`
-
-2. Configure the management interface of your switch chassis with a static IP
+1. Configure the management interface of your switch chassis with a static IP
    from the same subnet of the PC.
 
-3. Connect the management port of your switch chassis to the Ethernet port of
+2. Connect the management port of your switch chassis to the Ethernet port of
    the PC.
 
-4. Run the DHCP-less Bootz commands on your switch chassis to begin the testing.
+3. Run the command below in a terminal to build the Monax SUTs (Bootz, HTTP),
+   then `dut.StartBootz()` function will be called to start the testing
+   automatically.
+
+   `go run monax_bootz.go --alsologtostderr`
 
 ### Monax Cleanup
 

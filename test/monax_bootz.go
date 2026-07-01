@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: Convert this to a Golang test once we have a proper way to capture and judge the bootstrap results.
 package main
 
 import (
@@ -22,12 +23,15 @@ import (
 	"os/signal"
 
 	log "github.com/golang/glog"
+	"github.com/openconfig/bootz/test/dut"
 	"github.com/openconfig/monax"
 	"github.com/openconfig/monax/monaxtest"
 	"github.com/openconfig/monax/runtime/kubernetesruntime"
 )
 
 var (
+	dhcp = flag.Bool("dhcp", false, "Test DHCP Bootz (true) or DHCP-less Bootz (false)")
+
 	config monax.Config
 	sut    *monax.SUT
 )
@@ -61,12 +65,12 @@ func main() {
 	fmt.Println("=========================================================================")
 	fmt.Println("The SUTs (Bootz, HTTP) are now ready and running in Monax containers.")
 	fmt.Println("=========================================================================")
-	fmt.Println(">>> To test DHCP Bootz: <<<")
-	fmt.Println("1. Make sure DHCP service is running on bare metal in another terminal.")
-	fmt.Println("2. Put your chassis into DHCP Bootz ZeroTouch mode to start the testing.")
-	fmt.Println("-------------------------------------------------------------------------")
-	fmt.Println(">>> To test DHCP-less Bootz: <<<")
-	fmt.Println("1. Run the DHCP-less Bootz commands on your chassis to start the testing.")
+
+	// Start the Bootz process on the DUT.
+	if err := dut.StartBootz(*dhcp); err != nil {
+		log.ExitContextf(ctx, "Failed to start Bootz on DUT: %v", err)
+	}
+
 	fmt.Println("=========================================================================")
 	fmt.Println("After you finish the testing, press Ctrl+C to stop the SUTs.")
 	fmt.Println("=========================================================================")
