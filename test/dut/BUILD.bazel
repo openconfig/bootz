@@ -12,24 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
-    name = "monax_bootz_lib",
-    srcs = ["monax_bootz.go"],
-    importpath = "github.com/openconfig/bootz/test",
-    visibility = ["//visibility:private"],
-    deps = [
-	    "//test/dut",
-        "@com_github_golang_glog//:glog",
-        "@com_github_openconfig_monax//:monax",
-        "@com_github_openconfig_monax//monaxtest",
-        "@com_github_openconfig_monax//runtime/kubernetesruntime",
-    ],
-)
-
-go_binary(
-    name = "monax_bootz",
-    embed = [":monax_bootz_lib"],
+    name = "dut",
+    srcs = ["dut.go"],
+    importpath = "github.com/openconfig/bootz/test/dut",
     visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_golang_glog//:glog",
+    ],
 )
