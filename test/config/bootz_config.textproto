@@ -53,3 +53,4 @@ chassis: {
   authz: {}
   certz_profiles: {}
 }
+test_mode: true

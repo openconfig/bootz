@@ -23,14 +23,19 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/openconfig/bootz/common/types"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
+	tpb "github.com/openconfig/bootz/proto/test"
 	cpb "github.com/openconfig/bootz/server/proto/config"
 )
 
 // InMemoryChassisManager provides a simple in memory handler for chassis.
 type InMemoryChassisManager struct {
 	chassis map[string]*cpb.Chassis
+	// subscriberChannel is used to fetch bootstrap status when in test mode.
+	subscriberChannel chan *bpb.ReportStatusRequest
 }
 
 // ResolveChassis fills the chassis information based on the matched inventory.
@@ -77,7 +82,31 @@ func (m *InMemoryChassisManager) UpdateStatus(ctx context.Context, req *bpb.Repo
 	for _, v := range req.GetStates() {
 		log.Infof("Control card %v changed status to %v", v.GetSerialNumber(), v.GetStatus())
 	}
+	// When in test mode, we only expect one single bootstrapping.
+	if m.subscriberChannel != nil {
+		switch req.GetStatus() {
+		case bpb.ReportStatusRequest_BOOTSTRAP_STATUS_SUCCESS, bpb.ReportStatusRequest_BOOTSTRAP_STATUS_FAILURE:
+			select {
+			case m.subscriberChannel <- req:
+			default:
+				log.Warningf("Channel is full, dropping status update: %v", req.GetStatus())
+			}
+		}
+	}
 	return nil
+}
+
+// Subscribe implements the Subscribe RPC.
+func (m *InMemoryChassisManager) Subscribe(req *tpb.SubscribeRequest, stream tpb.Test_SubscribeServer) error {
+	if m.subscriberChannel == nil {
+		return status.Errorf(codes.FailedPrecondition, "Subscribe is only supported in test mode")
+	}
+	select {
+	case sta := <-m.subscriberChannel:
+		return stream.Send(sta)
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	}
 }
 
 // New returns a new in-memory chassis manager.
@@ -89,5 +118,13 @@ func New(config *cpb.Config) *InMemoryChassisManager {
 			chassis[cc.GetSerialNumber()] = c
 		}
 	}
-	return &InMemoryChassisManager{chassis: chassis}
+	var subscriberChannel chan *bpb.ReportStatusRequest
+	// If test mode is enabled, we create a valid channel for fetching status.
+	if config.GetTestMode() {
+		subscriberChannel = make(chan *bpb.ReportStatusRequest, 1)
+	}
+	return &InMemoryChassisManager{
+		chassis:           chassis,
+		subscriberChannel: subscriberChannel,
+	}
 }
