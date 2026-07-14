@@ -310,6 +310,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				session.currentState = stateChallengeSent
 
 			default:
+				log.Errorf("Unsupported identity type: %T", idType)
 				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
 			}
 
@@ -370,6 +371,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				log.Infof("HMAC challenge verified successfully for device %s", session.chassis.ActiveSerial)
 
 			default:
+				log.Errorf("Unsupported challenge response type: %T", challengeType)
 				return status.Errorf(codes.InvalidArgument, "unsupported challenge response type: %T", challengeType)
 			}
 
@@ -461,6 +463,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 
 		default:
+			log.Errorf("Unexpected message type: %T", req)
 			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
 		}
 	}
@@ -591,6 +594,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				log.Infof("Tpm12Ek challenge verification succeeded for device %s", session.chassis.ActiveSerial)
 
 			default:
+				log.Errorf("Unsupported challenge response type: %T", challengeType)
 				return status.Errorf(codes.InvalidArgument, "unsupported challenge response type: %T", challengeType)
 			}
 
@@ -659,8 +663,10 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 						},
 					}
 				case bpb.HPKECipherSuite_HPKE_CIPHER_SUITE_NONE:
+					log.Errorf("HPKE cipher suite can not be none")
 					return status.Errorf(codes.InvalidArgument, "HPKE cipher suite can not be none")
 				default:
+					log.Errorf("Unsupported HPKE cipher suite enum: %v", transportKey.GetCipherSuite())
 					return status.Errorf(codes.InvalidArgument, "unsupported HPKE cipher suite enum: %v", transportKey.GetCipherSuite())
 				}
 				// Sign the bootstrap data.
@@ -697,6 +703,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			}
 
 		default:
+			log.Errorf("Unsupported message type: %T", req)
 			return status.Errorf(codes.InvalidArgument, "unsupported message type: %T", req)
 		}
 
@@ -843,6 +850,7 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 		}
 
 	default:
+		log.Errorf("Unsupported device identity type: %T", idType)
 		return nil, status.Errorf(codes.InvalidArgument, "unsupported device identity type: %T", idType)
 	}
 
@@ -1035,6 +1043,7 @@ func (s *Service) establishSessionAndSendChallenge(session *streamSession) error
 			},
 		}
 	default:
+		log.Errorf("Unsupported device identity type: %T", idType)
 		return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
 	}
 
@@ -1108,13 +1117,16 @@ func initializeChassis(ctx context.Context, msg proto.Message) (*types.Chassis, 
 		}
 		id = m.GetIdentity()
 	default:
+		log.Errorf("Unexpected message type: %T", m)
 		return nil, status.Errorf(codes.InvalidArgument, "unexpected message type: %T", m)
 	}
 	activeSerial := cc.GetSerialNumber()
 	if activeSerial == "" {
+		log.Errorf("No active control card serial number provided in the request")
 		return nil, status.Errorf(codes.InvalidArgument, "no active control card serial number provided in the request")
 	}
 	if id == nil {
+		log.Errorf("No identity provided in the request")
 		return nil, status.Errorf(codes.InvalidArgument, "no identity provided in the request")
 	}
 
