@@ -64,6 +64,9 @@ type Opts interface {
 
 // NewServer start a new Bootz gRPC, DHCP, and HTTP image server based on specified flags.
 func NewServer(config *cpb.Config, opts ...Opts) (*Server, error) {
+	if config.GetServerPort() == "" {
+		return nil, fmt.Errorf("bootz server port must be specified")
+	}
 	ip := net.ParseIP(config.GetServerAddress())
 	if ip == nil {
 		return nil, fmt.Errorf("invalid Bootz server IP address: %q", config.GetServerAddress())
