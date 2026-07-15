@@ -41,6 +41,7 @@ import (
 	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	"github.com/openconfig/bootz/common/signature"
 	"github.com/openconfig/bootz/common/types"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
@@ -174,21 +175,31 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("=============================================================================")
 	log.Infof("==================== Fetching data for each control card ====================")
 	log.Infof("=============================================================================")
-	var responses []*bpb.BootstrapDataResponse
 	trustAnchorCert, _ := s.am.BootzServerTrustAnchorKeyPair()
 	if trustAnchorCert == nil {
 		return nil, status.Errorf(codes.Internal, "failed to retrieve server trust cert")
 	}
 	trustAnchor := base64.StdEncoding.EncodeToString(trustAnchorCert.Raw)
-	// Iterate over the control cards and fetch data for each card.
-	for _, v := range serials {
-		bootdata, err := s.cm.GenerateBootstrapData(ctx, chassis, v)
-		if err != nil {
-			log.Infof("Error occurred while retrieving bootstrap data for serial number %v", v)
-			return nil, err
-		}
-		bootdata.ServerTrustCert = trustAnchor
-		responses = append(responses, bootdata)
+	responses := make([]*bpb.BootstrapDataResponse, len(serials))
+	group, childCtx := errgroup.WithContext(ctx)
+
+	// Iterate over the control cards in parallel.
+	for i, serial := range serials {
+		group.Go(func() error {
+			log.Infof("Fetching bootstrap data for serial number %s", serial)
+			bootdata, err := s.cm.GenerateBootstrapData(childCtx, chassis, serial)
+			if err != nil {
+				log.Infof("Error occurred while retrieving bootstrap data for serial number %v: %v", serial, err)
+				return err
+			}
+			bootdata.ServerTrustCert = trustAnchor
+			responses[i] = bootdata
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
 	}
 
 	log.Infof("Successfully fetched data for each control card")
@@ -386,21 +397,31 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 
 			// If verification is successful, fetch and send the bootstrap data.
-			var responses []*bpb.BootstrapDataResponse
 			trustAnchorCert, _ := s.am.BootzServerTrustAnchorKeyPair()
 			if trustAnchorCert == nil {
 				return status.Errorf(codes.Internal, "failed to retrieve server trust cert")
 			}
 			trustAnchor := base64.StdEncoding.EncodeToString(trustAnchorCert.Raw)
-			for _, v := range session.chassis.Serials {
-				log.Infof("Fetching bootstrap data for serial number %s", v)
-				bootdata, err := s.cm.GenerateBootstrapData(ctx, session.chassis, v)
-				if err != nil {
-					log.Infof("Error occurred while retrieving bootstrap data for serial number %v", v)
-					return err
-				}
-				bootdata.ServerTrustCert = trustAnchor
-				responses = append(responses, bootdata)
+
+			responses := make([]*bpb.BootstrapDataResponse, len(session.chassis.Serials))
+			g, childCtx := errgroup.WithContext(ctx)
+
+			for i, serial := range session.chassis.Serials {
+				g.Go(func() error {
+					log.Infof("Fetching bootstrap data for serial number %s", serial)
+					bootdata, err := s.cm.GenerateBootstrapData(childCtx, session.chassis, serial)
+					if err != nil {
+						log.Infof("Error occurred while retrieving bootstrap data for serial number %v: %v", serial, err)
+						return err
+					}
+					bootdata.ServerTrustCert = trustAnchor
+					responses[i] = bootdata
+					return nil
+				})
+			}
+
+			if err := g.Wait(); err != nil {
+				return err
 			}
 			serializedSignedData, err := proto.Marshal(&bpb.BootstrapDataSigned{
 				Responses: responses,
@@ -615,21 +636,31 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				}
 			} else {
 				// Otherwise fetch the bootstrap data.
-				var bootstrapData []*bpb.BootstrapDataResponse
 				trustAnchorCert, _ := s.am.BootzServerTrustAnchorKeyPair()
 				if trustAnchorCert == nil {
 					return status.Errorf(codes.Internal, "failed to retrieve server trust cert")
 				}
 				trustAnchor := base64.StdEncoding.EncodeToString(trustAnchorCert.Raw)
-				for _, v := range session.chassis.Serials {
-					log.Infof("Fetching bootstrap data for serial number: %s", v)
-					data, err := s.cm.GenerateBootstrapData(ctx, session.chassis, v)
-					if err != nil {
-						log.Infof("Error occurred while retrieving bootstrap data for serial number %v", v)
-						return err
-					}
-					data.ServerTrustCert = trustAnchor
-					bootstrapData = append(bootstrapData, data)
+
+				bootstrapData := make([]*bpb.BootstrapDataResponse, len(session.chassis.Serials))
+				g, childCtx := errgroup.WithContext(ctx)
+
+				for i, serial := range session.chassis.Serials {
+					g.Go(func() error {
+						log.Infof("Fetching bootstrap data for serial number: %s", serial)
+						data, err := s.cm.GenerateBootstrapData(childCtx, session.chassis, serial)
+						if err != nil {
+							log.Infof("Error occurred while retrieving bootstrap data for serial number %v: %v", serial, err)
+							return err
+						}
+						data.ServerTrustCert = trustAnchor
+						bootstrapData[i] = data
+						return nil
+					})
+				}
+
+				if err := g.Wait(); err != nil {
+					return err
 				}
 				serializedBootstrapData, err := proto.Marshal(&bpb.BootstrapDataSigned{
 					Responses: bootstrapData,
