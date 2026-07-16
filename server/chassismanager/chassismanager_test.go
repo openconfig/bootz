@@ -128,9 +128,29 @@ func TestInMemoryChassisManager(t *testing.T) {
 	})
 
 	// 4. Test GenerateBootstrapData
+
+	serials := []string{serial1, serial2}
+	responses, err := manager.GenerateBootstrapData(ctx, nil, serials)
+	for i, serial := range serials {
+		t.Run(serial, func(t *testing.T) {
+			resp := responses[i]
+			want := &bpb.BootstrapDataResponse{
+				SerialNum:        serial,
+				IntendedImage:    intendedImage,
+				BootPasswordHash: bootPasswordHash,
+				BootConfig:       bootConfig,
+				Pathz:            pathzReq,
+				Authz:            authzReq,
+				CertzProfiles:    certzProfiles,
+				Credentials:      credentials,
+			}
+			if diff := cmp.Diff(want, resp, protocmp.Transform()); diff != "" {
+				t.Errorf("GenerateBootstrapData response mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
 	t.Run("GenerateBootstrapData Success", func(t *testing.T) {
-		serials := []string{serial1, serial2}
-		responses, err := manager.GenerateBootstrapData(ctx, nil, serials)
+
 		if err != nil {
 			t.Fatalf("GenerateBootstrapData failed: %v", err)
 		}
@@ -141,29 +161,18 @@ func TestInMemoryChassisManager(t *testing.T) {
 
 		for i, serial := range serials {
 			resp := responses[i]
-			if resp.SerialNum != serial {
-				t.Errorf("GenerateBootstrapData[%d] got serial %q, want %q", i, resp.SerialNum, serial)
+			want := &bpb.BootstrapDataResponse{
+				SerialNum:        serial,
+				IntendedImage:    intendedImage,
+				BootPasswordHash: bootPasswordHash,
+				BootConfig:       bootConfig,
+				Pathz:            pathzReq,
+				Authz:            authzReq,
+				CertzProfiles:    certzProfiles,
+				Credentials:      credentials,
 			}
-			if diff := cmp.Diff(resp.IntendedImage, intendedImage, protocmp.Transform()); diff != "" {
-				t.Errorf("GenerateBootstrapData[%d] IntendedImage diff (-got +want):\n%s", i, diff)
-			}
-			if resp.BootPasswordHash != bootPasswordHash {
-				t.Errorf("GenerateBootstrapData[%d] got BootPasswordHash %q, want %q", i, resp.BootPasswordHash, bootPasswordHash)
-			}
-			if diff := cmp.Diff(resp.BootConfig, bootConfig, protocmp.Transform()); diff != "" {
-				t.Errorf("GenerateBootstrapData[%d] BootConfig diff (-got +want):\n%s", i, diff)
-			}
-			if diff := cmp.Diff(resp.Credentials, credentials, protocmp.Transform()); diff != "" {
-				t.Errorf("GenerateBootstrapData[%d] Credentials diff (-got +want):\n%s", i, diff)
-			}
-			if diff := cmp.Diff(resp.Pathz, pathzReq, protocmp.Transform()); diff != "" {
-				t.Errorf("GenerateBootstrapData[%d] Pathz diff (-got +want):\n%s", i, diff)
-			}
-			if diff := cmp.Diff(resp.Authz, authzReq, protocmp.Transform()); diff != "" {
-				t.Errorf("GenerateBootstrapData[%d] Authz diff (-got +want):\n%s", i, diff)
-			}
-			if diff := cmp.Diff(resp.CertzProfiles, certzProfiles, protocmp.Transform()); diff != "" {
-				t.Errorf("GenerateBootstrapData[%d] CertzProfiles diff (-got +want):\n%s", i, diff)
+			if diff := cmp.Diff(want, resp, protocmp.Transform()); diff != "" {
+				t.Errorf("GenerateBootstrapData response mismatch (-want +got):\n%s", diff)
 			}
 		}
 	})
