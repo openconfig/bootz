@@ -97,20 +97,16 @@ func TestInMemoryChassisManager(t *testing.T) {
 			t.Fatalf("ResolveChassis failed: %v", err)
 		}
 
-		if ch.Hostname != hostname {
-			t.Errorf("ResolveChassis got hostname %q, want %q", ch.Hostname, hostname)
+		want := &types.Chassis{
+			ActiveSerial:               serial1,
+			Hostname:                   hostname,
+			BootMode:                   bootMode,
+			StreamingSupported:         streamingSupported,
+			Manufacturer:               manufacturer,
+			SkipIDevIDSerialValidation: skipIDevID,
 		}
-		if ch.BootMode != bootMode {
-			t.Errorf("ResolveChassis got BootMode %v, want %v", ch.BootMode, bootMode)
-		}
-		if ch.StreamingSupported != streamingSupported {
-			t.Errorf("ResolveChassis got StreamingSupported %v, want %v", ch.StreamingSupported, streamingSupported)
-		}
-		if ch.Manufacturer != manufacturer {
-			t.Errorf("ResolveChassis got Manufacturer %q, want %q", ch.Manufacturer, manufacturer)
-		}
-		if ch.SkipIDevIDSerialValidation != skipIDevID {
-			t.Errorf("ResolveChassis got SkipIDevIDSerialValidation %v, want %v", ch.SkipIDevIDSerialValidation, skipIDevID)
+		if diff := cmp.Diff(want, ch, protocmp.Transform()); diff != "" {
+			t.Errorf("ResolveChassis() mismatch (-want +got):\n%s", diff)
 		}
 	})
 
