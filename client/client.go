@@ -380,6 +380,10 @@ func main() {
 	if bootzAddress == "" {
 		log.Exit("Bootz server address not found in config file.")
 	}
+	serverPort := config.GetServerPort()
+	if serverPort == "" {
+		log.Exit("Bootz server port not found in config file.")
+	}
 	log.Infof("=============================================================================")
 	log.Infof("=========================== BootZ Client Emulator ===========================")
 	log.Infof("=============================================================================")
@@ -441,8 +445,9 @@ func main() {
 	if !*streaming {
 		tlsConfig.Certificates = []tls.Certificate{*idevid}
 	}
-	log.Infof("Connecting to bootz server at address %q", bootzAddress)
-	conn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+	serverAddress := "[" + bootzAddress + "]:" + serverPort
+	log.Infof("Connecting to bootz server at address %q", serverAddress)
+	conn, err := grpc.NewClient(serverAddress, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	if err != nil {
 		log.Exitf("Client unable to connect to Bootstrap Server: %v", err)
 	}

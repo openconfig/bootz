@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "chassismanager",
@@ -24,5 +24,20 @@ go_library(
         "//proto:bootz",
         "//server/proto:config",
         "@com_github_golang_glog//:glog",
+    ],
+)
+
+go_test(
+    name = "chassismanager_test",
+    srcs = ["chassismanager_test.go"],
+    embed = [":chassismanager"],
+    deps = [
+        "//common/types",
+        "//proto:bootz",
+        "//server/proto:config",
+        "@com_github_google_go_cmp//cmp",
+        "@openconfig_gnsi//authz",
+        "@openconfig_gnsi//pathz",
+        "@org_golang_google_protobuf//testing/protocmp",
     ],
 )

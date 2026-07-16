@@ -162,21 +162,22 @@ func (x *CertKeyPair) GetKey() string {
 }
 
 type Chassis struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	Manufacturer       string                 `protobuf:"bytes,1,opt,name=manufacturer,proto3" json:"manufacturer,omitempty"`
-	ControlCards       []*ControlCard         `protobuf:"bytes,2,rep,name=control_cards,json=controlCards,proto3" json:"control_cards,omitempty"`
-	Hostname           string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	BootMode           bootz.BootMode         `protobuf:"varint,4,opt,name=boot_mode,json=bootMode,proto3,enum=bootz.BootMode" json:"boot_mode,omitempty"`
-	StreamingSupported bool                   `protobuf:"varint,5,opt,name=streaming_supported,json=streamingSupported,proto3" json:"streaming_supported,omitempty"`
-	IntendedImage      *bootz.SoftwareImage   `protobuf:"bytes,6,opt,name=intended_image,json=intendedImage,proto3" json:"intended_image,omitempty"`
-	BootPasswordHash   string                 `protobuf:"bytes,7,opt,name=boot_password_hash,json=bootPasswordHash,proto3" json:"boot_password_hash,omitempty"`
-	BootConfig         *bootz.BootConfig      `protobuf:"bytes,8,opt,name=boot_config,json=bootConfig,proto3" json:"boot_config,omitempty"`
-	Credentials        *bootz.Credentials     `protobuf:"bytes,9,opt,name=credentials,proto3" json:"credentials,omitempty"`
-	Pathz              *pathz.UploadRequest   `protobuf:"bytes,10,opt,name=pathz,proto3" json:"pathz,omitempty"`
-	Authz              *authz.UploadRequest   `protobuf:"bytes,11,opt,name=authz,proto3" json:"authz,omitempty"`
-	CertzProfiles      *bootz.CertzProfiles   `protobuf:"bytes,12,opt,name=certz_profiles,json=certzProfiles,proto3" json:"certz_profiles,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state                      protoimpl.MessageState `protogen:"open.v1"`
+	Manufacturer               string                 `protobuf:"bytes,1,opt,name=manufacturer,proto3" json:"manufacturer,omitempty"`
+	ControlCards               []*ControlCard         `protobuf:"bytes,2,rep,name=control_cards,json=controlCards,proto3" json:"control_cards,omitempty"`
+	Hostname                   string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	BootMode                   bootz.BootMode         `protobuf:"varint,4,opt,name=boot_mode,json=bootMode,proto3,enum=bootz.BootMode" json:"boot_mode,omitempty"`
+	StreamingSupported         bool                   `protobuf:"varint,5,opt,name=streaming_supported,json=streamingSupported,proto3" json:"streaming_supported,omitempty"`
+	IntendedImage              *bootz.SoftwareImage   `protobuf:"bytes,6,opt,name=intended_image,json=intendedImage,proto3" json:"intended_image,omitempty"`
+	BootPasswordHash           string                 `protobuf:"bytes,7,opt,name=boot_password_hash,json=bootPasswordHash,proto3" json:"boot_password_hash,omitempty"`
+	BootConfig                 *bootz.BootConfig      `protobuf:"bytes,8,opt,name=boot_config,json=bootConfig,proto3" json:"boot_config,omitempty"`
+	Credentials                *bootz.Credentials     `protobuf:"bytes,9,opt,name=credentials,proto3" json:"credentials,omitempty"`
+	Pathz                      *pathz.UploadRequest   `protobuf:"bytes,10,opt,name=pathz,proto3" json:"pathz,omitempty"`
+	Authz                      *authz.UploadRequest   `protobuf:"bytes,11,opt,name=authz,proto3" json:"authz,omitempty"`
+	CertzProfiles              *bootz.CertzProfiles   `protobuf:"bytes,12,opt,name=certz_profiles,json=certzProfiles,proto3" json:"certz_profiles,omitempty"`
+	SkipIdevidSerialValidation bool                   `protobuf:"varint,13,opt,name=skip_idevid_serial_validation,json=skipIdevidSerialValidation,proto3" json:"skip_idevid_serial_validation,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *Chassis) Reset() {
@@ -293,6 +294,13 @@ func (x *Chassis) GetCertzProfiles() *bootz.CertzProfiles {
 	return nil
 }
 
+func (x *Chassis) GetSkipIdevidSerialValidation() bool {
+	if x != nil {
+		return x.SkipIdevidSerialValidation
+	}
+	return false
+}
+
 type ControlCard struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	SerialNumber     string                 `protobuf:"bytes,1,opt,name=serial_number,json=serialNumber,proto3" json:"serial_number,omitempty"`
@@ -384,7 +392,7 @@ const file_github_com_openconfig_bootz_server_proto_config_proto_rawDesc = "" +
 	"\achassis\x18\x05 \x03(\v2\x0f.config.ChassisR\achassis\"3\n" +
 	"\vCertKeyPair\x12\x12\n" +
 	"\x04cert\x18\x01 \x01(\tR\x04cert\x12\x10\n" +
-	"\x03key\x18\x02 \x01(\tR\x03key\"\xdc\x04\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\"\x9f\x05\n" +
 	"\aChassis\x12\"\n" +
 	"\fmanufacturer\x18\x01 \x01(\tR\fmanufacturer\x128\n" +
 	"\rcontrol_cards\x18\x02 \x03(\v2\x13.config.ControlCardR\fcontrolCards\x12\x1a\n" +
@@ -399,7 +407,8 @@ const file_github_com_openconfig_bootz_server_proto_config_proto_rawDesc = "" +
 	"\x05pathz\x18\n" +
 	" \x01(\v2\x1c.gnsi.pathz.v1.UploadRequestR\x05pathz\x122\n" +
 	"\x05authz\x18\v \x01(\v2\x1c.gnsi.authz.v1.UploadRequestR\x05authz\x12;\n" +
-	"\x0ecertz_profiles\x18\f \x01(\v2\x14.bootz.CertzProfilesR\rcertzProfiles\"\xec\x01\n" +
+	"\x0ecertz_profiles\x18\f \x01(\v2\x14.bootz.CertzProfilesR\rcertzProfiles\x12A\n" +
+	"\x1dskip_idevid_serial_validation\x18\r \x01(\bR\x1askipIdevidSerialValidation\"\xec\x01\n" +
 	"\vControlCard\x12#\n" +
 	"\rserial_number\x18\x01 \x01(\tR\fserialNumber\x12+\n" +
 	"\x11ownership_voucher\x18\x02 \x01(\tR\x10ownershipVoucher\x12\x1d\n" +
