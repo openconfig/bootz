@@ -23,7 +23,6 @@ import (
 	"crypto/x509/pkix"
 	"fmt"
 	"net"
-	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/openconfig/attestz/service/biz"
@@ -65,13 +64,12 @@ type Opts interface {
 
 // NewServer start a new Bootz gRPC, DHCP, and HTTP image server based on specified flags.
 func NewServer(config *cpb.Config, opts ...Opts) (*Server, error) {
-	addrParts := strings.Split(config.GetServerAddress(), ":")
-	if len(addrParts) != 2 {
-		return nil, fmt.Errorf("bootz server address must be in the format of 'IP:Port', got: %q", config.GetServerAddress())
+	if config.GetServerPort() == "" {
+		return nil, fmt.Errorf("bootz server port must be specified")
 	}
-	ip := net.ParseIP(addrParts[0])
+	ip := net.ParseIP(config.GetServerAddress())
 	if ip == nil {
-		return nil, fmt.Errorf("invalid Bootz server IP address: %q", addrParts[0])
+		return nil, fmt.Errorf("invalid Bootz server IP address: %q", config.GetServerAddress())
 	}
 	am, err := artifactmanager.New(config)
 	if err != nil {
@@ -117,7 +115,7 @@ func NewServer(config *cpb.Config, opts ...Opts) (*Server, error) {
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
 
-	lis, err := net.Listen("tcp", ":"+addrParts[1])
+	lis, err := net.Listen("tcp", ":"+config.GetServerPort())
 	if err != nil {
 		return nil, fmt.Errorf("error listening on port: %v", err)
 	}
