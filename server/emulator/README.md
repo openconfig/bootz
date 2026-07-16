@@ -19,7 +19,7 @@ go build main.go
 ### Containerization
 
 The typical bootz server has also been containerized with a [bazel oci_image rule](https://github.com/bazel-contrib/rules_oci).
-To load the conatainer image:
+To load the container image:
 
 ```bash
 $ bazel run //server/emulator:load_bootz_server_image
