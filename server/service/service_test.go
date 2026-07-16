@@ -111,8 +111,12 @@ func (m *mockChassisManager) ResolveChassis(ctx context.Context, chassis *types.
 	chassis.Identity = chassisCopy.Identity
 	return m.chassisErr
 }
-func (m *mockChassisManager) GenerateBootstrapData(context.Context, *types.Chassis, string) (*bpb.BootstrapDataResponse, error) {
-	return m.bootstrapData, m.bootstrapDataErr
+func (m *mockChassisManager) GenerateBootstrapData(ctx context.Context, chassis *types.Chassis, serials []string) ([]*bpb.BootstrapDataResponse, error) {
+	resp := make([]*bpb.BootstrapDataResponse, len(serials))
+	for i := range resp {
+		resp[i] = proto.Clone(m.bootstrapData).(*bpb.BootstrapDataResponse)
+	}
+	return resp, m.bootstrapDataErr
 }
 func (m *mockChassisManager) UpdateStatus(context.Context, *bpb.ReportStatusRequest) error {
 	return nil
