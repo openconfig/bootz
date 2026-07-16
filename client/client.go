@@ -445,7 +445,7 @@ func main() {
 	if !*streaming {
 		tlsConfig.Certificates = []tls.Certificate{*idevid}
 	}
-	serverAddress := "[" + bootzAddress + "]:" + serverPort
+serverAddress := net.JoinHostPort(bootzAddress, serverPort)
 	log.Infof("Connecting to bootz server at address %q", serverAddress)
 	conn, err := grpc.NewClient(serverAddress, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	if err != nil {
