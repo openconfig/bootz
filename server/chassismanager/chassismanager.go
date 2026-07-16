@@ -49,22 +49,26 @@ func (m *InMemoryChassisManager) ResolveChassis(ctx context.Context, chassis *ty
 	return nil
 }
 
-// GenerateBootstrapData generates the bootstrap data response for the provided serial number.
-func (m *InMemoryChassisManager) GenerateBootstrapData(ctx context.Context, _ *types.Chassis, serial string) (*bpb.BootstrapDataResponse, error) {
-	found, ok := m.chassis[serial]
-	if !ok {
-		return nil, fmt.Errorf("chassis with serial number %v not found", serial)
+// GenerateBootstrapData generates the bootstrap data responses for the provided serial numbers.
+func (m *InMemoryChassisManager) GenerateBootstrapData(ctx context.Context, _ *types.Chassis, serials []string) ([]*bpb.BootstrapDataResponse, error) {
+	responses := make([]*bpb.BootstrapDataResponse, len(serials))
+	for i, serial := range serials {
+		found, ok := m.chassis[serial]
+		if !ok {
+			return nil, fmt.Errorf("chassis with serial number %v not found", serial)
+		}
+		responses[i] = &bpb.BootstrapDataResponse{
+			SerialNum:        serial,
+			IntendedImage:    found.GetIntendedImage(),
+			BootPasswordHash: found.GetBootPasswordHash(),
+			BootConfig:       found.GetBootConfig(),
+			Credentials:      found.GetCredentials(),
+			Pathz:            found.GetPathz(),
+			Authz:            found.GetAuthz(),
+			CertzProfiles:    found.GetCertzProfiles(),
+		}
 	}
-	return &bpb.BootstrapDataResponse{
-		SerialNum:        serial,
-		IntendedImage:    found.GetIntendedImage(),
-		BootPasswordHash: found.GetBootPasswordHash(),
-		BootConfig:       found.GetBootConfig(),
-		Credentials:      found.GetCredentials(),
-		Pathz:            found.GetPathz(),
-		Authz:            found.GetAuthz(),
-		CertzProfiles:    found.GetCertzProfiles(),
-	}, nil
+	return responses, nil
 }
 
 // UpdateStatus updates the status for each control card on the chassis.
