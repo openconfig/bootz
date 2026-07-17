@@ -15,3 +15,23 @@ go build main.go
 ### Flags
 
 - `--config_file`: The config file to read from. Defaults to "../../testdata/bootz_config.textproto".
+
+### Containerization
+
+The typical bootz server has also been containerized with a [bazel oci_image rule](https://github.com/bazel-contrib/rules_oci).
+To load the container image into Docker:
+
+```bash
+bazel run //server/emulator:load_bootz_server_image
+```
+
+And run:
+
+```bash
+docker run --rm --user $(id -u):$(id -g) \
+  -p 15006:15006 \
+  -v ./testdata:/config \
+  open-config-bootz-server:latest \
+  --config_file=/config/bootz_config.textproto \
+  --alsologtostderr
+```

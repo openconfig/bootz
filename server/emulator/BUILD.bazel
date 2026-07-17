@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@bazel_lib//lib:testing.bzl", "assert_archive_contains")
 load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push")
+load("@tar.bzl", "mutate", "tar")
 
 go_library(
     name = "emulator_lib",
@@ -34,4 +37,30 @@ go_binary(
     name = "emulator",
     embed = [":emulator_lib"],
     visibility = ["//visibility:public"],
+)
+
+tar(
+    name = "emulator_layer",
+    srcs = [":emulator"],
+    out = "emulator_layer.tar",
+    mutate = mutate(strip_prefix = package_name() + "/emulator_"),
+)
+
+assert_archive_contains(
+    name = "test_emulator_layer",
+    archive = "emulator_layer.tar",
+    expected = ["emulator"],
+)
+
+oci_image(
+    name = "bootz_server_image",
+    base = "@distroless_base",
+    entrypoint = ["/emulator"],
+    tars = [":emulator_layer"],
+)
+
+oci_load(
+    name = "load_bootz_server_image",
+    image = ":bootz_server_image",
+    repo_tags = ["open-config-bootz-server:latest"],
 )
