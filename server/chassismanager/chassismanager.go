@@ -46,6 +46,7 @@ func (m *InMemoryChassisManager) ResolveChassis(ctx context.Context, chassis *ty
 	chassis.BootMode = found.GetBootMode()
 	chassis.StreamingSupported = found.GetStreamingSupported()
 	chassis.Manufacturer = found.GetManufacturer()
+	chassis.SkipIDevIDSerialValidation = found.GetSkipIdevidSerialValidation()
 	return nil
 }
 

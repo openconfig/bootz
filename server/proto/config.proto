@@ -73,6 +73,8 @@ message Chassis {
   gnsi.authz.v1.UploadRequest authz = 11;
   // Certz profiles.
   bootz.CertzProfiles certz_profiles = 12;
+  // Skip IDevID serial validation (default is false).
+  bool skip_idevid_serial_validation = 13;
 }
 
 message ControlCard {
