@@ -83,8 +83,8 @@ type ArtifactManager interface {
 type ChassisManager interface {
 	// ResolveChassis fetches details about a chassis.
 	ResolveChassis(ctx context.Context, chassis *types.Chassis) error
-	// GenerateBootstrapData generates the bootstrap data (Boot Config, Credz, Certz, Authz, Pathz policies) for the given serial number.
-	GenerateBootstrapData(ctx context.Context, chassis *types.Chassis, serial string) (*bpb.BootstrapDataResponse, error)
+	// GenerateBootstrapData generates the bootstrap data (Boot Config, Credz, Certz, Authz, Pathz policies) for the given serial numbers.
+	GenerateBootstrapData(ctx context.Context, chassis *types.Chassis, serials []string) ([]*bpb.BootstrapDataResponse, error)
 	// UpdateStatus updates the status of a chassis in its bootstrapping lifecycle based on the provided status report.
 	UpdateStatus(ctx context.Context, req *bpb.ReportStatusRequest) error
 }
@@ -174,21 +174,20 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	log.Infof("=============================================================================")
 	log.Infof("==================== Fetching data for each control card ====================")
 	log.Infof("=============================================================================")
-	var responses []*bpb.BootstrapDataResponse
 	trustAnchorCert, _ := s.am.BootzServerTrustAnchorKeyPair()
 	if trustAnchorCert == nil {
 		return nil, status.Errorf(codes.Internal, "failed to retrieve server trust cert")
 	}
 	trustAnchor := base64.StdEncoding.EncodeToString(trustAnchorCert.Raw)
-	// Iterate over the control cards and fetch data for each card.
-	for _, v := range serials {
-		bootdata, err := s.cm.GenerateBootstrapData(ctx, chassis, v)
-		if err != nil {
-			log.Infof("Error occurred while retrieving bootstrap data for serial number %v", v)
-			return nil, err
-		}
-		bootdata.ServerTrustCert = trustAnchor
-		responses = append(responses, bootdata)
+
+	log.Infof("Fetching bootstrap data for serial numbers: %s", serials)
+	responses, err := s.cm.GenerateBootstrapData(ctx, chassis, serials)
+	if err != nil {
+		log.Errorf("Error occurred while retrieving bootstrap data for serial numbers %v: %v", serials, err)
+		return nil, err
+	}
+	for _, resp := range responses {
+		resp.ServerTrustCert = trustAnchor
 	}
 
 	log.Infof("Successfully fetched data for each control card")
@@ -310,6 +309,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				session.currentState = stateChallengeSent
 
 			default:
+				log.Errorf("Unsupported identity type: %T", idType)
 				return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
 			}
 
@@ -370,6 +370,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				log.Infof("HMAC challenge verified successfully for device %s", session.chassis.ActiveSerial)
 
 			default:
+				log.Errorf("Unsupported challenge response type: %T", challengeType)
 				return status.Errorf(codes.InvalidArgument, "unsupported challenge response type: %T", challengeType)
 			}
 
@@ -384,22 +385,22 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 
 			// If verification is successful, fetch and send the bootstrap data.
-			var responses []*bpb.BootstrapDataResponse
 			trustAnchorCert, _ := s.am.BootzServerTrustAnchorKeyPair()
 			if trustAnchorCert == nil {
 				return status.Errorf(codes.Internal, "failed to retrieve server trust cert")
 			}
 			trustAnchor := base64.StdEncoding.EncodeToString(trustAnchorCert.Raw)
-			for _, v := range session.chassis.Serials {
-				log.Infof("Fetching bootstrap data for serial number %s", v)
-				bootdata, err := s.cm.GenerateBootstrapData(ctx, session.chassis, v)
-				if err != nil {
-					log.Infof("Error occurred while retrieving bootstrap data for serial number %v", v)
-					return err
-				}
-				bootdata.ServerTrustCert = trustAnchor
-				responses = append(responses, bootdata)
+
+			log.Infof("Fetching bootstrap data for serial numbers: %s", session.chassis.Serials)
+			responses, err := s.cm.GenerateBootstrapData(ctx, session.chassis, session.chassis.Serials)
+			if err != nil {
+				log.Errorf("Error occurred while retrieving bootstrap data for serial numbers %v: %v", session.chassis.Serials, err)
+				return err
 			}
+			for _, resp := range responses {
+				resp.ServerTrustCert = trustAnchor
+			}
+
 			serializedSignedData, err := proto.Marshal(&bpb.BootstrapDataSigned{
 				Responses: responses,
 				Nonce:     session.clientNonce,
@@ -461,6 +462,7 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 			}
 
 		default:
+			log.Errorf("Unexpected message type: %T", req)
 			return status.Errorf(codes.InvalidArgument, "unexpected message type: %T", req)
 		}
 	}
@@ -591,6 +593,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				log.Infof("Tpm12Ek challenge verification succeeded for device %s", session.chassis.ActiveSerial)
 
 			default:
+				log.Errorf("Unsupported challenge response type: %T", challengeType)
 				return status.Errorf(codes.InvalidArgument, "unsupported challenge response type: %T", challengeType)
 			}
 
@@ -611,24 +614,24 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				}
 			} else {
 				// Otherwise fetch the bootstrap data.
-				var bootstrapData []*bpb.BootstrapDataResponse
 				trustAnchorCert, _ := s.am.BootzServerTrustAnchorKeyPair()
 				if trustAnchorCert == nil {
 					return status.Errorf(codes.Internal, "failed to retrieve server trust cert")
 				}
 				trustAnchor := base64.StdEncoding.EncodeToString(trustAnchorCert.Raw)
-				for _, v := range session.chassis.Serials {
-					log.Infof("Fetching bootstrap data for serial number: %s", v)
-					data, err := s.cm.GenerateBootstrapData(ctx, session.chassis, v)
-					if err != nil {
-						log.Infof("Error occurred while retrieving bootstrap data for serial number %v", v)
-						return err
-					}
-					data.ServerTrustCert = trustAnchor
-					bootstrapData = append(bootstrapData, data)
+
+				log.Infof("Fetching bootstrap data for serial numbers: %s", session.chassis.Serials)
+				responses, err := s.cm.GenerateBootstrapData(ctx, session.chassis, session.chassis.Serials)
+				if err != nil {
+					log.Errorf("Error occurred while retrieving bootstrap data for serial numbers %v: %v", session.chassis.Serials, err)
+					return err
 				}
+				for _, resp := range responses {
+					resp.ServerTrustCert = trustAnchor
+				}
+
 				serializedBootstrapData, err := proto.Marshal(&bpb.BootstrapDataSigned{
-					Responses: bootstrapData,
+					Responses: responses,
 					Nonce:     session.clientNonce,
 				})
 				if err != nil {
@@ -659,8 +662,10 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 						},
 					}
 				case bpb.HPKECipherSuite_HPKE_CIPHER_SUITE_NONE:
+					log.Errorf("HPKE cipher suite can not be none")
 					return status.Errorf(codes.InvalidArgument, "HPKE cipher suite can not be none")
 				default:
+					log.Errorf("Unsupported HPKE cipher suite enum: %v", transportKey.GetCipherSuite())
 					return status.Errorf(codes.InvalidArgument, "unsupported HPKE cipher suite enum: %v", transportKey.GetCipherSuite())
 				}
 				// Sign the bootstrap data.
@@ -697,6 +702,7 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			}
 
 		default:
+			log.Errorf("Unsupported message type: %T", req)
 			return status.Errorf(codes.InvalidArgument, "unsupported message type: %T", req)
 		}
 
@@ -843,6 +849,7 @@ func (s *Service) createChallengeRequest(session *streamSessionV1, message proto
 		}
 
 	default:
+		log.Errorf("Unsupported device identity type: %T", idType)
 		return nil, status.Errorf(codes.InvalidArgument, "unsupported device identity type: %T", idType)
 	}
 
@@ -1035,6 +1042,7 @@ func (s *Service) establishSessionAndSendChallenge(session *streamSession) error
 			},
 		}
 	default:
+		log.Errorf("Unsupported device identity type: %T", idType)
 		return status.Errorf(codes.InvalidArgument, "unsupported identity type: %T", idType)
 	}
 
@@ -1108,13 +1116,16 @@ func initializeChassis(ctx context.Context, msg proto.Message) (*types.Chassis, 
 		}
 		id = m.GetIdentity()
 	default:
+		log.Errorf("Unexpected message type: %T", m)
 		return nil, status.Errorf(codes.InvalidArgument, "unexpected message type: %T", m)
 	}
 	activeSerial := cc.GetSerialNumber()
 	if activeSerial == "" {
+		log.Errorf("No active control card serial number provided in the request")
 		return nil, status.Errorf(codes.InvalidArgument, "no active control card serial number provided in the request")
 	}
 	if id == nil {
+		log.Errorf("No identity provided in the request")
 		return nil, status.Errorf(codes.InvalidArgument, "no identity provided in the request")
 	}
 

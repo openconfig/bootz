@@ -36,7 +36,8 @@ func TestStartup(t *testing.T) {
 	certStr := base64.StdEncoding.EncodeToString(cert.Raw)
 	keyStr := base64.StdEncoding.EncodeToString(keyRaw)
 	config := &cpb.Config{
-		ServerAddress: "127.0.0.1:15006",
+		ServerAddress: "127.0.0.1",
+		ServerPort:    "15006",
 		TrustAnchor: &cpb.CertKeyPair{
 			Cert: certStr,
 			Key:  keyStr,

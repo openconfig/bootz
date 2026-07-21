@@ -25,8 +25,10 @@ option go_package = "github.com/openconfig/bootz/server/proto/config";
 
 // A binding configuration for Bootz server.
 message Config {
-  // Bootz server address (IP:port).
+  // Bootz server IP address.
   string server_address = 1;
+  // Bootz server port to listen on.
+  string server_port = 6;
   // Bootz server trust anchor cert key pair.
   CertKeyPair trust_anchor = 2;
   // Owner certificate key pair.
@@ -73,6 +75,8 @@ message Chassis {
   gnsi.authz.v1.UploadRequest authz = 11;
   // Certz profiles.
   bootz.CertzProfiles certz_profiles = 12;
+  // Skip IDevID serial validation (default is false).
+  bool skip_idevid_serial_validation = 13;
 }
 
 message ControlCard {
