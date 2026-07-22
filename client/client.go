@@ -297,7 +297,7 @@ func handleStream(ctx context.Context, c bpb.BootstrapClient, msg proto.Message)
 }
 
 // reconnectWithTrustCert re-establishes the gRPC connection with the server using the provided trust certificate.
-func reconnectWithTrustCert(bootzAddress string, signedResp *bpb.BootstrapDataSigned) (*grpc.ClientConn, bpb.BootstrapClient, error) {
+func reconnectWithTrustCert(target string, signedResp *bpb.BootstrapDataSigned) (*grpc.ClientConn, bpb.BootstrapClient, error) {
 	log.Infof("Re-establishing TLS connection with server using provided trust cert")
 	if len(signedResp.GetResponses()) == 0 {
 		return nil, nil, fmt.Errorf("response contained no bootstrap responses")
@@ -328,7 +328,7 @@ func reconnectWithTrustCert(bootzAddress string, signedResp *bpb.BootstrapDataSi
 	if !*streaming {
 		tlsConfig.Certificates = []tls.Certificate{*idevid}
 	}
-	newConn, err := grpc.Dial(bootzAddress, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+	newConn, err := grpc.NewClient(target, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	if err != nil {
 		return nil, nil, fmt.Errorf("client unable to re-connect to Bootstrap Server: %v", err)
 	}
@@ -377,8 +377,8 @@ func main() {
 	if err := prototext.Unmarshal(configBytes, config); err != nil {
 		log.Exitf("Failed to unmarshal config file: %v", err)
 	}
-	bootzAddress := config.GetServerAddress()
-	if bootzAddress == "" {
+	serverAddress := config.GetServerAddress()
+	if serverAddress == "" {
 		log.Exit("Bootz server address not found in config file.")
 	}
 	serverPort := config.GetServerPort()
@@ -446,9 +446,9 @@ func main() {
 	if !*streaming {
 		tlsConfig.Certificates = []tls.Certificate{*idevid}
 	}
-	serverAddress := net.JoinHostPort(bootzAddress, serverPort)
-	log.Infof("Connecting to bootz server at address %q", serverAddress)
-	conn, err := grpc.NewClient(serverAddress, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+	target := net.JoinHostPort(serverAddress, serverPort)
+	log.Infof("Connecting to bootz server at address %q", target)
+	conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	if err != nil {
 		log.Exitf("Client unable to connect to Bootstrap Server: %v", err)
 	}
@@ -535,7 +535,7 @@ func main() {
 	processControlCardConfigs(&signedResp)
 
 	// Reconnect to the server with the provided server_trust_cert.
-	conn, c, err = reconnectWithTrustCert(bootzAddress, &signedResp)
+	conn, c, err = reconnectWithTrustCert(target, &signedResp)
 	if err != nil {
 		log.Exitf("Error reconnecting to server: %v", err)
 	}
