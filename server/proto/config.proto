@@ -37,6 +37,8 @@ message Config {
   repeated string vendor_ca_certs = 4;
   // Chassis owned by the organization.
   repeated Chassis chassis = 5;
+  // Whether to run the server in test mode or not.
+  bool test_mode = 100;
 }
 
 message CertKeyPair {

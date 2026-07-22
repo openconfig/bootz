@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	bpb "github.com/openconfig/bootz/proto/bootz"
+	tpb "github.com/openconfig/bootz/proto/test"
 	cpb "github.com/openconfig/bootz/server/proto/config"
 )
 
@@ -112,6 +113,10 @@ func NewServer(config *cpb.Config, opts ...Opts) (*Server, error) {
 	}
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(conf)))
 	bpb.RegisterBootstrapServer(s, c)
+	// Register the test service only if we are in test mode.
+	if config.GetTestMode() {
+		tpb.RegisterTestServer(s, cm)
+	}
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
 

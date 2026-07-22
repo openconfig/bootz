@@ -26,6 +26,7 @@ go_library(
         "//dhcp/proto:dhcpconfig",
         "//http",
         "//proto:bootz",
+        "//proto:test",
         "//server/artifactmanager",
         "//server/chassismanager",
         "//server/proto:config",
