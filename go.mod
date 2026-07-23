@@ -7,13 +7,12 @@ require (
 	github.com/golang/glog v1.2.5
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-tpm v0.9.8
-	github.com/insomniacslk/dhcp v0.0.0-20260603135910-a415979eb11e
-	github.com/openconfig/attestz v0.6.14
+	github.com/insomniacslk/dhcp v0.0.0-20260719225207-c76316d4aa82
+	github.com/openconfig/attestz v0.6.15
 	github.com/openconfig/gnsi v1.9.1
-	github.com/openconfig/monax v0.0.0-20260626002019-e784596c3dca
-	go.mozilla.org/pkcs7 v0.9.0
-	golang.org/x/sync v0.21.0
-	google.golang.org/grpc v1.81.1
+	github.com/openconfig/monax v0.0.0-20260720151517-883500dc841b
+	go.mozilla.org/pkcs7 v0.10.0
+	google.golang.org/grpc v1.82.1
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.2
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 )
@@ -99,6 +98,7 @@ require (
 	golang.org/x/exp v0.0.0-20260603202125-055de637280b // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
