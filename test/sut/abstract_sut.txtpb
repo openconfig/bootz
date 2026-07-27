@@ -1,6 +1,6 @@
 required_interfaces: {
   grpc: {
-    service_name: "Bootz"
+    service_name: "bootz.Test"
   }
 }
 required_interfaces: {

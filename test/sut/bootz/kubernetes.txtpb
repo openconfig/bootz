@@ -3,7 +3,7 @@ components: {
   kind: "kubernetes"
   provided_interfaces: {
     grpc: {
-      service_name: "Bootz"
+      service_name: "bootz.Test"
     }
   }
   parameters: {

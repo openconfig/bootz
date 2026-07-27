@@ -111,7 +111,7 @@ You can choose to test the DHCP Bootz flow or the DHCP-less Bootz flow.
    implementation private for your own tests only. You don't need to submit
    or publish your implementation on GitHub.
 
-### Monax Prepare
+### Monax Preparation
 
 1. Delete all existing KIND virtual clusters from the PC, if any.
 
@@ -138,11 +138,14 @@ You can choose to test the DHCP Bootz flow or the DHCP-less Bootz flow.
 
    NOTE: DHCP service needs root privilege to bind to the Ethernet interface.
 
-3. Run the command below in another terminal to build the Monax SUTs
-   (Bootz, HTTP), then `dut.StartBootz()` function will be called to start the
-   testing automatically.
+3. Run the command below in another terminal to start the testing. The test
+   first builds the Monax SUTs (Bootz, HTTP), then calls `dut.StartBootz()`
+   function to start the Bootz process on the DUT automatically.
 
-   `go run monax_bootz.go --alsologtostderr --dhcp`
+   `go test -timeout 120m --alsologtostderr --dhcp`
+
+   NOTE: Make sure you specify a timeout value large enough to cover an entire
+   bootstrap process.
 
 #### Monax DHCP-less Bootz Flow
 
@@ -152,16 +155,19 @@ You can choose to test the DHCP Bootz flow or the DHCP-less Bootz flow.
 2. Connect the management port of your switch chassis to the Ethernet port of
    the PC.
 
-3. Run the command below in a terminal to build the Monax SUTs (Bootz, HTTP),
-   then `dut.StartBootz()` function will be called to start the testing
-   automatically.
+3. Run the command below in a terminal to start the testing. The test
+   first builds the Monax SUTs (Bootz, HTTP), then calls `dut.StartBootz()`
+   function to start the Bootz process on the DUT automatically.
 
-   `go run monax_bootz.go --alsologtostderr`
+   `go test -timeout 120m --alsologtostderr`
+
+   NOTE: Make sure you specify a timeout value large enough to cover an entire
+   bootstrap process.
 
 ### Monax Cleanup
 
-1. After you finish the testing, press `Ctrl+C` on the PC to stop the Monax
-   SUTs.
+1. The test will automatically finish and exit with PASS, FAIL or TIMEOUT.
+   If you need to interrupt the test prematurely, press `Ctrl+C` instead.
 
 2. In the other terminal where you ran the DHCP Bash script, press `Ctrl+C` to
    stop the DHCP service.
