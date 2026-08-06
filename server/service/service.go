@@ -34,9 +34,11 @@ import (
 	"net"
 	"slices"
 	"strings"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/google/go-tpm/tpm2"
+	"github.com/jonboulle/clockwork"
 	"github.com/openconfig/attestz/service/biz"
 	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	"github.com/openconfig/bootz/common/signature"
@@ -60,6 +62,10 @@ const (
 	stateReauthChallengeSent
 	// Attested state.
 	stateAttested
+)
+
+const (
+	hmacChallengeTimeout = 10 * time.Second
 )
 
 // ArtifactManager is an interface for providing security artifacts to the Bootz service. These artifacts are
@@ -95,27 +101,30 @@ type Service struct {
 	am    ArtifactManager
 	cm    ChassisManager
 	tpm20 biz.TPM20Utils
+	clock clockwork.Clock
 }
 
 type streamSession struct {
-	stream        bpb.Bootstrap_BootstrapStreamServer
-	currentState  int
-	chassis       *types.Chassis           // Store chassis info for later stages
-	status        *bpb.ReportStatusRequest // Store status for later stages
-	clientNonce   string                   // client nonce from bootstrap request
-	serverNonce   string                   // For TPM 2.0 with IDevID nonce challenge
-	hmacSensitive *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
+	stream            bpb.Bootstrap_BootstrapStreamServer
+	currentState      int
+	chassis           *types.Chassis           // Store chassis info for later stages
+	status            *bpb.ReportStatusRequest // Store status for later stages
+	clientNonce       string                   // client nonce from bootstrap request
+	serverNonce       string                   // For TPM 2.0 with IDevID nonce challenge
+	hmacSensitive     *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
+	challengeSentTime time.Time
 }
 
 type streamSessionV1 struct {
-	stream        bpb.Bootstrap_BootstrapStreamV1Server
-	currentState  int
-	chassis       *types.Chassis           // Store chassis info for later stages
-	status        *bpb.ReportStatusRequest // Store status for later stages
-	clientNonce   string                   // client nonce from bootstrap request
-	serverNonce   []byte                   // For TPM 2.0 with IDevID nonce challenge
-	hmacSensitive *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
-	hmacKey       []byte                   // For TPM 1.2 EK challenge
+	stream            bpb.Bootstrap_BootstrapStreamV1Server
+	currentState      int
+	chassis           *types.Chassis           // Store chassis info for later stages
+	status            *bpb.ReportStatusRequest // Store status for later stages
+	clientNonce       string                   // client nonce from bootstrap request
+	serverNonce       []byte                   // For TPM 2.0 with IDevID nonce challenge
+	hmacSensitive     *tpm2.TPMTSensitive      // For TPM 2.0 without IDevID HMAC challenge
+	hmacKey           []byte                   // For TPM 1.2 EK challenge
+	challengeSentTime time.Time
 }
 
 // TPMAsymCAContents is the TPM_ASYM_CA_CONTENTS structure defined in the TPM 1.2 specification.
@@ -344,6 +353,10 @@ func (s *Service) BootstrapStream(stream bpb.Bootstrap_BootstrapStreamServer) er
 				if session.hmacSensitive == nil {
 					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM 2.0 HMAC challenge response")
 				}
+				if elapsed := s.clock.Since(session.challengeSentTime); elapsed > hmacChallengeTimeout {
+					log.Errorf("HMAC challenge timeout exceeded for device %s: took %v, limit %v", session.chassis.ActiveSerial, elapsed, hmacChallengeTimeout)
+					return status.Errorf(codes.DeadlineExceeded, "HMAC challenge timeout exceeded")
+				}
 				hmacResponse := challengeResponse.GetHmacChallengeResponse()
 
 				tpm2BAttest, err := tpm2.Unmarshal[tpm2.TPM2BAttest](hmacResponse.GetIakCertifyInfo())
@@ -537,6 +550,10 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 				if session.hmacSensitive == nil {
 					return status.Errorf(codes.FailedPrecondition, "received unexpected TPM20HMAC challenge response")
 				}
+				if elapsed := s.clock.Since(session.challengeSentTime); elapsed > hmacChallengeTimeout {
+					log.Errorf("HMAC challenge timeout exceeded for device %s: took %v, limit %v", session.chassis.ActiveSerial, elapsed, hmacChallengeTimeout)
+					return status.Errorf(codes.DeadlineExceeded, "HMAC challenge timeout exceeded")
+				}
 				// Verify HMAC challenge response.
 				mac := challengeResponse.GetTpm20Hmac().GetHmac()
 				tpm2BAttest, err := tpm2.Unmarshal[tpm2.TPM2BAttest](mac.GetIakCertifyInfo())
@@ -710,6 +727,9 @@ func (s *Service) BootstrapStreamV1(stream bpb.Bootstrap_BootstrapStreamV1Server
 			return status.Errorf(codes.Internal, "failed to send BootstrapStreamResponseV1 message: %v", err)
 		}
 		log.Infof("Sent BootstrapStreamResponseV1 message to device %s", session.chassis.ActiveSerial)
+		if (session.currentState == stateChallengeSent || session.currentState == stateReauthChallengeSent) && session.hmacSensitive != nil {
+			session.challengeSentTime = s.clock.Now()
+		}
 	}
 }
 
@@ -1050,6 +1070,9 @@ func (s *Service) establishSessionAndSendChallenge(session *streamSession) error
 		return err
 	}
 	log.Infof("Sent challenge to device %s", session.chassis.ActiveSerial)
+	if session.hmacSensitive != nil {
+		session.challengeSentTime = s.clock.Now()
+	}
 	return nil
 }
 
@@ -1150,5 +1173,6 @@ func New(am ArtifactManager, cm ChassisManager, tpm20 biz.TPM20Utils) (*Service,
 		am:    am,
 		cm:    cm,
 		tpm20: tpm20,
+		clock: clockwork.NewRealClock(),
 	}, nil
 }
