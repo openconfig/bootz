@@ -31,9 +31,11 @@ import (
 	"math/big"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-tpm/tpm2"
+	"github.com/jonboulle/clockwork"
 	"github.com/openconfig/attestz/service/biz"
 	ownercertificate "github.com/openconfig/bootz/common/owner_certificate"
 	ownershipvoucher "github.com/openconfig/bootz/common/ownership_voucher"
@@ -239,12 +241,13 @@ func TestBootstrapStream(t *testing.T) {
 	idNoIdevid := &bpb.Identity{Type: &bpb.Identity_EkPpkPub{EkPpkPub: true}}
 
 	tests := []struct {
-		name         string
-		req          *bpb.BootstrapStreamRequest
-		id           *bpb.Identity
-		wantErrCode  codes.Code
-		signedNonce  []byte
-		reportStatus bool
+		name                  string
+		req                   *bpb.BootstrapStreamRequest
+		id                    *bpb.Identity
+		wantErrCode           codes.Code
+		wantSecondRecvErrCode codes.Code
+		signedNonce           []byte
+		reportStatus          bool
 	}{
 		{
 			name:        "Missing Identity - Invalid Argument",
@@ -271,6 +274,12 @@ func TestBootstrapStream(t *testing.T) {
 			req:  statusReq,
 			id:   idNoIdevid,
 		},
+		{
+			name:                  "TPM 2.0 no-IDevID Flow Timeout - Failure",
+			req:                   initialReq,
+			id:                    idNoIdevid,
+			wantSecondRecvErrCode: codes.DeadlineExceeded,
+		},
 	}
 
 	for _, test := range tests {
@@ -278,6 +287,11 @@ func TestBootstrapStream(t *testing.T) {
 			s, err := New(am, cm, &mockTPM20Utils{})
 			if err != nil {
 				t.Fatalf("New() failed: %v", err)
+			}
+			var fakeClock *clockwork.FakeClock
+			if test.name == "TPM 2.0 no-IDevID Flow Timeout - Failure" {
+				fakeClock = clockwork.NewFakeClock()
+				s.clock = fakeClock
 			}
 			srv := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 			bpb.RegisterBootstrapServer(srv, s)
@@ -371,12 +385,23 @@ func TestBootstrapStream(t *testing.T) {
 			default:
 				t.Fatalf("Unexpected challenge type %T", challengeType)
 			}
+			if fakeClock != nil {
+				fakeClock.Advance(11 * time.Second)
+			}
 			if err := stream.Send(responseReq); err != nil {
 				t.Fatalf("stream.Send(responseReq) failed: %v", err)
 			}
 
 			// === Second Recv: Expect Bootstrap Data or Error ===
 			finalResp, err := stream.Recv()
+			if test.wantSecondRecvErrCode != codes.OK {
+				if err == nil {
+					t.Errorf("stream.Recv() got response %v, want error code %v", finalResp, test.wantSecondRecvErrCode)
+				} else if stat, ok := status.FromError(err); ok && stat.Code() != test.wantSecondRecvErrCode {
+					t.Errorf("stream.Recv() got error code %v, want %v: %v", stat.Code(), test.wantSecondRecvErrCode, err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("stream.Recv() for final response got unexpected error: %v", err)
 			}
@@ -530,6 +555,12 @@ func TestBootstrapStreamV1(t *testing.T) {
 			id:        idIdevid,
 			wantCodes: []codes.Code{codes.OK, codes.OK},
 		},
+		{
+			name:      "TPM 2.0 EK Flow Timeout - Failure",
+			req:       initialReq,
+			id:        idTPM20EK,
+			wantCodes: []codes.Code{codes.OK, codes.DeadlineExceeded},
+		},
 	}
 
 	for _, test := range tests {
@@ -537,6 +568,11 @@ func TestBootstrapStreamV1(t *testing.T) {
 			s, err := New(am, cm, &mockTPM20Utils{})
 			if err != nil {
 				t.Fatalf("New() failed: %v", err)
+			}
+			var fakeClock *clockwork.FakeClock
+			if test.name == "TPM 2.0 EK Flow Timeout - Failure" {
+				fakeClock = clockwork.NewFakeClock()
+				s.clock = fakeClock
 			}
 			srv := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 			bpb.RegisterBootstrapServer(srv, s)
@@ -642,6 +678,9 @@ func TestBootstrapStreamV1(t *testing.T) {
 								},
 							},
 						}
+					}
+					if fakeClock != nil {
+						fakeClock.Advance(11 * time.Second)
 					}
 				case 2: // Send Report Status Request.
 					request = proto.Clone(statusReq).(*bpb.BootstrapStreamRequestV1)
