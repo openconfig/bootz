@@ -7,15 +7,15 @@ require (
 	github.com/golang/glog v1.2.5
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-tpm v0.9.8
-	github.com/insomniacslk/dhcp v0.0.0-20260603135910-a415979eb11e
+	github.com/insomniacslk/dhcp v0.0.0-20260728151720-c308df0fdcef
 	github.com/jonboulle/clockwork v0.5.0
 	github.com/openconfig/attestz v0.6.15
 	github.com/openconfig/gnsi v1.9.1
-	github.com/openconfig/monax v0.0.0-20260720151517-883500dc841b
-	go.mozilla.org/pkcs7 v0.9.0
-	google.golang.org/grpc v1.82.1
+	github.com/openconfig/monax v0.1.0
+	go.mozilla.org/pkcs7 v0.10.0
+	google.golang.org/grpc v1.83.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.2
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
+	google.golang.org/protobuf v1.36.12-0.20260806062936-644d0267c26e
 )
 
 require (
