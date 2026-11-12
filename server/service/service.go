@@ -156,10 +156,17 @@ func (s *Service) GetBootstrapData(ctx context.Context, req *bpb.GetBootstrapDat
 	} else { // Fixed form factor chassis.
 		serials = append(serials, chassisDesc.GetSerialNumber())
 	}
+	activeSerial := req.GetControlCardState().GetSerialNumber()
+	if activeSerial == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "no active control card serial number provided in the request")
+	}
+	if !slices.Contains(serials, activeSerial) {
+		return nil, status.Errorf(codes.InvalidArgument, "active control card %v not found in chassis descriptor", activeSerial)
+	}
 	log.Infof("Requesting for %v chassis %v", chassisDesc.GetManufacturer(), chassisDesc.GetSerialNumber())
 	chassis := &types.Chassis{
 		Serials:      serials,
-		ActiveSerial: req.GetControlCardState().GetSerialNumber(),
+		ActiveSerial: activeSerial,
 		IPAddress:    peerAddr,
 	}
 	// Validate the chassis can be serviced.
@@ -1176,6 +1183,9 @@ func initializeChassis(ctx context.Context, msg proto.Message) (*types.Chassis, 
 	if activeSerial == "" {
 		log.Errorf("No active control card serial number provided in the request")
 		return nil, status.Errorf(codes.InvalidArgument, "no active control card serial number provided in the request")
+	}
+	if !slices.Contains(serials, activeSerial) {
+		return nil, status.Errorf(codes.InvalidArgument, "active control card %v not found in chassis descriptor", activeSerial)
 	}
 	if id == nil {
 		log.Errorf("No identity provided in the request")

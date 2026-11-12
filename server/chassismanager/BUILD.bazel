@@ -24,9 +24,9 @@ go_library(
         "//proto:bootz",
         "//proto:test",
         "//server/proto:config",
+        "@com_github_golang_glog//:glog",
         "@org_golang_google_grpc//codes",
         "@org_golang_google_grpc//status",
-        "@com_github_golang_glog//:glog",
     ],
 )
 

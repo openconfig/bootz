@@ -91,6 +91,7 @@ func TestInMemoryChassisManager(t *testing.T) {
 	t.Run("ResolveChassis Success", func(t *testing.T) {
 		ch := &types.Chassis{
 			ActiveSerial: serial1,
+			Serials:      []string{serial1, serial2},
 		}
 		err := manager.ResolveChassis(ctx, ch)
 		if err != nil {
@@ -99,6 +100,7 @@ func TestInMemoryChassisManager(t *testing.T) {
 
 		want := &types.Chassis{
 			ActiveSerial:               serial1,
+			Serials:                    []string{serial1, serial2},
 			Hostname:                   hostname,
 			BootMode:                   bootMode,
 			StreamingSupported:         streamingSupported,
@@ -120,10 +122,22 @@ func TestInMemoryChassisManager(t *testing.T) {
 	t.Run("ResolveChassis Not Found", func(t *testing.T) {
 		ch := &types.Chassis{
 			ActiveSerial: serialNotFound,
+			Serials:      []string{serialNotFound},
 		}
 		err := manager.ResolveChassis(ctx, ch)
 		if err == nil {
 			t.Errorf("ResolveChassis with unknown serial succeeded, want error")
+		}
+	})
+
+	t.Run("ResolveChassis Mismatch", func(t *testing.T) {
+		ch := &types.Chassis{
+			ActiveSerial: serial1,
+			Serials:      []string{serial1, serialNotFound},
+		}
+		err := manager.ResolveChassis(ctx, ch)
+		if err == nil {
+			t.Errorf("ResolveChassis with mismatched serials succeeded, want error")
 		}
 	})
 

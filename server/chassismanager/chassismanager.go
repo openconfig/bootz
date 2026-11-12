@@ -43,9 +43,20 @@ func (m *InMemoryChassisManager) ResolveChassis(ctx context.Context, chassis *ty
 	if chassis == nil {
 		return fmt.Errorf("chassis cannot be nil")
 	}
-	found, ok := m.chassis[chassis.ActiveSerial]
-	if !ok {
-		return fmt.Errorf("chassis with serial number %v not found", chassis.ActiveSerial)
+	if len(chassis.Serials) == 0 {
+		return fmt.Errorf("serial numbers cannot be empty")
+	}
+	var found *cpb.Chassis
+	for _, s := range chassis.Serials {
+		c, ok := m.chassis[s]
+		if !ok {
+			return fmt.Errorf("chassis with serial number %v not found", s)
+		}
+		if found == nil {
+			found = c
+		} else if found != c {
+			return fmt.Errorf("serial numbers %v do not belong to the same chassis", chassis.Serials)
+		}
 	}
 	chassis.Hostname = found.GetHostname()
 	chassis.BootMode = found.GetBootMode()
