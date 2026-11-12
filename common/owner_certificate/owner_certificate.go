@@ -43,7 +43,14 @@ func Verify(in []byte, certPool *x509.CertPool) (*x509.Certificate, error) {
 	if err = p7.VerifyWithChain(certPool); err != nil {
 		return nil, fmt.Errorf("failed to verify the chain of trust: %v", err)
 	}
-	return p7.Certificates[0], nil
+	// Return the certificate that actually produced the verified signature, not
+	// simply the first entry in the (attacker-orderable) certificates bag.
+	// GetOnlySigner also enforces that the CMS carries exactly one SignerInfo.
+	signer := p7.GetOnlySigner()
+	if signer == nil {
+		return nil, fmt.Errorf("owner certificate CMS must have exactly one identifiable signer")
+	}
+	return signer, nil
 }
 
 // GenerateCMS takes an owner certificate keypair and converts it to a CMS message.
