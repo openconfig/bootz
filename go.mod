@@ -13,7 +13,7 @@ require (
 	github.com/openconfig/gnsi v1.9.1
 	github.com/openconfig/monax v0.0.0-20260720151517-883500dc841b
 	go.mozilla.org/pkcs7 v0.9.0
-	google.golang.org/grpc v1.82.1
+	google.golang.org/grpc v1.83.1
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.2
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 )
