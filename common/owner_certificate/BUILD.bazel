@@ -19,7 +19,10 @@ go_library(
     srcs = ["owner_certificate.go"],
     importpath = "github.com/openconfig/bootz/common/owner_certificate",
     visibility = ["//visibility:public"],
-    deps = ["@org_mozilla_go_pkcs7//:pkcs7"],
+    deps = [
+        "//common/signature",
+        "@org_mozilla_go_pkcs7//:pkcs7",
+    ],
 )
 
 go_test(

@@ -22,11 +22,19 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"fmt"
 	"time"
 
+	"github.com/openconfig/bootz/common/signature"
 	"go.mozilla.org/pkcs7"
 )
+
+// hashToOID maps a crypto.Hash to the corresponding asn1.ObjectIdentifier.
+var hashToOID = map[crypto.Hash]asn1.ObjectIdentifier{
+	crypto.SHA256: pkcs7.OIDDigestAlgorithmSHA256,
+	crypto.SHA384: pkcs7.OIDDigestAlgorithmSHA384,
+}
 
 // Verify checks that the provided CMS message is signed by a signer in the provided certPool and returns the signer certificate.
 func Verify(in []byte, certPool *x509.CertPool) (*x509.Certificate, error) {
@@ -55,13 +63,22 @@ func Verify(in []byte, certPool *x509.CertPool) (*x509.Certificate, error) {
 
 // GenerateCMS takes an owner certificate keypair and converts it to a CMS message.
 // The CMS message contains the owner certificate in its list of certificates.
+// The CMS message also specifies the hash algorithm for signatures signed by this owner certificate.
 func GenerateCMS(cert *x509.Certificate, priv crypto.PrivateKey) ([]byte, error) {
 	signedMessage, err := pkcs7.NewSignedData(nil)
 	if err != nil {
 		return nil, err
 	}
-	// Override the default SHA1 digest with SHA256.
-	signedMessage.SetDigestAlgorithm(pkcs7.OIDDigestAlgorithmSHA256)
+	// The hash algorithm depends on the public key type of the owner certificate.
+	hashAlgo, err := signature.HashAlgorithmForPublicKey(cert.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deduce hash algorithm for public key: %w", err)
+	}
+	digestOID, ok := hashToOID[hashAlgo]
+	if !ok {
+		return nil, fmt.Errorf("unsupported hash algorithm: %v", hashAlgo)
+	}
+	signedMessage.SetDigestAlgorithm(digestOID)
 	signedMessage.AddCertificate(cert)
 
 	err = signedMessage.AddSigner(cert, priv, pkcs7.SignerInfoConfig{})

@@ -234,7 +234,7 @@ func handleStream(ctx context.Context, c bpb.BootstrapClient, msg proto.Message)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to serialize transport key message: %v", err)
 	}
-	sig, err := signature.Sign(idevid.PrivateKey, idevid.Leaf.SignatureAlgorithm, serializedMsg)
+	sig, err := signature.Sign(idevid.PrivateKey, serializedMsg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to sign transport key: %v", err)
 	}
