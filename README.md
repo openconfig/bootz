@@ -319,9 +319,11 @@ already have reachability to the Bootz server.
    1. Device initiates a gRPC connection `Bootstrap.GetBootstrapData` to
       the bootz-server whose address was obtained either from the DHCP server
       (Option A) or from the persistent Bootz parameter file (Option B).
-   2. In the TLS handshake, the server will send a CertificateRequest message.
-      The device **MUST** present the IDevID cert of the active control card
-      in this TLS handshake.
+   2. In the TLS handshake, the Bootz server requests the client present a
+      valid TLS certificate. The device **MUST** present the IDevID cert of the
+      active control card in this TLS handshake. The device should accept the
+      TLS certificate presented by the Bootz server without validation at this
+      stage, as the Bootz server CA certificate is not yet available.
    3. The responses from the bootz-server are signed by ownership-certificate.
       The device validates the ownership-voucher, which authenticates the
       ownership-certificate. The device verifies the signature of the message
@@ -381,10 +383,10 @@ the ownership voucher and ownership certificate.
       the bootstrapping process is complete. Success or failure is indicated
       using an enum.
    2. In case of failure, the device should retry this process from Step 1.
-   3. When making this gRPC, the device should verify the identity of the
-      server using the "`server_trust_cert`" certificate obtained from
-      `GetBootstrapDataResponse`.
-   4. "`server_trust_cert`" plays the same role as "trust-anchor" in the sZTP
+   3. When making this gRPC, the device should verify the TLS certificate
+      presented by the Bootz server during the TLS handshake by using the
+      `server_trust_cert` obtained earlier from `BootstrapDataResponse`.
+   4. `server_trust_cert` plays the same role as "trust-anchor" in the sZTP
       RFC (i.e. allows the device to verify the identity of the server).
    5. The TLS connection **MUST** be secured on the client-side with the
       IDevID of the active control card.
@@ -484,7 +486,9 @@ while TPM 1.2 systems are not supported.
       the bootz-server whose address was obtained either from the DHCP server
       (Option A) or from the persistent Bootz parameter file (Option B).
    2. The device **MUST NOT** present a client certificate in the TLS
-      handshake.
+      handshake. The device should accept the TLS certificate presented by the
+      Bootz server without validation at this stage, as the Bootz server CA
+      certificate is not yet available.
 3. BootstrapStreamRequest.bootstrap_request
    1. The bootz BootstrapStream is initiated by the device sending a
       `GetBootstrapDataRequest` message to the bootz-server in the first
@@ -553,9 +557,9 @@ while TPM 1.2 systems are not supported.
    1. The device sends a `ReportStatusRequest` message to the bootz-server.
       NOTE: If this `ReportStatusRequest` message is sent in a new stream
       (i.e., there was a reboot breaking the previous stream), then the
-      device must use the `server_trust_cert` received earlier from the
-      `BootstrapDataResponse` to verify the identity of the Bootz server
-      during the gRPC handshake of this new stream.
+      device must use the `server_trust_cert` obtained earlier from the
+      `BootstrapDataResponse` to verify the TLS certificate presented by the
+      Bootz server during the TLS handshake of this new stream.
       - If bootstrapping is successful, the device should report all control
         cards as `CONTROL_CARD_STATUS_INITIALIZED` and
         `BOOTSTRAP_STATUS_SUCCESS`.
@@ -622,10 +626,10 @@ while TPM 1.2 systems are not supported.
    1. Device initiates a gRPC connection `Bootstrap.BootstrapStreamV1` to
       the bootz-server whose address was obtained either from the DHCP server
       (Option A) or from the persistent Bootz parameter file (Option B).
-   2. In the TLS handshake, the server will send a CertificateRequest message.
-      The device **MUST NOT** present a client certificate in this TLS
-      handshake. The server MUST be configured to allow the handshake to
-      proceed without a client certificate.
+   2. The device **MUST NOT** present a client certificate in the TLS
+      handshake. The device should accept the TLS certificate presented by the
+      Bootz server without validation at this stage, as the Bootz server CA
+      certificate is not yet available.
 3. BootstrapStreamRequestV1.bootstrap_request
    1. The BootstrapStreamV1 RPC is initiated by the device sending a
       `GetBootstrapDataRequest` message to the bootz-server in the first
@@ -740,9 +744,9 @@ while TPM 1.2 systems are not supported.
    1. The device sends a `ReportStatusRequest` message to Bootz server.
       NOTE: If this `ReportStatusRequest` message is sent in a new stream
       (i.e., there was a reboot breaking the previous stream), then the
-      device must use the `server_trust_cert` received earlier from the
-      `BootstrapDataResponse` to verify the identity of the Bootz server
-      during the gRPC handshake of this new stream.
+      device must use the `server_trust_cert` obtained earlier from the
+      `BootstrapDataResponse` to verify the TLS certificate presented by the
+      Bootz server during the TLS handshake of this new stream.
       - If bootstrapping is successful, the device should report all control
         cards as `CONTROL_CARD_STATUS_INITIALIZED` and
         `BOOTSTRAP_STATUS_SUCCESS`.
