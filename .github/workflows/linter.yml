@@ -21,10 +21,7 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
-  packages: read
-  statuses: write
+permissions: {}
 
 jobs:
   build:
@@ -32,9 +29,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: read
-      # To report Github Actions status checks
-      statuses: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
