@@ -9,9 +9,9 @@ require (
 	github.com/google/go-tpm v0.9.8
 	github.com/insomniacslk/dhcp v0.0.0-20260603135910-a415979eb11e
 	github.com/jonboulle/clockwork v0.5.0
-	github.com/openconfig/attestz v0.6.15
+	github.com/openconfig/attestz v0.6.18
 	github.com/openconfig/gnsi v1.9.1
-	github.com/openconfig/monax v0.0.0-20260720151517-883500dc841b
+	github.com/openconfig/monax v0.1.0
 	go.mozilla.org/pkcs7 v0.9.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.2
