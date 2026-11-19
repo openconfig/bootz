@@ -1023,7 +1023,7 @@ func (s *Service) sign(ctx context.Context, data []byte, chassis *types.Chassis)
 	if err != nil {
 		return "", nil, nil, status.Errorf(codes.Internal, "failed to generate owner certificate CMS: %v", err)
 	}
-	sig, err := signature.Sign(oKey, oCert.SignatureAlgorithm, data)
+	sig, err := signature.Sign(oKey, data)
 	if err != nil {
 		return "", nil, nil, status.Errorf(codes.Internal, "failed to sign input data with owner certificate: %v", err)
 	}

@@ -20,67 +20,60 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/sha512"
 	"crypto/x509"
 	"fmt"
 )
 
-// computeHash computes the hash of the input data using the provided signature algorithm, plus the
-// crypto hash function that should be used to compute the signature.
-func computeHash(algorithm x509.SignatureAlgorithm, input []byte) (crypto.Hash, []byte, error) {
-	switch algorithm {
-	case x509.ECDSAWithSHA384:
-		v := sha512.Sum384(input)
-		return crypto.SHA384, v[:], nil
-	case x509.SHA256WithRSA:
-		v := sha256.Sum256(input)
-		return crypto.SHA256, v[:], nil
+// HashAlgorithmForPublicKey maps a public key algorithm to a hash algorithm.
+// This mapping is explicitly defined as part of Bootz specification.
+func HashAlgorithmForPublicKey(pub crypto.PublicKey) (crypto.Hash, error) {
+	switch pub.(type) {
+	case *rsa.PublicKey:
+		return crypto.SHA256, nil
+	case *ecdsa.PublicKey:
+		return crypto.SHA384, nil
 	default:
-		return 0, nil, fmt.Errorf("computeHash(): unsupported signature algorithm: %v", algorithm)
+		return 0, fmt.Errorf("unsupported public key type: %T", pub)
 	}
 }
 
 // Sign generates a signature of the input data using the provided private key.
-func Sign(privateKey crypto.PrivateKey, algorithm x509.SignatureAlgorithm, input []byte) ([]byte, error) {
-	hashAlgo, hashed, err := computeHash(algorithm, input)
+func Sign(privateKey crypto.PrivateKey, input []byte) ([]byte, error) {
+	signer, ok := privateKey.(crypto.Signer)
+	if !ok {
+		return nil, fmt.Errorf("Sign(): private key does not implement crypto.Signer")
+	}
+	hashAlgo, err := HashAlgorithmForPublicKey(signer.Public())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Sign(): failed to deduce hash algorithm for public key: %w", err)
 	}
-	var sig []byte
-	switch priv := privateKey.(type) {
-	case *rsa.PrivateKey:
-		sig, err = rsa.SignPKCS1v15(rand.Reader, priv, hashAlgo, hashed)
-		if err != nil {
-			return nil, fmt.Errorf("Sign(): unable to sign signature: %w", err)
-		}
-	case *ecdsa.PrivateKey:
-		sig, err = ecdsa.SignASN1(rand.Reader, priv, hashed)
-		if err != nil {
-			return nil, fmt.Errorf("Sign(): unable to sign signature: %w", err)
-		}
-	default:
-		return nil, fmt.Errorf("Sign(): unsupported private key type: %T", priv)
+	sig, err := crypto.SignMessage(signer, rand.Reader, input, hashAlgo)
+	if err != nil {
+		return nil, fmt.Errorf("Sign(): failed to sign data: %w", err)
 	}
-
 	return sig, nil
 }
 
 // Verify verifies a signature of the input data using the provided certificate.
 func Verify(cert *x509.Certificate, input []byte, signature []byte) error {
-	hashAlgo, hashed, err := computeHash(cert.SignatureAlgorithm, input)
-	if err != nil {
-		return err
+	if cert == nil {
+		return fmt.Errorf("Verify(): certificate is nil")
 	}
+	hashAlgo, err := HashAlgorithmForPublicKey(cert.PublicKey)
+	if err != nil {
+		return fmt.Errorf("Verify(): failed to deduce hash algorithm for public key: %w", err)
+	}
+	h := hashAlgo.New()
+	h.Write(input)
+	digest := h.Sum(nil)
 
 	switch pub := cert.PublicKey.(type) {
 	case *rsa.PublicKey:
-		err = rsa.VerifyPKCS1v15(pub, hashAlgo, hashed, signature)
-		if err != nil {
+		if err := rsa.VerifyPKCS1v15(pub, hashAlgo, digest, signature); err != nil {
 			return fmt.Errorf("Verify(): signature not verified: %w", err)
 		}
 	case *ecdsa.PublicKey:
-		if !ecdsa.VerifyASN1(pub, hashed, signature) {
+		if !ecdsa.VerifyASN1(pub, digest, signature) {
 			return fmt.Errorf("Verify(): signature not verified")
 		}
 	default:

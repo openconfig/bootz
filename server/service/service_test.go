@@ -349,7 +349,7 @@ func TestBootstrapStream(t *testing.T) {
 				}
 
 				// === Second Send: Respond with Signed Nonce ===
-				finalSignedNonce, err := signature.Sign(deviceKey, deviceCert.SignatureAlgorithm, []byte(nonce))
+				finalSignedNonce, err := signature.Sign(deviceKey, []byte(nonce))
 				if err != nil {
 					t.Fatalf("Failed to sign nonce: %v", err)
 				}
@@ -603,7 +603,7 @@ func TestBootstrapStreamV1(t *testing.T) {
 						if err != nil {
 							t.Fatalf("Failed to serialize transport key message: %v", err)
 						}
-						sig, err := signature.Sign(deviceKey, deviceCert.SignatureAlgorithm, serializedMsg)
+						sig, err := signature.Sign(deviceKey, serializedMsg)
 						if err != nil {
 							t.Fatalf("Failed to sign transport key: %v", err)
 						}

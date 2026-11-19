@@ -136,7 +136,12 @@ message GetBootstrapDataRequest {
 message BootstrapStreamRequest {
   message Response {
     oneof type {
-      // Nonce signed with IAK from the device for TPM 2.0 IDevID based systems.
+      // nonce_signed is the signature of the nonce, signed by IDevID for
+      // TPM 2.0 IDevID based systems.
+      // The hash algorithm used to generate this signature depends on the
+      // IDevID public key.
+      // - RSA public key: SHA256
+      // - ECDSA public key: SHA384
       bytes nonce_signed = 1;
       // HMAC challenge response for TPM 2.0 no-IDevID systems.
       openconfig.attestz.HMACChallengeResponse hmac_challenge_response = 3;
@@ -318,13 +323,13 @@ message GetBootstrapDataResponse {
   // The field is a CMS message (RFC 5652) which includes and is
   // signed by the OwnershipCertificate.
   bytes ownership_certificate = 102;
-  // This is a signature of the serialized_bootstrap_data field,
-  // using the ownership_certificate.
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field
   // in the GetBootstrapDataRequest message.
-  // The field is a base64-encoding of a signature generated using PKCS1v15
-  // with SHA256 as the hashing algorithm.
+  // This field is a base64-encoded signature of the serialized_bootstrap_data
+  // field, signed by the ownership_certificate.
+  // The hash algorithm is specified by the signerInfo.DigestAlgorithm field of
+  // the ownership_certificate CMS message.
   string response_signature = 103;
   // This field contains a serialized (in wire format encoding) yet
   // unencrypted BootstrapDataSigned message. This field should be verified
@@ -486,13 +491,14 @@ message StreamBootstrapDataResponse {
   // The field is a CMS message (RFC 5652) which includes and is
   // signed by the OwnershipCertificate.
   bytes ownership_certificate = 2;
-  // This is a signature of the encrypted_serialized_bootstrap_data field,
-  // using the ownership_certificate.
   // This should not be set if the device does not check for ownership
   // voucher, which is indicated by the device not setting the nonce field
   // in the GetBootstrapDataRequest message.
-  // The field is a base64-encoding of a signature generated using PKCS1v15
-  // with SHA256 as the hashing algorithm.
+  // This field is a base64-encoded signature of the
+  // encrypted_serialized_bootstrap_data field, signed by the
+  // ownership_certificate.
+  // The hash algorithm is specified by the signerInfo.DigestAlgorithm field of
+  // the ownership_certificate CMS message.
   string response_signature = 3;
   // This field contains a serialized (in wire format encoding)
   // BootstrapDataSigned message, encrypted to the HPKE cipher suite.
@@ -515,6 +521,10 @@ message BootstrapStreamRequestV1 {
       // challenge request.
       bytes serialized_transport_key = 1;
       // The signature over serialized_transport_key, signed by the IDevID.
+      // The hash algorithm used to generate this signature depends on the
+      // IDevID public key.
+      // - RSA public key: SHA256
+      // - ECDSA public key: SHA384
       bytes signature = 2;
     }
     message ChallengeResponseTPM20HMAC {
