@@ -159,8 +159,8 @@ github.com/openconfig/gnmi v0.14.1 h1:qKMuFvhIRR2/xxCOsStPQ25aKpbMDdWr3kI+nP9bhM
 github.com/openconfig/gnmi v0.14.1/go.mod h1:whr6zVq9PCU8mV1D0K9v7Ajd3+swoN6Yam9n8OH3eT0=
 github.com/openconfig/gnsi v1.9.1 h1:0XpYlG/99YWVIm6gFTVkxlwiXcU/tBla9MDLChLNBMM=
 github.com/openconfig/gnsi v1.9.1/go.mod h1:r1OgFdQdbVB6PdamWM6nW85MKLlRCYwCd9Gx/tm2/Gw=
-github.com/openconfig/monax v0.0.0-20260720151517-883500dc841b h1:oXK75Qm30JRv9PCfK7SEkrv0COz2T2xDCOyYogqedaQ=
-github.com/openconfig/monax v0.0.0-20260720151517-883500dc841b/go.mod h1:+E3fEillnigToN3KDPp0FuBnPDSrAov/vI4FmmdoWTc=
+github.com/openconfig/monax v0.1.0 h1:hG6H9v5n/TzmcIlWGSHpBkWiLSxvQ0YZ/CKDSfo8JEY=
+github.com/openconfig/monax v0.1.0/go.mod h1:+E3fEillnigToN3KDPp0FuBnPDSrAov/vI4FmmdoWTc=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
