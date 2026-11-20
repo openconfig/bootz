@@ -32,11 +32,11 @@ jobs:
     env:
       GOTOOLCHAIN: "go${{ matrix.go }}"
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Go ${{ matrix.go }}
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: ${{ matrix.go }}
       - name: Build
@@ -46,18 +46,18 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          go-version: "1.26.4"
+          go-version: "1.27.4"
       - name: Run Coverage
         run: go test -v -tags=ci -coverprofile=profile.cov ./...
       - name: Send coverage
         continue-on-error: true
-        uses: shogo82148/actions-goveralls@9606dbc5ac5cf888a0e9ef901515c3cd516a2790 # v1.11.0
+        uses: shogo82148/actions-goveralls@548a2a7896df420c38df648845a5525a33f82585 # v1.11.5
         with:
           path-to-profile: profile.cov
   static_analysis:
@@ -66,19 +66,19 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          go-version: "1.26.4"
+          go-version: "1.27.4"
         id: go
       - name: Install required static analysis tools
         run: |
           go get -u honnef.co/go/tools/cmd/staticcheck
       - name: Check out code
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       - name: get dependencies
         run: |
           go get -v -t -d ./...
