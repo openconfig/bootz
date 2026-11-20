@@ -54,7 +54,7 @@ assert_archive_contains(
 
 oci_image(
     name = "bootz_server_image",
-    base = "@distroless_base",
+    base = "@bootz_distroless_base",
     entrypoint = ["/emulator"],
     tars = [":emulator_layer"],
 )
