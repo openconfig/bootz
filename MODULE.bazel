@@ -39,7 +39,7 @@ go_deps_dev = use_extension("@bazel_gazelle//:extensions.bzl", "go_deps", dev_de
 
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
-    name = "boot_distroless_base",
+    name = "bootz_distroless_base",
     digest = "sha256:f5a3067027c2b322cd71b844f3d84ad3deada45ceb8a30f301260a602455070e",
     image = "gcr.io/distroless/base",
     platforms = [
