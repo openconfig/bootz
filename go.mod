@@ -9,7 +9,7 @@ require (
 	github.com/google/go-tpm v0.9.8
 	github.com/insomniacslk/dhcp v0.0.0-20261014062924-c6bb46ad3f3a
 	github.com/jonboulle/clockwork v0.5.0
-	github.com/openconfig/attestz v0.6.18
+	github.com/openconfig/attestz v0.6.19
 	github.com/openconfig/gnsi v1.9.1
 	github.com/openconfig/monax v0.1.0
 	go.mozilla.org/pkcs7 v0.10.0
