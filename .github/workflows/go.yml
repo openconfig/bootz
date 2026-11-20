@@ -52,12 +52,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          go-version: "1.26.4"
+          go-version: "1.27.4"
       - name: Run Coverage
         run: go test -v -tags=ci -coverprofile=profile.cov ./...
       - name: Send coverage
         continue-on-error: true
-        uses: shogo82148/actions-goveralls@9606dbc5ac5cf888a0e9ef901515c3cd516a2790 # v1.11.0
+        uses: shogo82148/actions-goveralls@548a2a7896df420c38df648845a5525a33f82585 # v1.11.5
         with:
           path-to-profile: profile.cov
   static_analysis:
@@ -72,7 +72,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          go-version: "1.26.4"
+          go-version: "1.27.4"
         id: go
       - name: Install required static analysis tools
         run: |
